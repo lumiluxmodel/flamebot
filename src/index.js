@@ -5,6 +5,8 @@ const morgan = require('morgan');
 const config = require('./config');
 const accountRoutes = require('./routes/accountRoutes');
 const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./flamebot-api-openapi.json');
 
 // Create Express app
 const app = express();
@@ -28,6 +30,7 @@ app.use(morgan('dev'));
 
 // API routes
 app.use('/api/accounts', accountRoutes);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -58,6 +61,7 @@ app.listen(PORT, () => {
 ║  🚀 Server running on port ${PORT}      ║
 ║  🌍 Environment: ${config.server.env}         ║
 ║  📍 Base URL: http://localhost:${PORT}  ║
+║  📚 API Docs: http://localhost:${PORT}/api-docs  ║
 ╚═══════════════════════════════════════╝
   `);
 });
