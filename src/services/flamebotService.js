@@ -46,13 +46,76 @@ class FlamebotService {
   }
 
   /**
+   * Check task status
+   * @param {string} taskId - Task ID from import response
+   * @returns {Promise<Object>} Task status
+   */
+  async checkTaskStatus(taskId) {
+    try {
+      const response = await this.client.get(`/api/get-add-tinder-cards-status/${taskId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error checking task status:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Poll task status until completed or failed
+   * @param {string} taskId - Task ID from import response
+   * @param {number} maxAttempts - Maximum polling attempts (default: 30)
+   * @param {number} interval - Polling interval in ms (default: 2000)
+   * @returns {Promise<Object>} Final task status
+   */
+  async pollTaskStatus(taskId, maxAttempts = 30, interval = 2000) {
+    console.log(`⏳ Polling task status for ID: ${taskId}`);
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const status = await this.checkTaskStatus(taskId);
+        
+        console.log(`📊 Attempt ${attempt}/${maxAttempts} - Status: ${status.status}, Progress: ${status.progress || 'N/A'}`);
+        
+        if (status.status === 'COMPLETED') {
+          console.log(`✅ Task completed successfully! Successful: ${status.successful}, Failed: ${status.failed}`);
+          return status;
+        }
+        
+        if (status.status === 'FAILED') {
+          console.error('❌ Task failed!');
+          throw new Error('Task failed');
+        }
+        
+        // Wait before next attempt
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, interval));
+        }
+      } catch (error) {
+        console.error(`Error on attempt ${attempt}:`, error.message);
+        if (attempt === maxAttempts) throw error;
+      }
+    }
+    
+    throw new Error('Task polling timeout - maximum attempts reached');
+  }
+
+  /**
    * Import account to Flamebot
    * @param {Object} accountData - Account information
+   * @param {boolean} waitForCompletion - Whether to wait for task completion
    * @returns {Promise<Object>} API response with account ID
    */
-  async importAccount(accountData) {
+  async importAccount(accountData, waitForCompletion = true) {
     try {
-      const modelColor = config.models.colors[accountData.model.toLowerCase()] || '#44ab6c';
+      // Validate required fields for 7-part format
+      const requiredFields = ['authToken', 'proxy'];
+      const missingFields = requiredFields.filter(field => !accountData[field]);
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+
+      const modelColor = config.models.colors[accountData.model] || '#44ab6c';
       const payload = formatAccountPayload(accountData, modelColor);
       
       const response = await this.client.post(
@@ -60,12 +123,23 @@ class FlamebotService {
         payload
       );
 
-      return {
+      const result = {
         success: true,
         data: response.data,
+        taskId: response.data.task_id,
         accountId: response.data.account_id || response.data.id,
-        message: 'Account imported successfully'
+        message: 'Account import initiated'
       };
+
+      // If waitForCompletion is true, poll for task status
+      if (waitForCompletion && result.taskId) {
+        console.log('\n🔄 Waiting for import to complete...');
+        const taskStatus = await this.pollTaskStatus(result.taskId);
+        result.taskStatus = taskStatus;
+        result.message = 'Account imported successfully';
+      }
+
+      return result;
     } catch (error) {
       return {
         success: false,
@@ -79,9 +153,10 @@ class FlamebotService {
   /**
    * Import multiple accounts
    * @param {Array<Object>} accounts - Array of account data
+   * @param {boolean} waitForCompletion - Whether to wait for task completion
    * @returns {Promise<Object>} Results of import operations
    */
-  async importMultipleAccounts(accounts) {
+  async importMultipleAccounts(accounts, waitForCompletion = true) {
     const results = {
       successful: [],
       failed: [],
@@ -89,12 +164,14 @@ class FlamebotService {
     };
 
     for (const account of accounts) {
-      const result = await this.importAccount(account);
+      const result = await this.importAccount(account, waitForCompletion);
       
       if (result.success) {
         results.successful.push({
           ...account,
-          accountId: result.accountId
+          accountId: result.accountId,
+          taskId: result.taskId,
+          taskStatus: result.taskStatus
         });
       } else {
         results.failed.push({
