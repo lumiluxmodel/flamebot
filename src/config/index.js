@@ -16,12 +16,12 @@ const config = {
     }
   },
   models: {
-    available: process.env.AVAILABLE_MODELS?.split(',') || ['lola', 'aura', 'ciara', 'iris'],
+    available: process.env.AVAILABLE_MODELS?.split(',') || ['Lola', 'Aura', 'Ciara', 'Iris'],
     colors: {
-      lola: '#FF69B4',
-      aura: '#44ab6c',
-      ciara: '#4169E1',
-      iris: '#9370DB'
+      Lola: '#e00000',
+      Aura: '#23d100',
+      Ciara: '#295eff',
+      Iris: '#ffb3f5'
     }
   }
 };

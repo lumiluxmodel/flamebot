@@ -38,7 +38,7 @@ function formatAccountString(accountData) {
    * @returns {boolean} Is valid model
    */
   function isValidModel(model, availableModels) {
-    return availableModels.includes(model.toLowerCase());
+    return availableModels.includes(model);
   }
   
   /**

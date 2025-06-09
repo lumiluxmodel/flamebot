@@ -7,12 +7,12 @@ const API_BASE_URL = `http://localhost:${PORT}/api/accounts`;
 // Test account data (using the provided information)
 const testAccount = {
   authToken: '9d2b1326-0286-4d10-a65c-dbb552614449',
-  proxy: 'gate.nodemaven.com:1080:lumiluxmodels_gmail_com-country-us-zip-87120-sid-9982203806312-ttl-24h-filter-high:hbif188pi7',
-  model: 'lola',
-  location: '35.1421012878418,-106.7041015625',
-  refreshToken: 'eyJhbGciOiJIUzI1NiJ9.MTg3MjI0MDc5NDE.NjUq7Zm5kAZcGS-_AQDmT7fX9tbWEpQHjwKoEf9loEE',
-  deviceId: 'AB6F3245-46CF-4362-BAA6-431F313FFABD',
-  persistentId: 'e124b3cc7cac49348daae6ae15745930'
+  proxy: 'gate.nodemaven.com:1080:lumiluxmodels_gmail_com-country-us-zip-15202-sid-257407378079-ttl-24h-filter-high:hbif188pi7',
+  model: 'Iris',
+  location: '40.50529861450195,-80.06849670410156',
+  refreshToken: 'eyJhbGciOiJIUzI1NiJ9.MTU0MTUxNzQ2NTE.azhSbgIGmaawxQTT5fiMHLu59FrlW06eMQZ88jzt-y0',
+  deviceId: 'D5654DBD-452F-4BA3-9424-EBEE1BD73CC4',
+  persistentId: 'a6bf872290eb42c5aa01916b9b3773c1'
 };
 
 // Test multiple accounts
@@ -21,12 +21,12 @@ const multipleAccounts = [
   {
     authToken: 'test-auth-token-2',
     proxy: 'gate.nodemaven.com:1080:testuser2:testpass2',
-    model: 'aura'
+    model: 'Aura'
   },
   {
     authToken: 'test-auth-token-3',
     proxy: 'gate.nodemaven.com:1080:testuser3:testpass3',
-    model: 'ciara'
+    model: 'Ciara'
   }
 ];
 

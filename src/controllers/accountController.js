@@ -1,141 +1,144 @@
-const axios = require('axios');
+const flamebotService = require('../services/flamebotService');
+const { isValidModel } = require('../utils/formatters');
 const config = require('../config');
-const { formatAccountPayload } = require('../utils/formatters');
 
-class FlamebotService {
-  constructor() {
-    this.client = axios.create({
-      baseURL: config.flamebot.baseUrl,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.flamebot.apiKey}`
-      },
-      timeout: 30000
-    });
-
-    // Request interceptor for logging
-    this.client.interceptors.request.use(
-      (request) => {
-        console.log(`🚀 ${request.method.toUpperCase()} ${request.url}`);
-        if (config.server.env === 'development') {
-          console.log('📦 Payload:', JSON.stringify(request.data, null, 2));
-        }
-        return request;
-      },
-      (error) => {
-        console.error('❌ Request error:', error.message);
-        return Promise.reject(error);
-      }
-    );
-
-    // Response interceptor for logging
-    this.client.interceptors.response.use(
-      (response) => {
-        console.log(`✅ Response [${response.status}]:`, response.data);
-        return response;
-      },
-      (error) => {
-        if (error.response) {
-          console.error(`❌ Response error [${error.response.status}]:`, error.response.data);
-        } else {
-          console.error('❌ Network error:', error.message);
-        }
-        return Promise.reject(error);
-      }
-    );
-  }
-
+class AccountController {
   /**
-   * Import account to Flamebot
-   * @param {Object} accountData - Account information
-   * @returns {Promise<Object>} API response with account ID
+   * Import single account
    */
-  async importAccount(accountData) {
+  async importAccount(req, res) {
     try {
-      const modelColor = config.models.colors[accountData.model.toLowerCase()] || '#44ab6c';
-      const payload = formatAccountPayload(accountData, modelColor);
-      
-      const response = await this.client.post(
-        config.flamebot.endpoints.addTinderCards,
-        payload
-      );
+      const { authToken, proxy, model, location, refreshToken, deviceId, persistentId } = req.body;
 
-      return {
-        success: true,
-        data: response.data,
-        accountId: response.data.account_id || response.data.id,
-        message: 'Account imported successfully'
+      // Validation
+      if (!authToken || !proxy || !model) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required fields: authToken, proxy, and model are required'
+        });
+      }
+
+      if (!isValidModel(model, config.models.available)) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid model. Available models: ${config.models.available.join(', ')}`
+        });
+      }
+
+      // Prepare account data
+      const accountData = {
+        authToken,
+        proxy,
+        model,
+        location,
+        refreshToken,
+        deviceId,
+        persistentId,
+        importedAt: new Date().toISOString()
       };
+
+      // Import to Flamebot
+      const result = await flamebotService.importAccount(accountData);
+
+      if (result.success) {
+        res.status(201).json({
+          success: true,
+          message: 'Account imported successfully',
+          data: {
+            accountId: result.accountId,
+            model: model,
+            importedAt: accountData.importedAt
+          }
+        });
+      } else {
+        res.status(result.statusCode || 500).json({
+          success: false,
+          error: result.error,
+          message: result.message
+        });
+      }
     } catch (error) {
-      return {
+      console.error('Import account error:', error);
+      res.status(500).json({
         success: false,
-        error: error.response?.data || error.message,
-        statusCode: error.response?.status || 500,
-        message: 'Failed to import account'
-      };
+        error: 'Internal server error',
+        message: error.message
+      });
     }
   }
 
   /**
    * Import multiple accounts
-   * @param {Array<Object>} accounts - Array of account data
-   * @returns {Promise<Object>} Results of import operations
    */
-  async importMultipleAccounts(accounts) {
-    const results = {
-      successful: [],
-      failed: [],
-      total: accounts.length
-    };
+  async importMultipleAccounts(req, res) {
+    try {
+      const { accounts } = req.body;
 
-    for (const account of accounts) {
-      const result = await this.importAccount(account);
-      
-      if (result.success) {
-        results.successful.push({
-          ...account,
-          accountId: result.accountId
-        });
-      } else {
-        results.failed.push({
-          ...account,
-          error: result.error
+      if (!Array.isArray(accounts) || accounts.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Accounts array is required and must not be empty'
         });
       }
 
-      // Add delay between requests to avoid rate limiting
-      if (accounts.indexOf(account) < accounts.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      // Validate all accounts
+      for (const account of accounts) {
+        if (!account.authToken || !account.proxy || !account.model) {
+          return res.status(400).json({
+            success: false,
+            error: 'Each account must have authToken, proxy, and model'
+          });
+        }
+
+        if (!isValidModel(account.model, config.models.available)) {
+          return res.status(400).json({
+            success: false,
+            error: `Invalid model "${account.model}" in account. Available models: ${config.models.available.join(', ')}`
+          });
+        }
       }
+
+      // Import accounts
+      const results = await flamebotService.importMultipleAccounts(accounts);
+
+      res.status(200).json({
+        success: true,
+        message: `Imported ${results.successful.length} of ${results.total} accounts`,
+        data: results
+      });
+    } catch (error) {
+      console.error('Import multiple accounts error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error',
+        message: error.message
+      });
     }
-
-    return results;
   }
 
   /**
-   * Health check for Flamebot API
-   * @returns {Promise<Object>} API health status
+   * Get available models
    */
-  async healthCheck() {
-    try {
-      // Try to make a request with minimal payload
-      const response = await this.client.get('/api/health', {
-        validateStatus: (status) => status < 500
-      });
+  async getModels(req, res) {
+    res.json({
+      success: true,
+      data: {
+        models: config.models.available,
+        colors: config.models.colors
+      }
+    });
+  }
 
-      return {
-        healthy: true,
-        statusCode: response.status,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      return {
-        healthy: false,
-        error: error.message,
-        timestamp: new Date().toISOString()
-      };
-    }
+  /**
+   * Health check
+   */
+  async healthCheck(req, res) {
+    const health = await flamebotService.healthCheck();
+    res.status(health.healthy ? 200 : 503).json({
+      success: health.healthy,
+      data: health
+    });
   }
 }
 
-module.exports = new FlamebotService();
+module.exports = new AccountController();
