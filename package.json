@@ -5,17 +5,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "test": "node test/testImport.js",
-    "test:openai": "node test/testOpenAI.js",
-    "test:username": "node test/testUsernameService.js",
-    "test:prompt:direct": "node test/testPromptDirect.js",
-    "test:ai": "node test/testAI.js",
-    "test:ai:stats": "node test/testAI.js stats",
-    "test:ai:prompt": "node test/testAI.js prompt",
-    "test:ai:prompts": "node test/testAI.js prompts",
-    "test:ai:bios": "node test/testAI.js bios",
-    "test:ai:rotation": "node test/testAI.js rotation"
+    "dev": "nodemon --ignore data/ --ignore test/ --ignore '*.txt' src/index.js",
+    "test:import": "node test/testImport.js",
+    "test:ai": "node test/testAI.js"
   },
   "keywords": [
     "flamebot",
