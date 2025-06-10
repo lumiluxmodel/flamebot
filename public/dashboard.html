@@ -1,0 +1,591 @@
+<!-- public/dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flamebot Terminal Dashboard</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0a0a0a;
+            color: #00ff41;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        
+        /* Terminal container */
+        .terminal {
+            background: #1a1a1a;
+            border: 2px solid #00ff41;
+            border-radius: 8px;
+            margin: 20px;
+            box-shadow: 0 0 40px rgba(0, 255, 65, 0.3);
+            min-height: calc(100vh - 40px);
+        }
+        
+        /* Terminal header */
+        .terminal-header {
+            background: #00ff41;
+            color: #0a0a0a;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 600;
+        }
+        
+        .terminal-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .terminal-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .terminal-btn {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .btn-close { background: #ff5f56; }
+        .btn-minimize { background: #ffbd2e; }
+        .btn-maximize { background: #27c93f; }
+        
+        /* Terminal body */
+        .terminal-body {
+            padding: 20px;
+            height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+        
+        /* Scrollbar styling */
+        .terminal-body::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        .terminal-body::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border: 1px solid #333;
+        }
+        
+        .terminal-body::-webkit-scrollbar-thumb {
+            background: #00ff41;
+            border-radius: 5px;
+        }
+        
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-box {
+            border: 1px solid #00ff41;
+            padding: 15px;
+            background: rgba(0, 255, 65, 0.05);
+        }
+        
+        .stat-label {
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+        
+        /* Workflow container */
+        .workflow-container {
+            border: 1px solid #333;
+            margin-bottom: 20px;
+            background: rgba(0, 255, 65, 0.02);
+        }
+        
+        .workflow-header {
+            border-bottom: 1px solid #333;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+        }
+        
+        .workflow-info h3 {
+            color: #00ff41;
+            margin-bottom: 5px;
+        }
+        
+        .workflow-meta {
+            color: #888;
+            font-size: 12px;
+        }
+        
+        .workflow-status {
+            padding: 4px 12px;
+            border: 1px solid;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        
+        .status-running {
+            color: #00bfff;
+            border-color: #00bfff;
+            background: rgba(0, 191, 255, 0.1);
+        }
+        
+        .status-completed {
+            color: #00ff41;
+            border-color: #00ff41;
+            background: rgba(0, 255, 65, 0.1);
+        }
+        
+        .status-failed {
+            color: #ff4444;
+            border-color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+        
+        /* Progress bar */
+        .progress-section {
+            padding: 15px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: #222;
+            border: 1px solid #444;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #00ff41;
+            transition: width 0.5s ease;
+            position: relative;
+        }
+        
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 20px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4));
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-20px); }
+            100% { transform: translateX(20px); }
+        }
+        
+        /* Current step */
+        .current-step {
+            padding: 15px;
+            background: rgba(0, 191, 255, 0.05);
+            border-bottom: 1px solid #333;
+            color: #00bfff;
+        }
+        
+        .current-step-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+        
+        /* Steps timeline */
+        .steps-timeline {
+            padding: 15px;
+        }
+        
+        .step-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            position: relative;
+        }
+        
+        .step-item:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 19px;
+            top: 30px;
+            bottom: -12px;
+            width: 1px;
+            background: #333;
+        }
+        
+        .step-indicator {
+            width: 24px;
+            height: 24px;
+            border: 2px solid;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            margin-right: 12px;
+            background: #1a1a1a;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .step-completed {
+            color: #00ff41;
+            border-color: #00ff41;
+            background: rgba(0, 255, 65, 0.1);
+        }
+        
+        .step-running {
+            color: #00bfff;
+            border-color: #00bfff;
+            background: rgba(0, 191, 255, 0.1);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0, 191, 255, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(0, 191, 255, 0); }
+        }
+        
+        .step-pending {
+            color: #666;
+            border-color: #666;
+        }
+        
+        .step-failed {
+            color: #ff4444;
+            border-color: #ff4444;
+            background: rgba(255, 68, 68, 0.1);
+        }
+        
+        .step-content {
+            flex: 1;
+        }
+        
+        .step-name {
+            font-size: 13px;
+            margin-bottom: 2px;
+        }
+        
+        .step-meta {
+            font-size: 11px;
+            color: #666;
+        }
+        
+        /* Terminal prompt */
+        .terminal-prompt {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+            display: flex;
+            align-items: center;
+            color: #00ff41;
+        }
+        
+        .prompt-symbol {
+            margin-right: 10px;
+        }
+        
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 16px;
+            background: #00ff41;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        /* Utilities */
+        .text-dim { color: #666; }
+        .text-bright { color: #00ff41; }
+        .text-info { color: #00bfff; }
+        .text-danger { color: #ff4444; }
+        .text-warning { color: #ffbd2e; }
+        
+        /* ASCII art header */
+        .ascii-header {
+            color: #00ff41;
+            font-size: 10px;
+            line-height: 1;
+            margin-bottom: 20px;
+            opacity: 0.8;
+            white-space: pre;
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal">
+        <div class="terminal-header">
+            <div class="terminal-title">
+                <span>🔥</span>
+                <span>FLAMEBOT WORKFLOW MONITOR v1.0</span>
+            </div>
+            <div class="terminal-controls">
+                <div class="terminal-btn btn-close"></div>
+                <div class="terminal-btn btn-minimize"></div>
+                <div class="terminal-btn btn-maximize"></div>
+            </div>
+        </div>
+        
+        <div class="terminal-body">
+            <pre class="ascii-header">
+███████╗██╗      █████╗ ███╗   ███╗███████╗██████╗  ██████╗ ████████╗
+██╔════╝██║     ██╔══██╗████╗ ████║██╔════╝██╔══██╗██╔═══██╗╚══██╔══╝
+█████╗  ██║     ███████║██╔████╔██║█████╗  ██████╔╝██║   ██║   ██║   
+██╔══╝  ██║     ██╔══██║██║╚██╔╝██║██╔══╝  ██╔══██╗██║   ██║   ██║   
+██║     ███████╗██║  ██║██║ ╚═╝ ██║███████╗██████╔╝╚██████╔╝   ██║   
+╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝╚═════╝  ╚═════╝    ╚═╝   
+            </pre>
+            
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-label">Active Workflows</div>
+                    <div class="stat-value" id="activeCount">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Completed</div>
+                    <div class="stat-value text-bright" id="completedCount">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Running</div>
+                    <div class="stat-value text-info" id="runningCount">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Failed</div>
+                    <div class="stat-value text-danger" id="failedCount">0</div>
+                </div>
+            </div>
+            
+            <!-- Workflows -->
+            <div id="workflowsList">
+                <!-- Workflows will be inserted here -->
+            </div>
+            
+            <!-- Terminal prompt -->
+            <div class="terminal-prompt">
+                <span class="prompt-symbol">$</span>
+                <span id="lastUpdate"></span>
+                <span class="cursor"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        let autoRefresh = true;
+
+        // Format time difference
+        function formatTimeDiff(date) {
+            const now = new Date();
+            const diff = now - new Date(date);
+            const seconds = Math.floor(diff / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            
+            if (hours > 0) return `${hours}h ${minutes % 60}m ago`;
+            if (minutes > 0) return `${minutes}m ago`;
+            return `${seconds}s ago`;
+        }
+
+        // Format duration
+        function formatDuration(ms) {
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            
+            if (hours > 0) return `${hours}h ${minutes % 60}m`;
+            if (minutes > 0) return `${minutes}m`;
+            return `${seconds}s`;
+        }
+
+        // Create workflow HTML
+        function createWorkflowItem(workflow) {
+            const progress = ((workflow.currentStep + 1) / workflow.steps.length * 100).toFixed(0);
+            const currentStepInfo = workflow.steps[workflow.currentStep];
+            
+            return `
+                <div class="workflow-container">
+                    <div class="workflow-header">
+                        <div class="workflow-info">
+                            <h3>Account: ${workflow.accountId}</h3>
+                            <div class="workflow-meta">
+                                ${workflow.workflowName} • Model: ${workflow.accountData.model} • Started ${formatTimeDiff(workflow.startedAt)}
+                            </div>
+                        </div>
+                        <div class="workflow-status status-${workflow.status}">
+                            ${workflow.status}
+                        </div>
+                    </div>
+                    
+                    <div class="progress-section">
+                        <div class="progress-info">
+                            <span>Progress: ${progress}%</span>
+                            <span>${workflow.currentStep + 1}/${workflow.steps.length} steps</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${progress}%"></div>
+                        </div>
+                    </div>
+                    
+                    ${workflow.status === 'running' && currentStepInfo ? `
+                        <div class="current-step">
+                            <div class="current-step-label">Current Step</div>
+                            <div>${currentStepInfo.description}</div>
+                            ${currentStepInfo.delay && workflow.currentStep < workflow.steps.length - 1 ? `
+                                <div class="text-dim" style="margin-top: 5px;">
+                                    Next step in ${formatDuration(currentStepInfo.delay)}
+                                </div>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="steps-timeline">
+                        ${workflow.steps.map((step, index) => {
+                            const result = workflow.results.find(r => r.step === step.id);
+                            const isCompleted = result && result.success;
+                            const isFailed = result && !result.success;
+                            const isRunning = index === workflow.currentStep && workflow.status === 'running';
+                            const isPending = index > workflow.currentStep;
+                            
+                            let statusClass = '';
+                            let icon = '';
+                            
+                            if (isCompleted) {
+                                statusClass = 'step-completed';
+                                icon = '✓';
+                            } else if (isFailed) {
+                                statusClass = 'step-failed';
+                                icon = '✗';
+                            } else if (isRunning) {
+                                statusClass = 'step-running';
+                                icon = '◉';
+                            } else {
+                                statusClass = 'step-pending';
+                                icon = '◯';
+                            }
+                            
+                            return `
+                                <div class="step-item">
+                                    <div class="step-indicator ${statusClass}">${icon}</div>
+                                    <div class="step-content">
+                                        <div class="step-name ${isPending ? 'text-dim' : ''}">
+                                            ${step.description}
+                                        </div>
+                                        ${result ? `
+                                            <div class="step-meta">
+                                                ${formatTimeDiff(result.timestamp)}
+                                                ${result.error ? ` - <span class="text-danger">${result.error}</span>` : ''}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Refresh data
+        async function refreshData() {
+            try {
+                const response = await fetch(`${API_BASE}/accounts/workflows`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const workflows = data.data.workflows;
+                    
+                    // Update stats
+                    document.getElementById('activeCount').textContent = workflows.length;
+                    document.getElementById('completedCount').textContent = workflows.filter(w => w.status === 'completed').length;
+                    document.getElementById('runningCount').textContent = workflows.filter(w => w.status === 'running').length;
+                    document.getElementById('failedCount').textContent = workflows.filter(w => w.status === 'failed').length;
+                    
+                    // Update workflows list
+                    const listContainer = document.getElementById('workflowsList');
+                    if (workflows.length === 0) {
+                        listContainer.innerHTML = `
+                            <div class="empty-state">
+                                <div class="empty-icon">◯</div>
+                                <div>No active workflows</div>
+                                <div class="text-dim" style="margin-top: 10px;">
+                                    Waiting for new imports...
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        listContainer.innerHTML = workflows.map(createWorkflowItem).join('');
+                    }
+                    
+                    // Update last refresh
+                    document.getElementById('lastUpdate').textContent = `Last update: ${new Date().toLocaleTimeString()} `;
+                }
+            } catch (error) {
+                console.error('Error fetching workflows:', error);
+                document.getElementById('lastUpdate').textContent = `Error: ${error.message} `;
+            }
+        }
+
+        // Auto-refresh
+        setInterval(() => {
+            if (autoRefresh) refreshData();
+        }, 5000);
+
+        // Initial load
+        refreshData();
+    </script>
+</body>
+</html>
