@@ -3,6 +3,11 @@ const config = require('../config');
 
 class AIService {
     constructor() {
+        // Validate OpenAI API key on initialization
+        if (!config.openai.apiKey) {
+            console.error('⚠️  Warning: OpenAI API key not configured');
+        }
+        
         // Initialize OpenAI client
         this.openai = new OpenAI({
             apiKey: config.openai.apiKey
@@ -15,8 +20,8 @@ class AIService {
         ];
         
         this.prefixes = {
-            snap: 'Snαp;',
-            gram: 'Grαm;'
+            snap: 'Sn\u{03B1}p;',  // α griega
+            gram: 'Gr\u{03B1}m;'   // α griega
         };
     }
 
@@ -28,20 +33,65 @@ class AIService {
      */
     async generateText(systemPrompt, userPrompt, maxTokens = 80) {
         try {
-            const response = await this.openai.chat.completions.create({
-                model: "gpt-4o",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userPrompt }
-                ],
-                temperature: 0.85,
-                max_tokens: maxTokens
-            });
+            console.log('🤖 Calling OpenAI API...');
+            
+            // Try with gpt-3.5-turbo first (more reliable and cheaper)
+            let model = "gpt-3.5-turbo";
+            
+            try {
+                const response = await this.openai.chat.completions.create({
+                    model: model,
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userPrompt }
+                    ],
+                    temperature: 0.85,
+                    max_tokens: maxTokens
+                });
 
-            return response.choices[0].message.content.trim();
+                console.log('✅ OpenAI API call successful');
+                return response.choices[0].message.content.trim();
+                
+            } catch (firstError) {
+                // If gpt-3.5-turbo fails, try gpt-4
+                if (firstError.message.includes('model_not_found')) {
+                    console.log('⚠️  gpt-3.5-turbo not available, trying gpt-4...');
+                    model = "gpt-4";
+                    
+                    const response = await this.openai.chat.completions.create({
+                        model: model,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            { role: "user", content: userPrompt }
+                        ],
+                        temperature: 0.85,
+                        max_tokens: maxTokens
+                    });
+                    
+                    return response.choices[0].message.content.trim();
+                }
+                throw firstError;
+            }
+            
         } catch (error) {
             console.error('❌ OpenAI API error:', error.message);
-            throw new Error('Failed to generate text with AI');
+            
+            // Provide more detailed error information
+            if (error.response) {
+                console.error('Response status:', error.response.status);
+                console.error('Response data:', error.response.data);
+            }
+            
+            // Throw a more descriptive error
+            if (error.message.includes('401')) {
+                throw new Error('Invalid OpenAI API key. Please check your OPENAI_API_KEY in .env');
+            } else if (error.message.includes('429')) {
+                throw new Error('OpenAI rate limit exceeded. Please wait a moment and try again');
+            } else if (error.message.includes('insufficient_quota')) {
+                throw new Error('OpenAI account has insufficient quota. Please add credits to your account');
+            } else {
+                throw new Error(`OpenAI API error: ${error.message}`);
+            }
         }
     }
 
@@ -53,13 +103,18 @@ class AIService {
      */
     obfuscate(text, numTags) {
         let result = '';
-        for (const char of text) {
-            // Shuffle tag characters
-            const shuffled = this.tagChars
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            // Shuffle tag characters and select numTags
+            const shuffled = [...this.tagChars]
                 .sort(() => Math.random() - 0.5)
-                .slice(0, numTags)
-                .join('');
-            result += char + shuffled;
+                .slice(0, numTags);
+            
+            // Add the character followed by the invisible tags
+            result += char;
+            for (const tag of shuffled) {
+                result += tag;
+            }
         }
         return result;
     }
@@ -72,6 +127,8 @@ class AIService {
      * @returns {Promise<Object>} Generated prompt data
      */
     async generatePrompt(model, channel, username) {
+        console.log(`🎨 Generating prompt for ${model}/${channel} with username: ${username}`);
+        
         // System prompt for short Tinder-style lines
         const systemPrompt = (
             "You are writing short, catchy Tinder profile prompts for a young girl. All responses must be lowercase, casual, and direct. " +
@@ -98,16 +155,28 @@ class AIService {
         );
 
         // Generate AI text
-        let aiText = await this.generateText(systemPrompt, userPrompt);
+        console.log('   Calling OpenAI API...');
+        let aiText;
+        try {
+            aiText = await this.generateText(systemPrompt, userPrompt);
+            console.log(`   Generated text: "${aiText}"`);
+        } catch (error) {
+            console.error('   Failed to generate text:', error.message);
+            throw error;
+        }
         
         // Enforce strict 40-char limit
         aiText = aiText.substring(0, 40).trim();
+        console.log(`   Trimmed to 40 chars: "${aiText}" (${aiText.length} chars)`);
 
         // Create obfuscated output
+        console.log('   Creating obfuscated output...');
         const prefixBlock = this.prefixes[channel] + username + " ";
         const obfPrefix = this.obfuscate(prefixBlock, 4);
         const obfBio = this.obfuscate(aiText, 1);
         const finalOutput = obfPrefix + obfBio;
+        
+        console.log('   ✅ Prompt generation complete');
 
         return {
             model,

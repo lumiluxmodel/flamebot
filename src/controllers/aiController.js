@@ -8,11 +8,25 @@ class AIController {
      * Generate a single prompt
      */
     async generatePrompt(req, res) {
+        // Set timeout for this request
+        const timeout = setTimeout(() => {
+            if (!res.headersSent) {
+                console.error('⏱️ Request timeout after 25 seconds');
+                res.status(504).json({
+                    success: false,
+                    error: 'Request timeout - generation took too long'
+                });
+            }
+        }, 25000);
+
         try {
+            console.log('\n🎯 Generate Prompt Request:', req.body);
+            
             const { model, channel } = req.body;
 
             // Validation
             if (!model || !channel) {
+                clearTimeout(timeout);
                 return res.status(400).json({
                     success: false,
                     error: 'Missing required fields: model and channel are required'
@@ -23,6 +37,7 @@ class AIController {
             const validChannels = ['snap', 'gram'];
 
             if (!validModels.includes(model.toLowerCase())) {
+                clearTimeout(timeout);
                 return res.status(400).json({
                     success: false,
                     error: `Invalid model. Valid models: ${validModels.join(', ')}`
@@ -30,21 +45,58 @@ class AIController {
             }
 
             if (!validChannels.includes(channel.toLowerCase())) {
+                clearTimeout(timeout);
                 return res.status(400).json({
                     success: false,
                     error: `Invalid channel. Valid channels: ${validChannels.join(', ')}`
                 });
             }
 
-            // Get next username
-            const usernameData = await usernameService.getNextUsername(model, channel);
+            // Check if OpenAI API key is configured
+            if (!config.openai.apiKey) {
+                clearTimeout(timeout);
+                return res.status(500).json({
+                    success: false,
+                    error: 'OpenAI API key not configured. Please set OPENAI_API_KEY in .env file'
+                });
+            }
+
+            // Get next username with timeout
+            console.log('📂 Getting next username...');
+            let usernameData;
+            try {
+                usernameData = await usernameService.getNextUsername(model, channel);
+                console.log('✅ Username obtained:', usernameData.username);
+            } catch (error) {
+                console.error('❌ Error getting username:', error.message);
+                clearTimeout(timeout);
+                return res.status(500).json({
+                    success: false,
+                    error: `Failed to get username: ${error.message}`
+                });
+            }
             
-            // Generate prompt with AI
-            const promptData = await aiService.generatePrompt(
-                model,
-                channel,
-                usernameData.username
-            );
+            // Generate prompt with AI with timeout
+            console.log('🤖 Generating prompt with AI...');
+            let promptData;
+            try {
+                promptData = await aiService.generatePrompt(
+                    model,
+                    channel,
+                    usernameData.username
+                );
+                console.log('✅ Prompt generated successfully');
+            } catch (error) {
+                console.error('❌ Error generating prompt:', error.message);
+                clearTimeout(timeout);
+                return res.status(500).json({
+                    success: false,
+                    error: `Failed to generate prompt: ${error.message}`
+                });
+            }
+
+            // Clear timeout on success
+            clearTimeout(timeout);
 
             res.json({
                 success: true,
@@ -54,11 +106,14 @@ class AIController {
                 }
             });
         } catch (error) {
-            console.error('Generate prompt error:', error);
-            res.status(500).json({
-                success: false,
-                error: error.message || 'Failed to generate prompt'
-            });
+            clearTimeout(timeout);
+            console.error('❌ Unexpected error in generatePrompt:', error);
+            if (!res.headersSent) {
+                res.status(500).json({
+                    success: false,
+                    error: error.message || 'Failed to generate prompt'
+                });
+            }
         }
     }
 
@@ -251,6 +306,47 @@ class AIController {
             res.status(500).json({
                 success: false,
                 error: error.message || 'Failed to get statistics'
+            });
+        }
+    }
+
+    /**
+     * Health check for AI service
+     */
+    async healthCheck(req, res) {
+        try {
+            const status = {
+                service: 'AI Service',
+                openaiConfigured: !!config.openai.apiKey,
+                timestamp: new Date().toISOString()
+            };
+
+            // Test OpenAI connection if key is configured
+            if (config.openai.apiKey) {
+                try {
+                    const testPrompt = await aiService.generateText(
+                        "You are a test assistant.",
+                        "Say 'OK' in one word.",
+                        10
+                    );
+                    status.openaiConnection = 'OK';
+                    status.testResponse = testPrompt;
+                } catch (error) {
+                    status.openaiConnection = 'ERROR';
+                    status.openaiError = error.message;
+                }
+            }
+
+            const isHealthy = status.openaiConfigured && status.openaiConnection === 'OK';
+            
+            res.status(isHealthy ? 200 : 503).json({
+                success: isHealthy,
+                data: status
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                error: error.message
             });
         }
     }

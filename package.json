@@ -7,10 +7,15 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "test": "node test/testImport.js",
+    "test:openai": "node test/testOpenAI.js",
+    "test:username": "node test/testUsernameService.js",
+    "test:prompt:direct": "node test/testPromptDirect.js",
     "test:ai": "node test/testAI.js",
-    "test:ai:setup": "node test/testAI.js setup",
+    "test:ai:stats": "node test/testAI.js stats",
     "test:ai:prompt": "node test/testAI.js prompt",
-    "test:ai:bios": "node test/testAI.js bios"
+    "test:ai:prompts": "node test/testAI.js prompts",
+    "test:ai:bios": "node test/testAI.js bios",
+    "test:ai:rotation": "node test/testAI.js rotation"
   },
   "keywords": [
     "flamebot",
