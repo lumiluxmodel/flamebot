@@ -23,6 +23,9 @@ const config = {
       Ciara: '#295eff',
       Iris: '#ffb3f5'
     }
+  },
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY
   }
 };
 

@@ -4,6 +4,8 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const config = require('./config');
 const accountRoutes = require('./routes/accountRoutes');
+const aiRoutes = require('./routes/aiRoutes');
+
 const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = require('./flamebot-api-openapi.json');
@@ -30,6 +32,7 @@ app.use(morgan('dev'));
 
 // API routes
 app.use('/api/accounts', accountRoutes);
+app.use('/api/ai', aiRoutes); 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Root endpoint
