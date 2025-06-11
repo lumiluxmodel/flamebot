@@ -50,11 +50,26 @@ class UsernameService {
     /**
      * Get file path for model and channel
      * @param {string} model - Model name
-     * @param {string} channel - Channel type (snap/gram)
+     * @param {string} channel - Channel type (snap/gram/of)
      * @returns {string} File path
      */
     getFilePath(model, channel) {
-        const filename = `${model.toLowerCase()}_${channel === 'snap' ? 'snap' : 'ig'}.txt`;
+        let suffix;
+        switch (channel) {
+            case 'snap':
+                suffix = 'snap';
+                break;
+            case 'gram':
+                suffix = 'ig';
+                break;
+            case 'of':
+                suffix = 'of';
+                break;
+            default:
+                throw new Error(`Invalid channel: ${channel}. Valid channels: snap, gram, of`);
+        }
+        
+        const filename = `${model.toLowerCase()}_${suffix}.txt`;
         return path.join(this.usernamesDir, filename);
     }
 

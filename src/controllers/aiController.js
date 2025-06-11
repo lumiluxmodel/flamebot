@@ -33,8 +33,8 @@ class AIController {
                 });
             }
 
-            const validModels = ['aura', 'lola', 'iris'];
-            const validChannels = ['snap', 'gram'];
+            const validModels = ['aura', 'lola', 'iris', 'ciara'];
+            const validChannels = ['snap', 'gram', 'of'];
 
             if (!validModels.includes(model.toLowerCase())) {
                 clearTimeout(timeout);
