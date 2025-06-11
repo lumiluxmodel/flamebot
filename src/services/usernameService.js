@@ -167,8 +167,8 @@ class UsernameService {
      */
     async getStatistics() {
         const stats = {};
-        const models = ['aura', 'lola', 'iris'];
-        const channels = ['snap', 'gram'];
+        const models = ['aura', 'lola', 'iris', 'ciara'];
+        const channels = ['snap', 'gram', 'of'];
 
         for (const model of models) {
             stats[model] = {};

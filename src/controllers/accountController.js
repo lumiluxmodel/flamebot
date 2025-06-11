@@ -1,3 +1,4 @@
+// src/controllers/accountController.js
 const flamebotService = require('../services/flamebotService');
 const { isValidModel } = require('../utils/formatters');
 const config = require('../config');

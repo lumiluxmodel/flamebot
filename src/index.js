@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const path = require('path');
 const config = require('./config');
 const accountRoutes = require('./routes/accountRoutes');
 const aiRoutes = require('./routes/aiRoutes');
@@ -30,13 +31,21 @@ app.use(express.urlencoded({ extended: true }));
 // Logging middleware
 app.use(morgan('dev'));
 
+// Serve static files (dashboard)
+app.use(express.static(path.join(__dirname, '../public')));
+
 // API routes
 app.use('/api/accounts', accountRoutes);
 app.use('/api/ai', aiRoutes); 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// Root endpoint
+// Root endpoint - serve dashboard
 app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/dashboard.html'));
+});
+
+// API info endpoint
+app.get('/api', (req, res) => {
   res.json({
     success: true,
     message: 'Flamebot Backend API',
@@ -63,8 +72,17 @@ app.listen(PORT, () => {
 ╠═══════════════════════════════════════╣
 ║  🚀 Server running on port ${PORT}      ║
 ║  🌍 Environment: ${config.server.env}         ║
-║  📍 Base URL: http://localhost:${PORT}  ║
-║  📚 API Docs: http://localhost:${PORT}/api-docs  ║
+║                                       ║
+║  📊 Dashboard UI:                     ║
+║  👉 http://localhost:${PORT}              ║
+║                                       ║
+║  🔌 API Endpoints:                    ║
+║  👉 http://localhost:${PORT}/api          ║
+║                                       ║
+║  📚 API Documentation:                ║
+║  👉 http://localhost:${PORT}/api-docs     ║
 ╚═══════════════════════════════════════╝
+
+Press CTRL+C to stop the server
   `);
 });
