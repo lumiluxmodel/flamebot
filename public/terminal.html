@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flamebot Terminal v1.0</title>
+    <title>Flamebot Terminal v2.0 - Workflow Management</title>
     <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
     <link rel="stylesheet" href="/css/terminal.css">
+    <link rel="stylesheet" href="/css/workflow-ui.css">
 </head>
 <body>
     <div class="terminal-container">
@@ -17,19 +18,27 @@
 ██╔══╝  ██║     ██╔══██║██║╚██╔╝██║██╔══╝  ██╔══██╗██║   ██║   ██║   
 ██║     ███████╗██║  ██║██║ ╚═╝ ██║███████╗██████╔╝╚██████╔╝   ██║   
 ╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝╚═════╝  ╚═════╝    ╚═╝   
-        T E R M I N A L   v1.0   |   T I N D E R   A U T O M A T I O N</pre>
+        WORKFLOW AUTOMATION v2.0   |   AI-POWERED MANAGEMENT</pre>
 
-        <!-- Status Bar -->
+        <!-- Enhanced Status Bar -->
         <div class="status-bar">
             <div class="status-item">
-                <div class="status-indicator"></div>
-                <span>System Online</span>
+                <div class="status-indicator" id="system-indicator"></div>
+                <span id="system-status">System Online</span>
             </div>
             <div class="status-item">
-                <span id="connection-status">API Connected</span>
+                <span id="workflow-count">0 Active Workflows</span>
+            </div>
+            <div class="status-item">
+                <span id="alert-count">0 Alerts</span>
             </div>
             <div class="status-item">
                 <span id="current-time">00:00:00</span>
+            </div>
+            <div class="status-item">
+                <button class="control-btn" id="pause-all-btn" title="Pause All Workflows">⏸️</button>
+                <button class="control-btn" id="resume-all-btn" title="Resume All Workflows">▶️</button>
+                <button class="control-btn" id="refresh-btn" title="Refresh Data">🔄</button>
             </div>
         </div>
 
@@ -37,113 +46,265 @@
         <div class="terminal-content">
             <!-- Loading State -->
             <div id="main-loader" class="loading" style="display: none;">
-                <div class="loading-text">INITIALIZING SYSTEM...</div>
+                <div class="loading-text">LOADING WORKFLOW DATA...</div>
                 <div class="loading-bar">
                     <div class="loading-progress"></div>
                 </div>
             </div>
 
-            <!-- Dashboard Grid -->
-            <div class="dashboard-grid">
-                <!-- Active Tasks Monitor -->
-                <div class="panel task-monitor">
-                    <div class="panel-header">
-                        <span>ACTIVE TASKS</span>
-                        <span id="task-count">0 active</span>
+            <!-- Navigation Tabs -->
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="dashboard">📊 Dashboard</button>
+                <button class="nav-tab" data-tab="workflows">🔄 Active Workflows</button>
+                <button class="nav-tab" data-tab="monitoring">📈 Monitoring</button>
+                <button class="nav-tab" data-tab="definitions">📚 Workflows</button>
+                <button class="nav-tab" data-tab="console">💻 Console</button>
+            </div>
+
+            <!-- Dashboard Tab -->
+            <div class="tab-content active" id="dashboard-tab">
+                <!-- System Overview -->
+                <div class="overview-grid">
+                    <div class="overview-card">
+                        <div class="card-header">
+                            <span class="card-title">SYSTEM OVERVIEW</span>
+                            <span class="card-status" id="system-health">HEALTHY</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="metric-row">
+                                <span class="metric-label">Active Workflows:</span>
+                                <span class="metric-value" id="active-workflows-count">0</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Total Executions:</span>
+                                <span class="metric-value" id="total-executions">0</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Success Rate:</span>
+                                <span class="metric-value" id="success-rate">0%</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Avg Duration:</span>
+                                <span class="metric-value" id="avg-duration">0ms</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="panel-content" id="tasks-list">
-                        <div class="loading">
-                            <div class="loading-text">Loading tasks...</div>
-                            <div class="loading-bar">
-                                <div class="loading-progress"></div>
+
+                    <div class="overview-card">
+                        <div class="card-header">
+                            <span class="card-title">WORKFLOW DISTRIBUTION</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="workflow-types" id="workflow-types">
+                                <!-- Dynamic workflow type bars -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="overview-card">
+                        <div class="card-header">
+                            <span class="card-title">SYSTEM PERFORMANCE</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="metric-row">
+                                <span class="metric-label">Cron Jobs:</span>
+                                <span class="metric-value" id="cron-jobs-count">0</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Queued Tasks:</span>
+                                <span class="metric-value" id="queued-tasks">0</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Memory Usage:</span>
+                                <span class="metric-value" id="memory-usage">0MB</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Uptime:</span>
+                                <span class="metric-value" id="uptime">0s</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="overview-card">
+                        <div class="card-header">
+                            <span class="card-title">RECENT ALERTS</span>
+                            <button class="card-action" id="view-all-alerts">View All</button>
+                        </div>
+                        <div class="card-content">
+                            <div class="alerts-list" id="recent-alerts">
+                                <!-- Dynamic alerts -->
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Models Panel -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <span>MODELS</span>
-                    </div>
-                    <div class="panel-content">
-                        <div class="list-container" id="models-list">
-                            <!-- Models will be loaded here -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Channels Panel -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <span>CHANNELS</span>
-                    </div>
-                    <div class="panel-content">
-                        <div class="list-container" id="channels-list">
-                            <!-- Channels will be loaded here -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Statistics Panel -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <span>TODAY'S STATISTICS</span>
-                    </div>
-                    <div class="panel-content">
-                        <div class="stats-grid">
-                            <div class="stat-box">
-                                <div class="stat-label">Swipes</div>
-                                <div class="stat-value" id="swipes-today">0</div>
-                            </div>
-                            <div class="stat-box">
-                                <div class="stat-label">Matches</div>
-                                <div class="stat-value" id="matches-today">0</div>
-                            </div>
-                            <div class="stat-box">
-                                <div class="stat-label">Active</div>
-                                <div class="stat-value" id="active-accounts">0</div>
-                            </div>
-                            <div class="stat-box">
-                                <div class="stat-label">Success</div>
-                                <div class="stat-value" id="success-rate">0%</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Quick Actions Panel -->
-                <div class="panel">
-                    <div class="panel-header">
-                        <span>QUICK ACTIONS</span>
-                    </div>
-                    <div class="panel-content">
-                        <div class="list-container">
-                            <div class="list-item" onclick="terminal.executeCommand('monitor')">
-                                <span>🔄 Start Monitoring</span>
-                            </div>
-                            <div class="list-item" onclick="terminal.executeCommand('status')">
-                                <span>📊 System Status</span>
-                            </div>
-                            <div class="list-item" onclick="terminal.executeCommand('help')">
-                                <span>❓ Help & Commands</span>
-                            </div>
-                            <div class="list-item" onclick="terminal.executeCommand('emergency-stop')">
-                                <span>🛑 Emergency Stop</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Activity Panel -->
+                <!-- Recent Activity -->
                 <div class="panel">
                     <div class="panel-header">
                         <span>RECENT ACTIVITY</span>
+                        <button class="panel-action" id="refresh-activity">Refresh</button>
                     </div>
                     <div class="panel-content">
-                        <div class="list-container" id="recent-activity">
-                            <div class="empty-state">
-                                <div>No recent activity</div>
+                        <div class="activity-timeline" id="recent-activity">
+                            <!-- Dynamic activity timeline -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Workflows Tab -->
+            <div class="tab-content" id="workflows-tab">
+                <!-- Workflow Controls -->
+                <div class="workflow-controls">
+                    <div class="control-group">
+                        <label>Filter by Type:</label>
+                        <select id="workflow-type-filter" class="form-select">
+                            <option value="">All Types</option>
+                            <option value="default">Default</option>
+                            <option value="aggressive">Aggressive</option>
+                            <option value="test">Test</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Filter by Status:</label>
+                        <select id="workflow-status-filter" class="form-select">
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="paused">Paused</option>
+                            <option value="completed">Completed</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <button class="btn btn-primary" id="refresh-workflows">🔄 Refresh</button>
+                        <button class="btn btn-warning" id="bulk-stop">🛑 Stop Selected</button>
+                    </div>
+                </div>
+
+                <!-- Workflows Grid -->
+                <div class="workflows-grid" id="workflows-grid">
+                    <!-- Dynamic workflow cards -->
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination" id="workflows-pagination">
+                    <!-- Dynamic pagination -->
+                </div>
+            </div>
+
+            <!-- Monitoring Tab -->
+            <div class="tab-content" id="monitoring-tab">
+                <!-- System Health Dashboard -->
+                <div class="monitoring-grid">
+                    <div class="monitoring-card">
+                        <div class="card-header">
+                            <span class="card-title">SYSTEM HEALTH</span>
+                            <div class="health-indicator" id="health-indicator">●</div>
+                        </div>
+                        <div class="card-content">
+                            <div class="health-components" id="health-components">
+                                <!-- Dynamic health components -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="monitoring-card">
+                        <div class="card-header">
+                            <span class="card-title">PERFORMANCE METRICS</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="metrics-chart" id="performance-chart">
+                                <!-- Performance visualization -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="monitoring-card full-width">
+                        <div class="card-header">
+                            <span class="card-title">SYSTEM ALERTS</span>
+                            <div class="alert-controls">
+                                <button class="btn btn-sm" id="acknowledge-all">Acknowledge All</button>
+                                <button class="btn btn-sm" id="filter-critical">Critical Only</button>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <div class="alerts-table" id="alerts-table">
+                                <!-- Dynamic alerts table -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow Definitions Tab -->
+            <div class="tab-content" id="definitions-tab">
+                <div class="definitions-grid" id="definitions-grid">
+                    <!-- Dynamic workflow definitions -->
+                </div>
+            </div>
+
+            <!-- Console Tab (Original Terminal) -->
+            <div class="tab-content" id="console-tab">
+                <!-- Original Dashboard Grid -->
+                <div class="dashboard-grid">
+                    <!-- Legacy Task Monitor -->
+                    <div class="panel task-monitor">
+                        <div class="panel-header">
+                            <span>LEGACY TASKS</span>
+                            <span id="legacy-task-count">0 active</span>
+                        </div>
+                        <div class="panel-content" id="legacy-tasks-list">
+                            <!-- Legacy tasks -->
+                        </div>
+                    </div>
+
+                    <!-- Models Panel -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <span>MODELS</span>
+                        </div>
+                        <div class="panel-content">
+                            <div class="list-container" id="models-list">
+                                <!-- Models will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Channels Panel -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <span>CHANNELS</span>
+                        </div>
+                        <div class="panel-content">
+                            <div class="list-container" id="channels-list">
+                                <!-- Channels will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Statistics Panel -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <span>TODAY'S STATISTICS</span>
+                        </div>
+                        <div class="panel-content">
+                            <div class="stats-grid">
+                                <div class="stat-box">
+                                    <div class="stat-label">Swipes</div>
+                                    <div class="stat-value" id="swipes-today">0</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-label">Matches</div>
+                                    <div class="stat-value" id="matches-today">0</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-label">Active</div>
+                                    <div class="stat-value" id="active-accounts">0</div>
+                                </div>
+                                <div class="stat-box">
+                                    <div class="stat-label">Success</div>
+                                    <div class="stat-value" id="success-rate-legacy">0%</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -154,9 +315,9 @@
         <!-- Command Input Section -->
         <div class="command-section">
             <div class="command-prompt">
-                <span class="prompt-symbol">flamebot@terminal:~$</span>
+                <span class="prompt-symbol">flamebot@workflow:~$</span>
                 <input type="text" class="command-input" id="command-input" 
-                       placeholder="type 'help' for commands" 
+                       placeholder="type 'help' for commands or use UI tabs above" 
                        autocomplete="off" 
                        spellcheck="false">
                 <span class="cursor"></span>
@@ -164,67 +325,105 @@
         </div>
     </div>
 
-    <!-- Modal Overlay -->
+    <!-- Enhanced Modal System -->
     <div class="modal-overlay" id="modal-overlay">
         <div class="modal" id="modal" onclick="event.stopPropagation()">
-            <h2 class="modal-header" id="modal-header">MODAL TITLE</h2>
+            <div class="modal-header">
+                <h2 class="modal-title" id="modal-title">MODAL TITLE</h2>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
             <div class="modal-content" id="modal-content">
                 <!-- Modal content will be inserted here -->
             </div>
         </div>
     </div>
 
-    <!-- Matrix Rain Effect (Optional) -->
-    <canvas class="matrix-rain" id="matrix-rain"></canvas>
+    <!-- Workflow Detail Modal -->
+    <div class="modal-overlay" id="workflow-detail-modal">
+        <div class="modal large" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 class="modal-title" id="workflow-detail-title">WORKFLOW DETAILS</h2>
+                <button class="modal-close" onclick="workflowUI.closeWorkflowDetail()">&times;</button>
+            </div>
+            <div class="modal-content" id="workflow-detail-content">
+                <!-- Workflow detail content -->
+            </div>
+        </div>
+    </div>
 
     <!-- Load JavaScript -->
     <script src="/js/terminal.js"></script>
+    <script src="/js/workflowUI.js"></script>
+    <script src="/js/workflowManager.js"></script>
     
-    <!-- Optional: Matrix Rain Effect -->
+    <!-- Enhanced Initialize Script -->
     <script>
-        // Matrix rain effect (subtle background)
-        const canvas = document.getElementById('matrix-rain');
-        const ctx = canvas.getContext('2d');
-        
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        
-        const matrix = "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789@#$%^&*()*&^%+-/~{[|`]}";
-        const matrixArray = matrix.split("");
-        
-        const fontSize = 10;
-        const columns = canvas.width / fontSize;
-        
-        const drops = [];
-        for(let x = 0; x < columns; x++) {
-            drops[x] = 1;
+        // Debug function
+        function debugTabNavigation() {
+            console.log('🔍 Debug: Tab Navigation Status');
+            console.log('Tab buttons:', document.querySelectorAll('.nav-tab').length);
+            console.log('Tab contents:', document.querySelectorAll('.tab-content').length);
+            console.log('WorkflowUI exists:', typeof workflowUI !== 'undefined');
+            console.log('WorkflowUI initialized:', workflowUI?.isInitialized);
         }
-        
-        function drawMatrix() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Initialize with better error handling and debugging
+        function initializeSystem() {
+            console.log('🚀 Initializing Flamebot Workflow Terminal v2.0');
             
-            ctx.fillStyle = '#00ff41';
-            ctx.font = fontSize + 'px monospace';
-            
-            for(let i = 0; i < drops.length; i++) {
-                const text = matrixArray[Math.floor(Math.random() * matrixArray.length)];
-                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-                
-                if(drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-                    drops[i] = 0;
+            try {
+                // Initialize terminal first (if exists)
+                if (typeof terminal !== 'undefined') {
+                    console.log('📺 Initializing terminal...');
+                    terminal.init();
+                } else {
+                    console.warn('⚠️ Terminal not found, continuing without it');
                 }
-                drops[i]++;
+
+                // Initialize workflow manager
+                if (typeof workflowManager !== 'undefined') {
+                    console.log('🔧 Initializing workflow manager...');
+                    workflowManager.init();
+                } else {
+                    console.warn('⚠️ Workflow manager not found');
+                }
+
+                // Initialize workflow UI (most important)
+                if (typeof workflowUI !== 'undefined') {
+                    console.log('🎨 Initializing workflow UI...');
+                    workflowUI.init();
+                    
+                    // Add debug function to window for testing
+                    window.debugTabs = debugTabNavigation;
+                    
+                    // Test tab functionality after a short delay
+                    setTimeout(debugTabNavigation, 1000);
+                } else {
+                    console.error('❌ WorkflowUI not found! Check workflowUI.js');
+                }
+
+                console.log('✅ System initialization completed');
+                
+            } catch (error) {
+                console.error('❌ System initialization failed:', error);
             }
         }
-        
-        // Uncomment to enable matrix effect
-        // setInterval(drawMatrix, 35);
-        
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeSystem);
+        } else {
+            initializeSystem();
+        }
+
+        // Also try after window load as backup
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (!workflowUI?.isInitialized) {
+                    console.log('🔄 Backup initialization attempt...');
+                    initializeSystem();
+                }
+            }, 500);
         });
     </script>
 </body>

@@ -13,6 +13,8 @@ const workflowManager = require('./services/workflowManager');
 const accountRoutes = require('./routes/accountRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const actionsRoutes = require('./routes/actionsRoutes');
+const workflowRoutes = require('./routes/workflowRoutes');
+
 
 // Middleware
 const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
@@ -50,7 +52,10 @@ app.use('/js', express.static(path.join(__dirname, '../public/js')));
 app.use('/api/accounts', accountRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/actions', actionsRoutes);
+app.use('/api/workflows', workflowRoutes); // NUEVA LÍNEA
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+
 
 // Root endpoint - serve dashboard
 app.get('/', (req, res) => {
