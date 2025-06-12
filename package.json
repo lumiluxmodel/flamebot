@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon --ignore data/ --ignore test/ --ignore '*.txt' src/index.js",
+    "db:test": "node scripts/test-db-connection.js",
+    "db:migrate": "node scripts/migrate-usernames.js",
     "test:import": "node test/testImport.js",
     "test:ai": "node test/testAI.js",
     "test:bio-prompt": "node test/testBioPrompt.js",
@@ -27,6 +29,7 @@
     "helmet": "^7.1.0",
     "morgan": "^1.10.0",
     "openai": "^5.2.0",
+    "pg": "^8.16.0",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {

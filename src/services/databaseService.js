@@ -1,0 +1,572 @@
+// src/services/databaseService.js
+const { Pool } = require('pg');
+const config = require('../config');
+
+class DatabaseService {
+    constructor() {
+        this.pool = new Pool({
+            host: config.database.host,
+            port: config.database.port,
+            database: config.database.name,
+            user: config.database.user,
+            password: config.database.password,
+            max: 20,
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 2000,
+        });
+
+        // Log connection
+        this.pool.on('connect', () => {
+            console.log('✅ Database connected');
+        });
+
+        this.pool.on('error', (err) => {
+            console.error('❌ Database error:', err);
+        });
+    }
+
+    /**
+     * Execute a query
+     */
+    async query(text, params) {
+        const start = Date.now();
+        try {
+            const res = await this.pool.query(text, params);
+            const duration = Date.now() - start;
+            console.log('📊 Query executed', { text, duration, rows: res.rowCount });
+            return res;
+        } catch (error) {
+            console.error('❌ Query error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get a client for transactions
+     */
+    async getClient() {
+        const client = await this.pool.connect();
+        const query = client.query.bind(client);
+        const release = client.release.bind(client);
+
+        // Enhanced release to ensure client is released
+        const releaseClient = () => {
+            client.release();
+        };
+
+        return { query, release: releaseClient, client };
+    }
+
+    // ========== ACCOUNTS ==========
+
+    async createAccount(accountData) {
+        const { flamebot_id, auth_token, proxy, model_name, location, refresh_token, device_id, persistent_id } = accountData;
+        
+        const query = `
+            INSERT INTO accounts (flamebot_id, auth_token, proxy, model_id, location, refresh_token, device_id, persistent_id)
+            VALUES ($1, $2, $3, (SELECT id FROM models WHERE name = $4), $5, $6, $7, $8)
+            RETURNING *
+        `;
+        
+        const result = await this.query(query, [
+            flamebot_id, auth_token, proxy, model_name, location, refresh_token, device_id, persistent_id
+        ]);
+        
+        return result.rows[0];
+    }
+
+    async getAccountById(accountId) {
+        const query = `
+            SELECT a.*, m.name as model_name, m.color as model_color
+            FROM accounts a
+            JOIN models m ON a.model_id = m.id
+            WHERE a.flamebot_id = $1
+        `;
+        const result = await this.query(query, [accountId]);
+        return result.rows[0];
+    }
+
+    async updateAccountStats(accountId, stats) {
+        const { total_swipes, total_matches, last_swipe_at } = stats;
+        
+        const query = `
+            UPDATE accounts 
+            SET total_swipes = COALESCE($2, total_swipes),
+                total_matches = COALESCE($3, total_matches),
+                last_swipe_at = COALESCE($4, last_swipe_at),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE flamebot_id = $1
+            RETURNING *
+        `;
+        
+        const result = await this.query(query, [accountId, total_swipes, total_matches, last_swipe_at]);
+        return result.rows[0];
+    }
+
+    async updateAccountBio(accountId, bio) {
+        const query = `
+            UPDATE accounts 
+            SET bio = $2, updated_at = CURRENT_TIMESTAMP
+            WHERE flamebot_id = $1
+            RETURNING *
+        `;
+        const result = await this.query(query, [accountId, bio]);
+        return result.rows[0];
+    }
+
+    async updateAccountPrompt(accountId, prompt) {
+        const query = `
+            UPDATE accounts 
+            SET prompt = $2, updated_at = CURRENT_TIMESTAMP
+            WHERE flamebot_id = $1
+            RETURNING *
+        `;
+        const result = await this.query(query, [accountId, prompt]);
+        return result.rows[0];
+    }
+
+    async updateAccountSpectreConfig(accountId, spectreConfig) {
+        const query = `
+            UPDATE accounts 
+            SET spectre_config = $2, updated_at = CURRENT_TIMESTAMP
+            WHERE flamebot_id = $1
+            RETURNING *
+        `;
+        const result = await this.query(query, [accountId, JSON.stringify(spectreConfig)]);
+        return result.rows[0];
+    }
+
+    async getActiveAccounts(modelName = null) {
+        let query = `
+            SELECT a.*, m.name as model_name, m.color as model_color
+            FROM accounts a
+            JOIN models m ON a.model_id = m.id
+            WHERE a.status = 'active'
+        `;
+        
+        const params = [];
+        if (modelName) {
+            query += ` AND m.name = $1`;
+            params.push(modelName);
+        }
+        
+        query += ` ORDER BY a.created_at DESC`;
+        
+        const result = await this.query(query, params);
+        return result.rows;
+    }
+
+    // ========== TASKS ==========
+
+    async createTask(taskData) {
+        const { task_id, type, status, account_id, payload } = taskData;
+        
+        const query = `
+            INSERT INTO tasks (task_id, type, status, account_id, payload)
+            VALUES ($1, $2, $3, (SELECT id FROM accounts WHERE flamebot_id = $4), $5)
+            RETURNING *
+        `;
+        
+        const result = await this.query(query, [
+            task_id, type, status, account_id, JSON.stringify(payload)
+        ]);
+        
+        return result.rows[0];
+    }
+
+    async updateTaskStatus(taskId, status, result = null, error = null) {
+        const query = `
+            UPDATE tasks 
+            SET status = $2, 
+                result = $3,
+                error = $4,
+                completed_at = CASE WHEN $2 IN ('completed', 'failed') THEN CURRENT_TIMESTAMP ELSE NULL END,
+                duration_ms = CASE WHEN $2 IN ('completed', 'failed') THEN EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)) * 1000 ELSE NULL END
+            WHERE task_id = $1
+            RETURNING *
+        `;
+        
+        const result_json = result ? JSON.stringify(result) : null;
+        const db_result = await this.query(query, [taskId, status, result_json, error]);
+        return db_result.rows[0];
+    }
+
+    async getTaskById(taskId) {
+        const query = `
+            SELECT t.*, a.flamebot_id as account_id
+            FROM tasks t
+            LEFT JOIN accounts a ON t.account_id = a.id
+            WHERE t.task_id = $1
+        `;
+        const result = await this.query(query, [taskId]);
+        return result.rows[0];
+    }
+
+    async getTaskHistory(accountId = null, type = null, limit = 50) {
+        let query = `
+            SELECT t.*, a.flamebot_id as account_id, m.name as model_name
+            FROM tasks t
+            LEFT JOIN accounts a ON t.account_id = a.id
+            LEFT JOIN models m ON a.model_id = m.id
+            WHERE 1=1
+        `;
+        
+        const params = [];
+        let paramIndex = 1;
+        
+        if (accountId) {
+            query += ` AND a.flamebot_id = $${paramIndex}`;
+            params.push(accountId);
+            paramIndex++;
+        }
+        
+        if (type) {
+            query += ` AND t.type = $${paramIndex}`;
+            params.push(type);
+            paramIndex++;
+        }
+        
+        query += ` ORDER BY t.started_at DESC LIMIT $${paramIndex}`;
+        params.push(limit);
+        
+        const result = await this.query(query, params);
+        return result.rows;
+    }
+
+    // ========== SWIPE HISTORY ==========
+
+    async createSwipeHistory(swipeData) {
+        const { account_id, task_id, spectre_config } = swipeData;
+        
+        const query = `
+            INSERT INTO swipe_history (account_id, task_id, spectre_config)
+            VALUES (
+                (SELECT id FROM accounts WHERE flamebot_id = $1),
+                (SELECT id FROM tasks WHERE task_id = $2),
+                $3
+            )
+            RETURNING *
+        `;
+        
+        const result = await this.query(query, [
+            account_id, task_id, JSON.stringify(spectre_config)
+        ]);
+        
+        return result.rows[0];
+    }
+
+    async updateSwipeHistory(swipeHistoryId, stats) {
+        const { swipes_count, likes_count, matches_count } = stats;
+        
+        const query = `
+            UPDATE swipe_history 
+            SET swipes_count = $2,
+                likes_count = $3,
+                matches_count = $4,
+                completed_at = CURRENT_TIMESTAMP,
+                duration_minutes = EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)) / 60
+            WHERE id = $1
+            RETURNING *
+        `;
+        
+        const result = await this.query(query, [swipeHistoryId, swipes_count, likes_count, matches_count]);
+        return result.rows[0];
+    }
+
+    // ========== USERNAMES ==========
+
+    async addUsernames(modelName, channelName, usernames) {
+        const client = await this.getClient();
+        
+        try {
+            await client.query('BEGIN');
+            
+            // Get model and channel IDs
+            const modelResult = await client.query('SELECT id FROM models WHERE name = $1', [modelName]);
+            const channelResult = await client.query('SELECT id FROM channels WHERE name = $1', [channelName]);
+            
+            if (!modelResult.rows[0] || !channelResult.rows[0]) {
+                throw new Error('Model or channel not found');
+            }
+            
+            const modelId = modelResult.rows[0].id;
+            const channelId = channelResult.rows[0].id;
+            
+            // Insert usernames
+            for (const username of usernames) {
+                await client.query(
+                    `INSERT INTO usernames (model_id, channel_id, username) 
+                     VALUES ($1, $2, $3) 
+                     ON CONFLICT (model_id, channel_id, username) DO NOTHING`,
+                    [modelId, channelId, username]
+                );
+            }
+            
+            await client.query('COMMIT');
+            return { success: true, count: usernames.length };
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
+    async getNextUsername(modelName, channelName) {
+        const client = await this.getClient();
+        
+        try {
+            await client.query('BEGIN');
+            
+            // Get model and channel IDs
+            const modelResult = await client.query('SELECT id FROM models WHERE name = $1', [modelName]);
+            const channelResult = await client.query('SELECT id FROM channels WHERE name = $1', [channelName]);
+            
+            if (!modelResult.rows[0] || !channelResult.rows[0]) {
+                throw new Error('Model or channel not found');
+            }
+            
+            const modelId = modelResult.rows[0].id;
+            const channelId = channelResult.rows[0].id;
+            
+            // Get current pointer
+            let pointerResult = await client.query(
+                'SELECT current_index FROM username_pointers WHERE model_id = $1 AND channel_id = $2',
+                [modelId, channelId]
+            );
+            
+            let currentIndex = 0;
+            if (!pointerResult.rows[0]) {
+                // Create pointer if doesn't exist
+                await client.query(
+                    'INSERT INTO username_pointers (model_id, channel_id, current_index) VALUES ($1, $2, 0)',
+                    [modelId, channelId]
+                );
+            } else {
+                currentIndex = pointerResult.rows[0].current_index;
+            }
+            
+            // Get username at current index
+            const usernameResult = await client.query(
+                `SELECT username FROM usernames 
+                 WHERE model_id = $1 AND channel_id = $2 
+                 ORDER BY created_at 
+                 LIMIT 1 OFFSET $3`,
+                [modelId, channelId, currentIndex]
+            );
+            
+            if (!usernameResult.rows[0]) {
+                // Reset to beginning if we've reached the end
+                currentIndex = 0;
+                const firstUsername = await client.query(
+                    `SELECT username FROM usernames 
+                     WHERE model_id = $1 AND channel_id = $2 
+                     ORDER BY created_at 
+                     LIMIT 1`,
+                    [modelId, channelId]
+                );
+                
+                if (!firstUsername.rows[0]) {
+                    throw new Error('No usernames available');
+                }
+                
+                usernameResult.rows[0] = firstUsername.rows[0];
+            }
+            
+            // Update pointer
+            const totalCount = await client.query(
+                'SELECT COUNT(*) FROM usernames WHERE model_id = $1 AND channel_id = $2',
+                [modelId, channelId]
+            );
+            
+            const nextIndex = (currentIndex + 1) % parseInt(totalCount.rows[0].count);
+            
+            await client.query(
+                `UPDATE username_pointers 
+                 SET current_index = $3, updated_at = CURRENT_TIMESTAMP 
+                 WHERE model_id = $1 AND channel_id = $2`,
+                [modelId, channelId, nextIndex]
+            );
+            
+            await client.query('COMMIT');
+            
+            return {
+                username: usernameResult.rows[0].username,
+                index: currentIndex,
+                total: parseInt(totalCount.rows[0].count),
+                nextIndex: nextIndex
+            };
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
+    // ========== ANALYTICS ==========
+
+    async updateDailyAnalytics(date = new Date()) {
+        const dateStr = date.toISOString().split('T')[0];
+        
+        const query = `
+            INSERT INTO analytics (date, model_id, total_swipes, total_likes, total_matches, 
+                                 total_accounts_active, avg_swipes_per_account, avg_matches_per_account, conversion_rate)
+            SELECT 
+                $1::date,
+                m.id,
+                COALESCE(SUM(sh.swipes_count), 0),
+                COALESCE(SUM(sh.likes_count), 0),
+                COALESCE(SUM(sh.matches_count), 0),
+                COUNT(DISTINCT a.id),
+                CASE WHEN COUNT(DISTINCT a.id) > 0 
+                     THEN SUM(sh.swipes_count)::float / COUNT(DISTINCT a.id) 
+                     ELSE 0 END,
+                CASE WHEN COUNT(DISTINCT a.id) > 0 
+                     THEN SUM(sh.matches_count)::float / COUNT(DISTINCT a.id) 
+                     ELSE 0 END,
+                CASE WHEN SUM(sh.swipes_count) > 0 
+                     THEN (SUM(sh.matches_count)::float / SUM(sh.swipes_count) * 100) 
+                     ELSE 0 END
+            FROM models m
+            LEFT JOIN accounts a ON a.model_id = m.id
+            LEFT JOIN swipe_history sh ON sh.account_id = a.id 
+                AND DATE(sh.started_at) = $1::date
+            GROUP BY m.id
+            ON CONFLICT (date, model_id) 
+            DO UPDATE SET 
+                total_swipes = EXCLUDED.total_swipes,
+                total_likes = EXCLUDED.total_likes,
+                total_matches = EXCLUDED.total_matches,
+                total_accounts_active = EXCLUDED.total_accounts_active,
+                avg_swipes_per_account = EXCLUDED.avg_swipes_per_account,
+                avg_matches_per_account = EXCLUDED.avg_matches_per_account,
+                conversion_rate = EXCLUDED.conversion_rate
+        `;
+        
+        await this.query(query, [dateStr]);
+        return { success: true, date: dateStr };
+    }
+
+    async getAnalytics(startDate, endDate, modelName = null) {
+        let query = `
+            SELECT * FROM daily_performance
+            WHERE date BETWEEN $1 AND $2
+        `;
+        
+        const params = [startDate, endDate];
+        
+        if (modelName) {
+            query += ` AND model_name = $3`;
+            params.push(modelName);
+        }
+        
+        query += ` ORDER BY date DESC, model_name`;
+        
+        const result = await this.query(query, params);
+        return result.rows;
+    }
+
+    // ========== CLEANUP ==========
+
+    async close() {
+        await this.pool.end();
+        console.log('🔌 Database connection closed');
+    }
+}
+
+module.exports = new DatabaseService();
+
+// ============================================
+// src/config/database.js
+// ============================================
+module.exports = {
+    development: {
+        host: process.env.DB_HOST || 'localhost',
+        port: process.env.DB_PORT || 5432,
+        database: process.env.DB_NAME || 'flamebot_dev',
+        user: process.env.DB_USER || 'flamebot',
+        password: process.env.DB_PASSWORD || 'flamebot123'
+    },
+    production: {
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT || 5432,
+        database: process.env.DB_NAME,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD
+    },
+    test: {
+        host: process.env.DB_HOST || 'localhost',
+        port: process.env.DB_PORT || 5432,
+        database: process.env.DB_NAME || 'flamebot_test',
+        user: process.env.DB_USER || 'flamebot',
+        password: process.env.DB_PASSWORD || 'flamebot123'
+    }
+};
+
+// ============================================
+// scripts/setup-database.js
+// ============================================
+const { Client } = require('pg');
+const fs = require('fs').promises;
+const path = require('path');
+
+async function setupDatabase() {
+    const env = process.env.NODE_ENV || 'development';
+    const config = require('../src/config/database')[env];
+    
+    // Connect to postgres database to create our database
+    const client = new Client({
+        host: config.host,
+        port: config.port,
+        user: config.user,
+        password: config.password,
+        database: 'postgres'
+    });
+
+    try {
+        await client.connect();
+        
+        // Create database if it doesn't exist
+        const dbExists = await client.query(
+            `SELECT 1 FROM pg_database WHERE datname = $1`,
+            [config.database]
+        );
+        
+        if (dbExists.rows.length === 0) {
+            await client.query(`CREATE DATABASE ${config.database}`);
+            console.log(`✅ Database '${config.database}' created`);
+        } else {
+            console.log(`ℹ️  Database '${config.database}' already exists`);
+        }
+        
+        await client.end();
+        
+        // Now connect to our database and run schema
+        const dbClient = new Client({
+            ...config,
+            database: config.database
+        });
+        
+        await dbClient.connect();
+        
+        // Read and execute schema
+        const schemaPath = path.join(__dirname, '..', 'database', 'schema.sql');
+        const schema = await fs.readFile(schemaPath, 'utf8');
+        
+        await dbClient.query(schema);
+        console.log('✅ Database schema created');
+        
+        await dbClient.end();
+        
+    } catch (error) {
+        console.error('❌ Database setup error:', error);
+        process.exit(1);
+    }
+}
+
+if (require.main === module) {
+    setupDatabase();
+}
+
+module.exports = setupDatabase;

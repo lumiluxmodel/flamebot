@@ -1,591 +1,1165 @@
-<!-- public/dashboard.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flamebot Terminal Dashboard</title>
+    <title>Flamebot Terminal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
-        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --bg-tertiary: #1a1a1a;
+            --text-primary: #00ff41;
+            --text-secondary: #00bfff;
+            --text-warning: #ffbd2e;
+            --text-danger: #ff4444;
+            --text-dim: #666;
+            --border-color: #333;
+            --terminal-green: #00ff41;
+            --terminal-cyan: #00bfff;
+            --terminal-yellow: #ffbd2e;
+            --terminal-red: #ff4444;
+            --terminal-magenta: #ff00ff;
+        }
+
         body {
-            background: #0a0a0a;
-            color: #00ff41;
             font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             font-size: 14px;
             line-height: 1.6;
-            overflow-x: hidden;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
-        
-        /* Terminal container */
-        .terminal {
-            background: #1a1a1a;
-            border: 2px solid #00ff41;
+
+        /* Terminal Container */
+        .terminal-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: var(--bg-secondary);
+            border: 2px solid var(--terminal-green);
+            margin: 10px;
             border-radius: 8px;
-            margin: 20px;
-            box-shadow: 0 0 40px rgba(0, 255, 65, 0.3);
-            min-height: calc(100vh - 40px);
+            box-shadow: 0 0 40px rgba(0, 255, 65, 0.2);
+            overflow: hidden;
         }
-        
-        /* Terminal header */
+
+        /* Terminal Header */
         .terminal-header {
-            background: #00ff41;
-            color: #0a0a0a;
+            background: var(--terminal-green);
+            color: var(--bg-primary);
             padding: 12px 20px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             font-weight: 600;
+            user-select: none;
         }
-        
+
         .terminal-title {
             display: flex;
             align-items: center;
             gap: 10px;
+            font-size: 16px;
         }
-        
+
         .terminal-controls {
             display: flex;
             gap: 8px;
         }
-        
+
         .terminal-btn {
             width: 14px;
             height: 14px;
             border-radius: 50%;
             cursor: pointer;
+            transition: transform 0.2s;
         }
-        
+
+        .terminal-btn:hover {
+            transform: scale(1.1);
+        }
+
         .btn-close { background: #ff5f56; }
         .btn-minimize { background: #ffbd2e; }
         .btn-maximize { background: #27c93f; }
-        
-        /* Terminal body */
-        .terminal-body {
+
+        /* ASCII Art Header */
+        .ascii-header {
+            text-align: center;
             padding: 20px;
-            height: calc(100vh - 100px);
+            color: var(--terminal-green);
+            font-size: 10px;
+            line-height: 1.2;
+            white-space: pre;
+            font-weight: 700;
+            text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 10px rgba(0, 255, 65, 0.5); }
+            to { text-shadow: 0 0 20px rgba(0, 255, 65, 0.8), 0 0 30px rgba(0, 255, 65, 0.6); }
+        }
+
+        /* Main Content */
+        .terminal-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            padding: 15px 20px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--terminal-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            padding: 20px;
+            height: 100%;
             overflow-y: auto;
         }
-        
-        /* Scrollbar styling */
-        .terminal-body::-webkit-scrollbar {
-            width: 10px;
-        }
-        
-        .terminal-body::-webkit-scrollbar-track {
-            background: #1a1a1a;
-            border: 1px solid #333;
-        }
-        
-        .terminal-body::-webkit-scrollbar-thumb {
-            background: #00ff41;
-            border-radius: 5px;
-        }
-        
-        /* Stats grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-box {
-            border: 1px solid #00ff41;
+
+        /* Panel Styles */
+        .panel {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
             padding: 15px;
-            background: rgba(0, 255, 65, 0.05);
-        }
-        
-        .stat-label {
-            color: #888;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .stat-value {
-            font-size: 24px;
-            font-weight: 600;
-            margin-top: 5px;
-        }
-        
-        /* Workflow container */
-        .workflow-container {
-            border: 1px solid #333;
-            margin-bottom: 20px;
-            background: rgba(0, 255, 65, 0.02);
-        }
-        
-        .workflow-header {
-            border-bottom: 1px solid #333;
-            padding: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-        }
-        
-        .workflow-info h3 {
-            color: #00ff41;
-            margin-bottom: 5px;
-        }
-        
-        .workflow-meta {
-            color: #888;
-            font-size: 12px;
-        }
-        
-        .workflow-status {
-            padding: 4px 12px;
-            border: 1px solid;
-            font-size: 11px;
-            text-transform: uppercase;
-            font-weight: 600;
-        }
-        
-        .status-running {
-            color: #00bfff;
-            border-color: #00bfff;
-            background: rgba(0, 191, 255, 0.1);
-        }
-        
-        .status-completed {
-            color: #00ff41;
-            border-color: #00ff41;
-            background: rgba(0, 255, 65, 0.1);
-        }
-        
-        .status-failed {
-            color: #ff4444;
-            border-color: #ff4444;
-            background: rgba(255, 68, 68, 0.1);
-        }
-        
-        /* Progress bar */
-        .progress-section {
-            padding: 15px;
-            border-bottom: 1px solid #333;
-        }
-        
-        .progress-info {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 12px;
-            color: #888;
-        }
-        
-        .progress-bar {
-            height: 8px;
-            background: #222;
-            border: 1px solid #444;
             position: relative;
             overflow: hidden;
         }
-        
-        .progress-fill {
-            height: 100%;
-            background: #00ff41;
-            transition: width 0.5s ease;
-            position: relative;
-        }
-        
-        .progress-fill::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            width: 20px;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4));
-            animation: shimmer 2s infinite;
-        }
-        
-        @keyframes shimmer {
-            0% { transform: translateX(-20px); }
-            100% { transform: translateX(20px); }
-        }
-        
-        /* Current step */
-        .current-step {
-            padding: 15px;
-            background: rgba(0, 191, 255, 0.05);
-            border-bottom: 1px solid #333;
-            color: #00bfff;
-        }
-        
-        .current-step-label {
+
+        .panel-header {
             font-size: 12px;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 5px;
-        }
-        
-        /* Steps timeline */
-        .steps-timeline {
-            padding: 15px;
-        }
-        
-        .step-item {
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--terminal-cyan);
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
-            position: relative;
         }
-        
-        .step-item:not(:last-child)::after {
+
+        .panel-content {
+            font-size: 13px;
+        }
+
+        /* Task Monitor */
+        .task-monitor {
+            grid-column: span 2;
+            grid-row: span 2;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .task-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background: rgba(0, 255, 65, 0.05);
+            border: 1px solid rgba(0, 255, 65, 0.2);
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .task-item::before {
             content: '';
             position: absolute;
-            left: 19px;
-            top: 30px;
-            bottom: -12px;
-            width: 1px;
-            background: #333;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: var(--terminal-green);
         }
-        
-        .step-indicator {
-            width: 24px;
-            height: 24px;
-            border: 2px solid;
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .task-id {
+            font-size: 11px;
+            color: var(--text-dim);
+            font-family: monospace;
+        }
+
+        .task-status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .status-progress {
+            background: rgba(0, 191, 255, 0.2);
+            color: var(--terminal-cyan);
+            border: 1px solid var(--terminal-cyan);
+        }
+
+        .status-completed {
+            background: rgba(0, 255, 65, 0.2);
+            color: var(--terminal-green);
+            border: 1px solid var(--terminal-green);
+        }
+
+        .status-failed {
+            background: rgba(255, 68, 68, 0.2);
+            color: var(--terminal-red);
+            border: 1px solid var(--terminal-red);
+        }
+
+        /* Models Panel */
+        .models-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .model-item {
+            padding: 12px;
+            background: rgba(0, 255, 65, 0.05);
+            border: 1px solid var(--border-color);
             border-radius: 4px;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            font-weight: 600;
-            margin-right: 12px;
-            background: #1a1a1a;
-            position: relative;
-            z-index: 1;
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
-        
-        .step-completed {
-            color: #00ff41;
-            border-color: #00ff41;
+
+        .model-item:hover {
+            border-color: var(--terminal-green);
             background: rgba(0, 255, 65, 0.1);
+            transform: translateX(5px);
         }
-        
-        .step-running {
-            color: #00bfff;
-            border-color: #00bfff;
-            background: rgba(0, 191, 255, 0.1);
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(0, 191, 255, 0.4); }
-            50% { box-shadow: 0 0 0 8px rgba(0, 191, 255, 0); }
-        }
-        
-        .step-pending {
-            color: #666;
-            border-color: #666;
-        }
-        
-        .step-failed {
-            color: #ff4444;
-            border-color: #ff4444;
-            background: rgba(255, 68, 68, 0.1);
-        }
-        
-        .step-content {
-            flex: 1;
-        }
-        
-        .step-name {
-            font-size: 13px;
-            margin-bottom: 2px;
-        }
-        
-        .step-meta {
-            font-size: 11px;
-            color: #666;
-        }
-        
-        /* Terminal prompt */
-        .terminal-prompt {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #333;
+
+        .model-name {
+            font-weight: 600;
             display: flex;
             align-items: center;
-            color: #00ff41;
+            gap: 8px;
         }
-        
+
+        .model-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .model-stats {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        /* Channels Panel */
+        .channels-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .channel-item {
+            padding: 10px;
+            background: rgba(0, 191, 255, 0.05);
+            border: 1px solid rgba(0, 191, 255, 0.2);
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .channel-name {
+            font-weight: 600;
+            color: var(--terminal-cyan);
+        }
+
+        .channel-status {
+            font-size: 11px;
+            color: var(--terminal-green);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .stat-box {
+            text-align: center;
+            padding: 15px;
+            background: rgba(0, 255, 65, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-top: 5px;
+            color: var(--terminal-green);
+        }
+
+        /* Command Input */
+        .command-section {
+            padding: 20px;
+            background: var(--bg-tertiary);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .command-prompt {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
         .prompt-symbol {
-            margin-right: 10px;
+            color: var(--terminal-green);
+            font-weight: 600;
         }
-        
+
+        .command-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--terminal-green);
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+        }
+
         .cursor {
             display: inline-block;
             width: 10px;
             height: 16px;
-            background: #00ff41;
+            background: var(--terminal-green);
             animation: blink 1s infinite;
         }
-        
+
         @keyframes blink {
             0%, 50% { opacity: 1; }
             51%, 100% { opacity: 0; }
         }
-        
-        /* Empty state */
-        .empty-state {
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            position: relative;
+            width: 80px;
+            height: 20px;
+        }
+
+        .loading div {
+            position: absolute;
+            top: 8px;
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            background: var(--terminal-green);
+            animation-timing-function: cubic-bezier(0, 1, 1, 0);
+        }
+
+        .loading div:nth-child(1) {
+            left: 8px;
+            animation: loading1 0.6s infinite;
+        }
+
+        .loading div:nth-child(2) {
+            left: 8px;
+            animation: loading2 0.6s infinite;
+        }
+
+        .loading div:nth-child(3) {
+            left: 32px;
+            animation: loading2 0.6s infinite;
+        }
+
+        .loading div:nth-child(4) {
+            left: 56px;
+            animation: loading3 0.6s infinite;
+        }
+
+        @keyframes loading1 {
+            0% { transform: scale(0); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes loading2 {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(24px, 0); }
+        }
+
+        @keyframes loading3 {
+            0% { transform: scale(1); }
+            100% { transform: scale(0); }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--terminal-green);
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--terminal-cyan);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .task-monitor {
+                grid-column: span 2;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .task-monitor {
+                grid-column: span 1;
+            }
+            
+            .ascii-header {
+                font-size: 8px;
+                padding: 10px;
+            }
+        }
+
+        /* Animations */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Help Modal */
+        .help-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--bg-secondary);
+            border: 2px solid var(--terminal-green);
+            border-radius: 8px;
+            padding: 30px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 0 50px rgba(0, 255, 65, 0.5);
+        }
+
+        .help-modal.active {
+            display: block;
+        }
+
+        .help-header {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: var(--terminal-cyan);
             text-align: center;
-            padding: 60px 20px;
-            color: #666;
         }
-        
-        .empty-icon {
-            font-size: 48px;
-            margin-bottom: 20px;
-            opacity: 0.5;
+
+        .help-content {
+            line-height: 1.8;
         }
-        
-        /* Utilities */
-        .text-dim { color: #666; }
-        .text-bright { color: #00ff41; }
-        .text-info { color: #00bfff; }
-        .text-danger { color: #ff4444; }
-        .text-warning { color: #ffbd2e; }
-        
-        /* ASCII art header */
-        .ascii-header {
-            color: #00ff41;
-            font-size: 10px;
-            line-height: 1;
-            margin-bottom: 20px;
-            opacity: 0.8;
-            white-space: pre;
+
+        .help-command {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .help-cmd {
+            color: var(--terminal-green);
+            font-weight: 600;
+        }
+
+        .help-desc {
+            color: var(--text-dim);
+        }
+
+        /* Overlay */
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 999;
+        }
+
+        .overlay.active {
+            display: block;
         }
     </style>
 </head>
 <body>
-    <div class="terminal">
+    <div class="terminal-container">
+        <!-- Terminal Header -->
         <div class="terminal-header">
             <div class="terminal-title">
                 <span>🔥</span>
-                <span>FLAMEBOT WORKFLOW MONITOR v1.0</span>
+                <span>FLAMEBOT TERMINAL v1.0</span>
             </div>
             <div class="terminal-controls">
-                <div class="terminal-btn btn-close"></div>
+                <div class="terminal-btn btn-close" onclick="window.close()"></div>
                 <div class="terminal-btn btn-minimize"></div>
-                <div class="terminal-btn btn-maximize"></div>
+                <div class="terminal-btn btn-maximize" onclick="toggleFullscreen()"></div>
             </div>
         </div>
-        
-        <div class="terminal-body">
-            <pre class="ascii-header">
-███████╗██╗      █████╗ ███╗   ███╗███████╗██████╗  ██████╗ ████████╗
-██╔════╝██║     ██╔══██╗████╗ ████║██╔════╝██╔══██╗██╔═══██╗╚══██╔══╝
-█████╗  ██║     ███████║██╔████╔██║█████╗  ██████╔╝██║   ██║   ██║   
-██╔══╝  ██║     ██╔══██║██║╚██╔╝██║██╔══╝  ██╔══██╗██║   ██║   ██║   
-██║     ███████╗██║  ██║██║ ╚═╝ ██║███████╗██████╔╝╚██████╔╝   ██║   
-╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝╚═════╝  ╚═════╝    ╚═╝   
-            </pre>
-            
-            <!-- Stats -->
-            <div class="stats-grid">
-                <div class="stat-box">
-                    <div class="stat-label">Active Workflows</div>
-                    <div class="stat-value" id="activeCount">0</div>
+
+        <!-- ASCII Art -->
+        <div class="ascii-header">████████╗██╗███╗   ██╗██████╗ ███████╗██████╗ 
+╚══██╔══╝██║████╗  ██║██╔══██╗██╔════╝██╔══██╗
+   ██║   ██║██╔██╗ ██║██║  ██║█████╗  ██████╔╝
+   ██║   ██║██║╚██╗██║██║  ██║██╔══╝  ██╔══██╗
+   ██║   ██║██║ ╚████║██████╔╝███████╗██║  ██║
+   ╚═╝   ╚═╝╚═╝  ╚═══╝╚═════╝ ╚══════╝╚═╝  ╚═╝</div>
+
+        <!-- Main Content -->
+        <div class="terminal-content">
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="status-indicator"></div>
+                    <span>System Online</span>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-label">Completed</div>
-                    <div class="stat-value text-bright" id="completedCount">0</div>
+                <div class="status-item">
+                    <span id="connection-status">API Connected</span>
                 </div>
-                <div class="stat-box">
-                    <div class="stat-label">Running</div>
-                    <div class="stat-value text-info" id="runningCount">0</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Failed</div>
-                    <div class="stat-value text-danger" id="failedCount">0</div>
+                <div class="status-item">
+                    <span id="current-time">00:00:00</span>
                 </div>
             </div>
-            
-            <!-- Workflows -->
-            <div id="workflowsList">
-                <!-- Workflows will be inserted here -->
+
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid">
+                <!-- Active Tasks Monitor -->
+                <div class="panel task-monitor">
+                    <div class="panel-header">
+                        <span>ACTIVE TASKS</span>
+                        <span id="task-count">0 active</span>
+                    </div>
+                    <div class="panel-content" id="tasks-list">
+                        <div class="loading">
+                            <div></div>
+                            <div></div>
+                            <div></div>
+                            <div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Models Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span>MODELS</span>
+                        <span>[+ add]</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="models-list" id="models-list">
+                            <div class="model-item">
+                                <div class="model-name">
+                                    <div class="model-indicator" style="background: #23d100;"></div>
+                                    Aura
+                                </div>
+                                <div class="model-stats">45 active</div>
+                            </div>
+                            <div class="model-item">
+                                <div class="model-name">
+                                    <div class="model-indicator" style="background: #e00000;"></div>
+                                    Lola
+                                </div>
+                                <div class="model-stats">38 active</div>
+                            </div>
+                            <div class="model-item">
+                                <div class="model-name">
+                                    <div class="model-indicator" style="background: #ffb3f5;"></div>
+                                    Iris
+                                </div>
+                                <div class="model-stats">52 active</div>
+                            </div>
+                            <div class="model-item">
+                                <div class="model-name">
+                                    <div class="model-indicator" style="background: #295eff;"></div>
+                                    Ciara
+                                </div>
+                                <div class="model-stats">29 active</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Channels Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span>CHANNELS</span>
+                        <span>[+ add]</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="channels-list">
+                            <div class="channel-item">
+                                <span class="channel-name">snap</span>
+                                <span class="channel-status">● Active</span>
+                            </div>
+                            <div class="channel-item">
+                                <span class="channel-name">gram</span>
+                                <span class="channel-status">● Active</span>
+                            </div>
+                            <div class="channel-item">
+                                <span class="channel-name">of</span>
+                                <span class="channel-status">● Active</span>
+                            </div>
+                            <div class="channel-item">
+                                <span class="channel-name">telegram</span>
+                                <span class="channel-status" style="color: var(--terminal-yellow);">⚠ Beta</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span>STATISTICS</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="stats-grid">
+                            <div class="stat-box">
+                                <div class="stat-label">Swipes Today</div>
+                                <div class="stat-value" id="swipes-today">0</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Matches</div>
+                                <div class="stat-value" id="matches-today">0</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Active</div>
+                                <div class="stat-value" id="active-accounts">0</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Success</div>
+                                <div class="stat-value" id="success-rate">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
-            <!-- Terminal prompt -->
-            <div class="terminal-prompt">
-                <span class="prompt-symbol">$</span>
-                <span id="lastUpdate"></span>
+        </div>
+
+        <!-- Command Input -->
+        <div class="command-section">
+            <div class="command-prompt">
+                <span class="prompt-symbol">flamebot@terminal:~$</span>
+                <input type="text" class="command-input" id="command-input" placeholder="type 'help' for commands" autofocus>
                 <span class="cursor"></span>
             </div>
         </div>
     </div>
 
+    <!-- Help Modal -->
+    <div class="overlay" id="overlay" onclick="closeHelp()"></div>
+    <div class="help-modal" id="help-modal">
+        <h2 class="help-header">FLAMEBOT TERMINAL COMMANDS</h2>
+        <div class="help-content">
+            <div class="help-command">
+                <span class="help-cmd">help</span>
+                <span class="help-desc">Show all commands</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">status</span>
+                <span class="help-desc">System overview</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">monitor</span>
+                <span class="help-desc">Live activity feed</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">models [list|add]</span>
+                <span class="help-desc">Manage models</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">channels [list|add]</span>
+                <span class="help-desc">Manage channels</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">tasks [active|history]</span>
+                <span class="help-desc">Task management</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">accounts [import|list]</span>
+                <span class="help-desc">Account management</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">ai [generate|test]</span>
+                <span class="help-desc">AI content tools</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">swipe start &lt;account_id&gt;</span>
+                <span class="help-desc">Start swipe for account</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">spectre &lt;account_id&gt; &lt;likes&gt;</span>
+                <span class="help-desc">Configure spectre mode</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">bio generate &lt;account_id&gt;</span>
+                <span class="help-desc">Generate new bio</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">prompt &lt;model&gt; &lt;channel&gt;</span>
+                <span class="help-desc">Generate prompt</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">stop &lt;task_id&gt;</span>
+                <span class="help-desc">Stop specific task</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">emergency-stop</span>
+                <span class="help-desc">Stop ALL active tasks</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">clear</span>
+                <span class="help-desc">Clear screen</span>
+            </div>
+            <div class="help-command">
+                <span class="help-cmd">exit</span>
+                <span class="help-desc">Exit terminal</span>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // API Configuration
         const API_BASE = window.location.origin + '/api';
-        let autoRefresh = true;
+        let ws = null;
+        let commandHistory = [];
+        let historyIndex = -1;
 
-        // Format time difference
-        function formatTimeDiff(date) {
+        // Initialize Terminal
+        function initTerminal() {
+            updateTime();
+            setInterval(updateTime, 1000);
+            connectWebSocket();
+            loadInitialData();
+            setupCommandInput();
+            
+            // Show welcome message
+            setTimeout(() => {
+                showNotification('Welcome to Flamebot Terminal v1.0', 'success');
+            }, 1000);
+        }
+
+        // Update current time
+        function updateTime() {
             const now = new Date();
-            const diff = now - new Date(date);
-            const seconds = Math.floor(diff / 1000);
-            const minutes = Math.floor(seconds / 60);
-            const hours = Math.floor(minutes / 60);
-            
-            if (hours > 0) return `${hours}h ${minutes % 60}m ago`;
-            if (minutes > 0) return `${minutes}m ago`;
-            return `${seconds}s ago`;
+            document.getElementById('current-time').textContent = now.toLocaleTimeString();
         }
 
-        // Format duration
-        function formatDuration(ms) {
-            const seconds = Math.floor(ms / 1000);
-            const minutes = Math.floor(seconds / 60);
-            const hours = Math.floor(minutes / 60);
-            
-            if (hours > 0) return `${hours}h ${minutes % 60}m`;
-            if (minutes > 0) return `${minutes}m`;
-            return `${seconds}s`;
+        // WebSocket connection for real-time updates
+        function connectWebSocket() {
+            // In a real implementation, connect to WebSocket server
+            // For now, we'll simulate with polling
+            setInterval(refreshTasks, 5000);
         }
 
-        // Create workflow HTML
-        function createWorkflowItem(workflow) {
-            const progress = ((workflow.currentStep + 1) / workflow.steps.length * 100).toFixed(0);
-            const currentStepInfo = workflow.steps[workflow.currentStep];
-            
-            return `
-                <div class="workflow-container">
-                    <div class="workflow-header">
-                        <div class="workflow-info">
-                            <h3>Account: ${workflow.accountId}</h3>
-                            <div class="workflow-meta">
-                                ${workflow.workflowName} • Model: ${workflow.accountData.model} • Started ${formatTimeDiff(workflow.startedAt)}
-                            </div>
-                        </div>
-                        <div class="workflow-status status-${workflow.status}">
-                            ${workflow.status}
-                        </div>
-                    </div>
-                    
-                    <div class="progress-section">
-                        <div class="progress-info">
-                            <span>Progress: ${progress}%</span>
-                            <span>${workflow.currentStep + 1}/${workflow.steps.length} steps</span>
-                        </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${progress}%"></div>
-                        </div>
-                    </div>
-                    
-                    ${workflow.status === 'running' && currentStepInfo ? `
-                        <div class="current-step">
-                            <div class="current-step-label">Current Step</div>
-                            <div>${currentStepInfo.description}</div>
-                            ${currentStepInfo.delay && workflow.currentStep < workflow.steps.length - 1 ? `
-                                <div class="text-dim" style="margin-top: 5px;">
-                                    Next step in ${formatDuration(currentStepInfo.delay)}
-                                </div>
-                            ` : ''}
-                        </div>
-                    ` : ''}
-                    
-                    <div class="steps-timeline">
-                        ${workflow.steps.map((step, index) => {
-                            const result = workflow.results.find(r => r.step === step.id);
-                            const isCompleted = result && result.success;
-                            const isFailed = result && !result.success;
-                            const isRunning = index === workflow.currentStep && workflow.status === 'running';
-                            const isPending = index > workflow.currentStep;
-                            
-                            let statusClass = '';
-                            let icon = '';
-                            
-                            if (isCompleted) {
-                                statusClass = 'step-completed';
-                                icon = '✓';
-                            } else if (isFailed) {
-                                statusClass = 'step-failed';
-                                icon = '✗';
-                            } else if (isRunning) {
-                                statusClass = 'step-running';
-                                icon = '◉';
-                            } else {
-                                statusClass = 'step-pending';
-                                icon = '◯';
-                            }
-                            
-                            return `
-                                <div class="step-item">
-                                    <div class="step-indicator ${statusClass}">${icon}</div>
-                                    <div class="step-content">
-                                        <div class="step-name ${isPending ? 'text-dim' : ''}">
-                                            ${step.description}
-                                        </div>
-                                        ${result ? `
-                                            <div class="step-meta">
-                                                ${formatTimeDiff(result.timestamp)}
-                                                ${result.error ? ` - <span class="text-danger">${result.error}</span>` : ''}
-                                            </div>
-                                        ` : ''}
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                </div>
-            `;
+        // Load initial data
+        async function loadInitialData() {
+            await refreshTasks();
+            await refreshStats();
         }
 
-        // Refresh data
-        async function refreshData() {
+        // Refresh active tasks
+        async function refreshTasks() {
             try {
-                const response = await fetch(`${API_BASE}/accounts/workflows`);
+                const response = await fetch(`${API_BASE}/actions/swipe/active`);
                 const data = await response.json();
                 
                 if (data.success) {
-                    const workflows = data.data.workflows;
-                    
-                    // Update stats
-                    document.getElementById('activeCount').textContent = workflows.length;
-                    document.getElementById('completedCount').textContent = workflows.filter(w => w.status === 'completed').length;
-                    document.getElementById('runningCount').textContent = workflows.filter(w => w.status === 'running').length;
-                    document.getElementById('failedCount').textContent = workflows.filter(w => w.status === 'failed').length;
-                    
-                    // Update workflows list
-                    const listContainer = document.getElementById('workflowsList');
-                    if (workflows.length === 0) {
-                        listContainer.innerHTML = `
-                            <div class="empty-state">
-                                <div class="empty-icon">◯</div>
-                                <div>No active workflows</div>
-                                <div class="text-dim" style="margin-top: 10px;">
-                                    Waiting for new imports...
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        listContainer.innerHTML = workflows.map(createWorkflowItem).join('');
-                    }
-                    
-                    // Update last refresh
-                    document.getElementById('lastUpdate').textContent = `Last update: ${new Date().toLocaleTimeString()} `;
+                    displayTasks(data.data);
                 }
             } catch (error) {
-                console.error('Error fetching workflows:', error);
-                document.getElementById('lastUpdate').textContent = `Error: ${error.message} `;
+                console.error('Error fetching tasks:', error);
             }
         }
 
-        // Auto-refresh
-        setInterval(() => {
-            if (autoRefresh) refreshData();
-        }, 5000);
+        // Display tasks in the monitor
+        function displayTasks(tasks) {
+            const tasksList = document.getElementById('tasks-list');
+            const taskCount = document.getElementById('task-count');
+            
+            taskCount.textContent = `${tasks.length} active`;
+            
+            if (tasks.length === 0) {
+                tasksList.innerHTML = '<div style="text-align: center; color: var(--text-dim); padding: 40px;">No active tasks</div>';
+                return;
+            }
+            
+            tasksList.innerHTML = tasks.map(task => `
+                <div class="task-item fade-in">
+                    <div class="task-header">
+                        <span style="color: var(--terminal-cyan);">🔄 SWIPE</span>
+                        <span class="task-status status-${task.status.toLowerCase()}">${task.status}</span>
+                    </div>
+                    <div class="task-id">Task: ${task.task_id}</div>
+                    <div style="color: var(--text-dim); font-size: 12px;">
+                        Account: ${task.account_ids ? task.account_ids.join(', ') : 'N/A'}
+                    </div>
+                    <div style="color: var(--text-dim); font-size: 12px;">
+                        Started: ${new Date(task.started_at).toLocaleTimeString()}
+                    </div>
+                </div>
+            `).join('');
+        }
 
-        // Initial load
-        refreshData();
+        // Refresh statistics
+        async function refreshStats() {
+            // In a real implementation, fetch from API
+            // For now, using placeholder values
+            document.getElementById('swipes-today').textContent = Math.floor(Math.random() * 1000);
+            document.getElementById('matches-today').textContent = Math.floor(Math.random() * 100);
+            document.getElementById('active-accounts').textContent = Math.floor(Math.random() * 50);
+            document.getElementById('success-rate').textContent = Math.floor(Math.random() * 30 + 70) + '%';
+        }
+
+        // Setup command input
+        function setupCommandInput() {
+            const input = document.getElementById('command-input');
+            
+            input.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter') {
+                    const command = input.value.trim();
+                    if (command) {
+                        commandHistory.push(command);
+                        historyIndex = commandHistory.length;
+                        await executeCommand(command);
+                        input.value = '';
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (historyIndex > 0) {
+                        historyIndex--;
+                        input.value = commandHistory[historyIndex];
+                    }
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (historyIndex < commandHistory.length - 1) {
+                        historyIndex++;
+                        input.value = commandHistory[historyIndex];
+                    } else {
+                        historyIndex = commandHistory.length;
+                        input.value = '';
+                    }
+                }
+            });
+        }
+
+        // Execute command
+        async function executeCommand(command) {
+            const parts = command.toLowerCase().split(' ');
+            const cmd = parts[0];
+            
+            switch (cmd) {
+                case 'help':
+                    showHelp();
+                    break;
+                    
+                case 'clear':
+                    clearTerminal();
+                    break;
+                    
+                case 'status':
+                    await showStatus();
+                    break;
+                    
+                case 'monitor':
+                    await refreshTasks();
+                    showNotification('Monitoring active tasks...', 'info');
+                    break;
+                    
+                case 'swipe':
+                    if (parts[1] === 'start' && parts[2]) {
+                        await startSwipe(parts[2]);
+                    } else {
+                        showNotification('Usage: swipe start <account_id>', 'error');
+                    }
+                    break;
+                    
+                case 'spectre':
+                    if (parts[1] && parts[2]) {
+                        await configureSpectre(parts[1], parts[2]);
+                    } else {
+                        showNotification('Usage: spectre <account_id> <max_likes>', 'error');
+                    }
+                    break;
+                    
+                case 'stop':
+                    if (parts[1]) {
+                        await stopTask(parts[1]);
+                    } else {
+                        showNotification('Usage: stop <task_id>', 'error');
+                    }
+                    break;
+                    
+                case 'emergency-stop':
+                    await emergencyStop();
+                    break;
+                    
+                case 'exit':
+                    if (confirm('Exit Flamebot Terminal?')) {
+                        window.close();
+                    }
+                    break;
+                    
+                default:
+                    showNotification(`Unknown command: ${cmd}. Type 'help' for available commands.`, 'error');
+            }
+        }
+
+        // Command implementations
+        async function showStatus() {
+            showNotification('System Status: All systems operational', 'success');
+            await refreshStats();
+        }
+
+        async function startSwipe(accountId) {
+            showNotification(`Starting swipe for account ${accountId}...`, 'info');
+            try {
+                const response = await fetch(`${API_BASE}/actions/swipe`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ accountIds: [accountId] })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showNotification(`Swipe started! Task ID: ${data.data.taskId}`, 'success');
+                    await refreshTasks();
+                } else {
+                    showNotification(`Failed to start swipe: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function configureSpectre(accountId, maxLikes) {
+            showNotification(`Configuring Spectre mode for ${accountId} with ${maxLikes} likes...`, 'info');
+            try {
+                const response = await fetch(`${API_BASE}/actions/spectre/enable`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ accountId, maxLikes: parseInt(maxLikes) })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showNotification(`Spectre configured! Task ID: ${data.data.taskId}`, 'success');
+                } else {
+                    showNotification(`Failed to configure Spectre: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function stopTask(taskId) {
+            showNotification(`Stopping task ${taskId}...`, 'info');
+            try {
+                const response = await fetch(`${API_BASE}/actions/swipe/stop/${taskId}`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showNotification(`Task stopped successfully!`, 'success');
+                    await refreshTasks();
+                } else {
+                    showNotification(`Failed to stop task: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function emergencyStop() {
+            if (!confirm('Stop ALL active tasks?')) return;
+            
+            showNotification('Executing emergency stop...', 'warning');
+            try {
+                const response = await fetch(`${API_BASE}/actions/swipe/stop-all`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('All tasks stopped!', 'success');
+                    await refreshTasks();
+                } else {
+                    showNotification(`Failed to stop tasks: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        // UI Helper functions
+        function showHelp() {
+            document.getElementById('help-modal').classList.add('active');
+            document.getElementById('overlay').classList.add('active');
+        }
+
+        function closeHelp() {
+            document.getElementById('help-modal').classList.remove('active');
+            document.getElementById('overlay').classList.remove('active');
+        }
+
+        function clearTerminal() {
+            // Clear some panels or reset view
+            showNotification('Terminal cleared', 'info');
+        }
+
+        function showNotification(message, type = 'info') {
+            // In a real implementation, show a toast notification
+            console.log(`[${type.toUpperCase()}] ${message}`);
+            
+            // Update status bar temporarily
+            const statusEl = document.getElementById('connection-status');
+            const originalText = statusEl.textContent;
+            const colors = {
+                success: 'var(--terminal-green)',
+                error: 'var(--terminal-red)',
+                warning: 'var(--terminal-yellow)',
+                info: 'var(--terminal-cyan)'
+            };
+            
+            statusEl.style.color = colors[type] || colors.info;
+            statusEl.textContent = message;
+            
+            setTimeout(() => {
+                statusEl.style.color = '';
+                statusEl.textContent = originalText;
+            }, 3000);
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl/Cmd + K to clear
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                clearTerminal();
+            }
+            
+            // Escape to close help
+            if (e.key === 'Escape') {
+                closeHelp();
+            }
+            
+            // Always focus on input
+            const input = document.getElementById('command-input');
+            if (document.activeElement !== input) {
+                input.focus();
+            }
+        });
+
+        // Initialize on load
+        window.addEventListener('load', initTerminal);
     </script>
 </body>
 </html>

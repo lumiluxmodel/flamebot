@@ -1,3 +1,4 @@
+// src/config/index.js
 require('dotenv').config();
 
 const config = {
@@ -26,7 +27,8 @@ const config = {
   },
   openai: {
     apiKey: process.env.OPENAI_API_KEY
-  }
+  },
+  database: require('./database')[process.env.NODE_ENV || 'development']
 };
 
 // Validate required configuration
