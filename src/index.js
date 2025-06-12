@@ -1,3 +1,4 @@
+// src/index.js
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -6,6 +7,7 @@ const path = require('path');
 const config = require('./config');
 const accountRoutes = require('./routes/accountRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const actionsRoutes = require('./routes/actionsRoutes'); // 👈 NUEVA LÍNEA
 
 const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
 const swaggerUi = require('swagger-ui-express');
@@ -36,7 +38,8 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // API routes
 app.use('/api/accounts', accountRoutes);
-app.use('/api/ai', aiRoutes); 
+app.use('/api/ai', aiRoutes);
+app.use('/api/actions', actionsRoutes); // 👈 NUEVA LÍNEA
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Root endpoint - serve dashboard
@@ -51,10 +54,23 @@ app.get('/api', (req, res) => {
     message: 'Flamebot Backend API',
     version: '1.0.0',
     endpoints: {
+      // Account endpoints
       importAccount: 'POST /api/accounts/import',
       importMultiple: 'POST /api/accounts/import-multiple',
       getModels: 'GET /api/accounts/models',
-      health: 'GET /api/accounts/health'
+      accountHealth: 'GET /api/accounts/health',
+      
+      // AI endpoints
+      generatePrompt: 'POST /api/ai/generate-prompt',
+      generateBios: 'POST /api/ai/generate-bios',
+      aiHealth: 'GET /api/ai/health',
+      
+      // Actions endpoints - NUEVOS 👈
+      swipe: 'POST /api/actions/swipe',
+      spectreEnable: 'POST /api/actions/spectre/enable',
+      bioUpdate: 'POST /api/actions/bio/update',
+      promptUpdate: 'POST /api/actions/prompt/update',
+      actionsHealth: 'GET /api/actions/health'
     }
   });
 });
@@ -81,6 +97,9 @@ app.listen(PORT, () => {
 ║                                       ║
 ║  📚 API Documentation:                ║
 ║  👉 http://localhost:${PORT}/api-docs     ║
+║                                       ║
+║  ⚡ Actions API:                      ║
+║  👉 http://localhost:${PORT}/api/actions/health ║
 ╚═══════════════════════════════════════╝
 
 Press CTRL+C to stop the server
