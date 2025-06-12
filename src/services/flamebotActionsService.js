@@ -190,8 +190,8 @@ class FlamebotActionsService {
     if (taskName) payload.task_name = taskName;
     
     try {
-      // Usando el endpoint correcto para start swipe
-      const response = await this.client.post('/api/start-swipe', payload);
+      // 🎯 USANDO ENDPOINT CORRECTO DE TU CÓDIGO PYTHON
+      const response = await this.client.post('/api/tasks/swipe/start', payload);
       const taskId = response.data.task_id;
       
       if (taskId) {
@@ -207,37 +207,63 @@ class FlamebotActionsService {
   }
 
   /**
-   * Configure Spectre and then start swipe (COMPLETE FLOW)
-   * @param {string} accountId - Account ID
-   * @param {number} maxLikes - Max likes for this swipe session
-   * @param {string} taskName - Optional task name
-   * @returns {Promise<Object>} Complete result
+   * Check swipe task status - SEGÚN TU CÓDIGO PYTHON
+   * @param {string} taskId - Task ID
+   * @returns {Promise<Object>} Task status
    */
-  async spectreSwipeFlow(accountId, maxLikes = 50, taskName = null) {
-    console.log(`🎯 Starting complete Spectre + Swipe flow for account ${accountId}`);
-    
+  async checkSwipeTaskStatus(taskId) {
     try {
-      // Step 1: Configure Spectre mode
-      console.log(`📝 Step 1: Configuring Spectre mode (${maxLikes} likes)...`);
-      const configResult = await this.configureSpectreMode(accountId, maxLikes);
-      
-      // Wait a bit between config and swipe
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Step 2: Start swipe with configured settings
-      console.log(`💕 Step 2: Starting swipe task...`);
-      const swipeResult = await this.startSwipeTask([accountId], taskName);
-      
-      return {
-        success: true,
-        configTaskId: configResult.taskId,
-        swipeTaskId: swipeResult.taskId,
-        maxLikes,
-        accountId,
-        message: `Spectre configured with ${maxLikes} likes and swipe started`
-      };
+      // 🎯 ENDPOINT CORRECTO DE TU CÓDIGO PYTHON
+      const response = await this.client.get(`/api/tasks/swipe/status/${taskId}`);
+      return response.data;
     } catch (error) {
-      console.error('❌ Error in Spectre + Swipe flow:', error.message);
+      console.error('Error checking swipe task status:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Stop swipe task - SEGÚN TU CÓDIGO PYTHON
+   * @param {string} taskId - Task ID to stop
+   * @returns {Promise<Object>} Stop result
+   */
+  async stopSwipeTask(taskId) {
+    try {
+      // 🎯 ENDPOINT CORRECTO DE TU CÓDIGO PYTHON
+      const response = await this.client.post(`/api/tasks/swipe/stop/${taskId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error stopping swipe task:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all active swipe tasks - NUEVO ENDPOINT DESCUBIERTO
+   * @returns {Promise<Object>} Active tasks list
+   */
+  async getActiveSwipeTasks() {
+    try {
+      // 🎯 NUEVO ENDPOINT QUE DESCUBRISTE
+      const response = await this.client.get('/api/tasks/swipe/active');
+      return response.data;
+    } catch (error) {
+      console.error('Error getting active swipe tasks:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Stop all swipe tasks - SEGÚN TU CÓDIGO PYTHON
+   * @returns {Promise<Object>} Stop result
+   */
+  async stopAllSwipeTasks() {
+    try {
+      // 🎯 ENDPOINT CORRECTO DE TU CÓDIGO PYTHON
+      const response = await this.client.post('/api/tasks/swipe/stop-all');
+      return response.data;
+    } catch (error) {
+      console.error('Error stopping all swipe tasks:', error.message);
       throw error;
     }
   }
@@ -284,34 +310,64 @@ class FlamebotActionsService {
   }
 
   /**
-   * Check swipe task status
+   * Poll swipe task status until completion - SEGÚN TU LÓGICA PYTHON
    * @param {string} taskId - Task ID
-   * @returns {Promise<Object>} Task status
+   * @param {number} maxAttempts - Maximum polling attempts (default: 36)
+   * @param {number} interval - Polling interval in ms (default: 10000 = 10s)
+   * @returns {Promise<Object>} Final task status
    */
-  async checkSwipeTaskStatus(taskId) {
-    try {
-      // Ajustar según el endpoint real de Flamebot para swipe status
-      const response = await this.client.get(`/api/get-swipe-status/${taskId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error checking swipe task status:', error.message);
-      throw error;
+  async pollSwipeTaskStatus(taskId, maxAttempts = 36, interval = 10000) {
+    console.log(`⏳ Polling swipe task status: ${taskId}`);
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const status = await this.checkSwipeTaskStatus(taskId);
+        const celeryStatus = status.celery_status;
+        
+        console.log(`   Attempt ${attempt}/${maxAttempts} - Celery Status: ${celeryStatus}`);
+        
+        // SEGÚN TU LÓGICA PYTHON
+        if (celeryStatus === 'SUCCESS') {
+          console.log('   ✅ Swipe task COMPLETED successfully!');
+          console.log(`   📊 Result:`, JSON.stringify(status.result, null, 2));
+          return status;
+        }
+        
+        if (celeryStatus === 'FAILURE') {
+          console.error('   ❌ Swipe task resulted in FAILURE.');
+          console.error('   Error details:', JSON.stringify(status.error, null, 2));
+          throw new Error(`Swipe task failed: ${JSON.stringify(status.error)}`);
+        }
+        
+        if (celeryStatus === 'REVOKED') {
+          console.log('   🛑 Swipe task was REVOKED (stopped).');
+          console.log('   Details:', JSON.stringify(status.error, null, 2));
+          return status;
+        }
+        
+        if (['PENDING', 'STARTED', 'PROGRESS', 'RETRY'].includes(celeryStatus)) {
+          console.log(`   ⏳ Swipe task is currently: ${celeryStatus}`);
+          if (status.progress) {
+            console.log('   📈 Progress:', JSON.stringify(status.progress, null, 2));
+          }
+          
+          // Wait before next attempt
+          if (attempt < maxAttempts) {
+            console.log(`   ⏰ Waiting ${interval/1000}s before next check...`);
+            await new Promise(resolve => setTimeout(resolve, interval));
+          }
+        } else {
+          console.log(`   ❓ Unknown status: ${celeryStatus}. Stopping polling.`);
+          return status;
+        }
+      } catch (error) {
+        console.error(`   ❌ Error on attempt ${attempt}:`, error.message);
+        if (attempt === maxAttempts) throw error;
+      }
     }
-  }
-
-  /**
-   * Stop swipe task
-   * @param {string} taskId - Task ID to stop
-   * @returns {Promise<Object>} Stop result
-   */
-  async stopSwipeTask(taskId) {
-    try {
-      const response = await this.client.post(`/api/stop-swipe/${taskId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error stopping swipe task:', error.message);
-      throw error;
-    }
+    
+    console.log('⚠️  Maximum polling attempts reached. Task might still be running.');
+    throw new Error('Swipe task polling timeout');
   }
 
   // BACKWARDS COMPATIBILITY - mantener método original pero usando el nuevo

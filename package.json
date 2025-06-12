@@ -7,7 +7,10 @@
     "start": "node src/index.js",
     "dev": "nodemon --ignore data/ --ignore test/ --ignore '*.txt' src/index.js",
     "test:import": "node test/testImport.js",
-    "test:ai": "node test/testAI.js"
+    "test:ai": "node test/testAI.js",
+    "test:bio-prompt": "node test/testBioPrompt.js",
+    "test:swipe": "node test/testSwipe.js",
+    "test:spectre": "node test/testSpectre.js"
   },
   "keywords": [
     "flamebot",

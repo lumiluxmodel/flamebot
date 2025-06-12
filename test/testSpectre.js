@@ -6,7 +6,7 @@ const PORT = process.env.PORT || 3090;
 const API_BASE_URL = `http://localhost:${PORT}/api/actions`;
 
 // ⚠️ CAMBIAR ESTE ACCOUNT ID POR UNO REAL
-const TEST_ACCOUNT_ID = "684ac67faa9ff42adb90e24a"; // 👈 TU ACCOUNT ID
+const TEST_ACCOUNT_ID = "684ac3d172a9d307fa3e9995"; // 👈 TU ACCOUNT ID
 
 // Color codes for console output
 const colors = {

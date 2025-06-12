@@ -9,20 +9,26 @@ const asyncHandler = (fn) => (req, res, next) => {
 };
 
 // ============================
-// SWIPE ROUTES
+// SWIPE ROUTES - SEGÚN TU CÓDIGO PYTHON
 // ============================
 
-// Start swipe task
+// Start swipe task (uses saved Spectre configuration)
 router.post('/swipe', asyncHandler(actionsController.startSwipe));
-
-// Start swipe with wait for completion
-router.post('/swipe-wait', asyncHandler(actionsController.startSwipeWithWait));
 
 // Check swipe status
 router.get('/swipe/status/:taskId', asyncHandler(actionsController.getSwipeStatus));
 
-// Stop swipe task
+// Stop specific swipe task
 router.post('/swipe/stop/:taskId', asyncHandler(actionsController.stopSwipe));
+
+// Poll swipe status with automatic monitoring
+router.get('/swipe/poll/:taskId', asyncHandler(actionsController.pollSwipeStatus));
+
+// Get all active swipe tasks - NUEVO ENDPOINT DESCUBIERTO
+router.get('/swipe/active', asyncHandler(actionsController.getActiveSwipeTasks));
+
+// Stop all swipe tasks
+router.post('/swipe/stop-all', asyncHandler(actionsController.stopAllSwipes));
 
 // ============================
 // SPECTRE MODE ROUTES
@@ -92,9 +98,11 @@ router.get('/health', asyncHandler(async (req, res) => {
         endpoints: {
             swipe: {
                 start: 'POST /api/actions/swipe',
-                startWait: 'POST /api/actions/swipe-wait',
                 status: 'GET /api/actions/swipe/status/:taskId',
-                stop: 'POST /api/actions/swipe/stop/:taskId'
+                stop: 'POST /api/actions/swipe/stop/:taskId',
+                poll: 'GET /api/actions/swipe/poll/:taskId',
+                active: 'GET /api/actions/swipe/active',
+                stopAll: 'POST /api/actions/swipe/stop-all'
             },
             spectre: {
                 enable: 'POST /api/actions/spectre/enable',

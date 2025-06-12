@@ -22,7 +22,7 @@ class ActionsController {
                 });
             }
 
-            console.log(`🎯 Starting swipe for ${accountIds.length} accounts (using saved config)`);
+            console.log(`🎯 Starting swipe for ${accountIds.length} accounts (using saved Spectre config)`);
             
             const result = await flamebotActionsService.startSwipeTask(accountIds, taskName);
 
@@ -41,45 +41,7 @@ class ActionsController {
     }
 
     /**
-     * Start swipe and wait for completion
-     */
-    async startSwipeWithWait(req, res) {
-        try {
-            const { accountIds, taskName, waitForCompletion = true } = req.body;
-
-            if (!Array.isArray(accountIds) || accountIds.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'accountIds array is required and must not be empty'
-                });
-            }
-
-            console.log(`🎯 Starting swipe with wait for ${accountIds.length} accounts`);
-            
-            const result = await flamebotActionsService.startSwipeTask(accountIds, taskName);
-
-            if (waitForCompletion && result.taskId) {
-                console.log('⏳ Waiting for swipe completion...');
-                const finalStatus = await this.waitForSwipeCompletion(result.taskId);
-                result.finalStatus = finalStatus;
-            }
-
-            res.json({
-                success: true,
-                message: `Swipe task ${waitForCompletion ? 'completed' : 'started'} for ${accountIds.length} accounts`,
-                data: result
-            });
-        } catch (error) {
-            console.error('Start swipe with wait error:', error);
-            res.status(500).json({
-                success: false,
-                error: error.message || 'Failed to start swipe task with wait'
-            });
-        }
-    }
-
-    /**
-     * Check swipe task status
+     * Check swipe task status - USANDO ENDPOINTS DE TU CÓDIGO PYTHON
      */
     async getSwipeStatus(req, res) {
         try {
@@ -108,7 +70,7 @@ class ActionsController {
     }
 
     /**
-     * Stop swipe task
+     * Stop swipe task - USANDO ENDPOINTS DE TU CÓDIGO PYTHON
      */
     async stopSwipe(req, res) {
         try {
@@ -125,7 +87,7 @@ class ActionsController {
 
             res.json({
                 success: true,
-                message: 'Swipe task stopped successfully',
+                message: 'Stop request sent successfully',
                 data: result
             });
         } catch (error) {
@@ -133,6 +95,89 @@ class ActionsController {
             res.status(500).json({
                 success: false,
                 error: error.message || 'Failed to stop swipe task'
+            });
+        }
+    }
+
+    /**
+     * Poll swipe status with automatic monitoring
+     */
+    async pollSwipeStatus(req, res) {
+        try {
+            const { taskId } = req.params;
+            const { maxAttempts = 36, interval = 10000 } = req.query;
+
+            if (!taskId) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Task ID is required'
+                });
+            }
+
+            console.log(`⏳ Starting polling for swipe task: ${taskId}`);
+            
+            const finalStatus = await flamebotActionsService.pollSwipeTaskStatus(
+                taskId, 
+                parseInt(maxAttempts), 
+                parseInt(interval)
+            );
+
+            res.json({
+                success: true,
+                message: 'Swipe task monitoring completed',
+                data: finalStatus
+            });
+        } catch (error) {
+            console.error('Poll swipe status error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message || 'Failed to poll swipe status'
+            });
+        }
+    }
+
+    /**
+     * Get all active swipe tasks - NUEVO ENDPOINT DESCUBIERTO
+     */
+    async getActiveSwipeTasks(req, res) {
+        try {
+            console.log('📋 Getting all active swipe tasks');
+            
+            const activeTasks = await flamebotActionsService.getActiveSwipeTasks();
+
+            res.json({
+                success: true,
+                message: `Found ${activeTasks.length} active swipe tasks`,
+                data: activeTasks
+            });
+        } catch (error) {
+            console.error('Get active swipe tasks error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message || 'Failed to get active swipe tasks'
+            });
+        }
+    }
+
+    /**
+     * Stop all swipe tasks - SEGÚN TU CÓDIGO PYTHON
+     */
+    async stopAllSwipes(req, res) {
+        try {
+            console.log('🛑 Stopping all active swipe tasks');
+            
+            const result = await flamebotActionsService.stopAllSwipeTasks();
+
+            res.json({
+                success: true,
+                message: 'Stop all swipe tasks request sent',
+                data: result
+            });
+        } catch (error) {
+            console.error('Stop all swipes error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message || 'Failed to stop all swipe tasks'
             });
         }
     }
