@@ -1,7 +1,8 @@
-/* public/css/terminal.css */
+/* public/css/terminal-improved.css */
+/* Improved version of the original terminal.css */
 
 /* Import Fonts */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Cascadia+Code&family=Space+Mono:wght@400;700&display=swap");
 
 /* CSS Variables */
 :root {
@@ -9,48 +10,60 @@
     --bg-secondary: #0a0a0a;
     --bg-tertiary: #141414;
     --text-primary: #00ff41;
-    --text-secondary: #00bfff;
+    /* Main green */
+    --text-secondary: #ff00ff;
+    /* Magenta vibrante */
     --text-warning: #ffbd2e;
+    /* Yellow */
     --text-danger: #ff4444;
-    --text-dim: #555;
+    /* Red */
+    --text-dim: #555555;
+    /* Dimmed text */
     --text-bright: #ffffff;
-    --border-color: #222;
+    /* Bright white */
+    --border-color: #222222;
     --terminal-green: #00ff41;
-    --terminal-cyan: #00bfff;
+    --terminal-cyan: #ff00ff;
+    /* Reemplazado por magenta */
     --terminal-yellow: #ffbd2e;
     --terminal-red: #ff4444;
     --terminal-magenta: #ff00ff;
     --terminal-pink: #ff69b4;
 }
 
-/* Reset */
+/* Basic Reset */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
 
-/* Base */
+/* Base Styles */
 body {
-    font-family: 'JetBrains Mono', 'Courier New', monospace;
-    background: var(--bg-primary);
+    font-family: "Cascadia Code", "Space Mono", monospace;
+    background-color: var(--bg-primary);
     color: var(--text-primary);
     font-size: 13px;
     line-height: 1.6;
     overflow: hidden;
+    /* Prevent body scrollbars, handled by terminal-container */
     height: 100vh;
     display: flex;
+    /* Ensure terminal-container can take full height */
     flex-direction: column;
 }
 
 /* Terminal Container - Full Screen */
 .terminal-container {
     flex: 1;
+    /* Take remaining space */
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background: var(--bg-primary);
+    /* Ensure it fills viewport height */
+    background-color: var(--bg-primary);
     position: relative;
+    /* For pseudo-elements and absolute positioning */
 }
 
 /* Scanlines Effect */
@@ -61,13 +74,13 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(
-        transparent 50%,
-        rgba(0, 255, 65, 0.03) 50%
-    );
+    background: linear-gradient(transparent 50%, rgba(0, 255, 65, 0.03) 50%);
     background-size: 100% 4px;
+    /* Adjust scanline thickness and spacing */
     pointer-events: none;
+    /* Allow interaction with elements underneath */
     z-index: 1;
+    /* Behind content but above background */
 }
 
 /* ASCII Header */
@@ -77,25 +90,30 @@ body {
     color: var(--terminal-green);
     font-size: 9px;
     line-height: 1.1;
-    white-space: pre;
+    white-space: pre; /* Preserve ASCII art formatting */
     font-weight: 600;
-    text-shadow: 0 0 20px rgba(0, 255, 65, 0.8);
-    animation: flicker 3s infinite;
+    text-shadow: 0 0 10px rgba(0, 255, 65, 0.7), 0 0 20px rgba(0, 255, 65, 0.5);
+    animation: flicker 3s infinite alternate; /* Softer flicker */
     position: relative;
-    z-index: 2;
-}
-
-@keyframes flicker {
-    0%, 100% { opacity: 1; }
-    92% { opacity: 0.9; }
-    94% { opacity: 1; }
-    96% { opacity: 0.95; }
-}
+    z-index: 2; /* Above scanlines */
+  }
+  
+  @keyframes flicker {
+    0%,
+    100% {
+      opacity: 1;
+      text-shadow: 0 0 10px rgba(0, 255, 65, 0.7), 0 0 20px rgba(0, 255, 65, 0.5);
+    }
+    50% {
+      opacity: 0.95;
+      text-shadow: 0 0 12px rgba(0, 255, 65, 0.6), 0 0 22px rgba(0, 255, 65, 0.4);
+    }
+  }
 
 /* Status Bar */
 .status-bar {
     padding: 10px 20px;
-    background: var(--bg-secondary);
+    background-color: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
     display: flex;
     justify-content: space-between;
@@ -103,6 +121,7 @@ body {
     gap: 20px;
     position: relative;
     z-index: 2;
+    /* Above scanlines */
 }
 
 .status-item {
@@ -116,33 +135,40 @@ body {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--terminal-green);
-    box-shadow: 0 0 10px var(--terminal-green);
+    background-color: var(--terminal-green);
+    box-shadow: 0 0 8px var(--terminal-green);
     animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
-    0%, 100% { 
+
+    0%,
+    100% {
         opacity: 1;
-        box-shadow: 0 0 10px var(--terminal-green);
+        box-shadow: 0 0 8px var(--terminal-green);
     }
-    50% { 
+
+    50% {
         opacity: 0.6;
-        box-shadow: 0 0 20px var(--terminal-green);
+        box-shadow: 0 0 15px var(--terminal-green), 0 0 5px var(--terminal-green);
     }
 }
 
 /* Main Content - Scrollable */
 .terminal-content {
     flex: 1;
+    /* Allows content to grow and enable scrolling */
     overflow-y: auto;
+    /* Enable vertical scroll if content overflows */
     overflow-x: hidden;
+    /* Prevent horizontal scroll */
     padding: 20px;
     position: relative;
     z-index: 2;
+    /* Above scanlines */
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar for Webkit browsers */
 .terminal-content::-webkit-scrollbar {
     width: 12px;
 }
@@ -154,8 +180,7 @@ body {
 
 .terminal-content::-webkit-scrollbar-thumb {
     background: var(--terminal-green);
-    border-radius: 0;
-    box-shadow: inset 0 0 6px rgba(0, 255, 65, 0.5);
+    box-shadow: inset 0 0 6px rgba(0, 255, 65, 0.4);
 }
 
 .terminal-content::-webkit-scrollbar-thumb:hover {
@@ -168,20 +193,23 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 20px;
     margin-bottom: 20px;
+    /* Space before command input or next section */
 }
 
 /* Panel Styles */
 .panel {
-    background: var(--bg-secondary);
+    background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
     position: relative;
+    /* For potential absolute positioned children */
     overflow: hidden;
-    transition: all 0.3s ease;
+    /* Clip content like ::before elements if needed */
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .panel:hover {
     border-color: var(--terminal-green);
-    box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+    box-shadow: 0 0 15px rgba(0, 255, 65, 0.15);
 }
 
 .panel-header {
@@ -194,15 +222,19 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgba(0, 191, 255, 0.05);
+    background-color: rgba(0, 191, 255, 0.05);
+    /* Subtle cyan tint */
 }
 
 .panel-content {
     padding: 15px;
     max-height: 300px;
+    /* Default max height for panel content */
     overflow-y: auto;
+    /* Scroll if content exceeds max-height */
 }
 
+/* Custom Scrollbar for panel content */
 .panel-content::-webkit-scrollbar {
     width: 8px;
 }
@@ -213,43 +245,45 @@ body {
 
 .panel-content::-webkit-scrollbar-thumb {
     background: var(--terminal-cyan);
-    border-radius: 0;
 }
 
-/* Task Monitor - Full Width */
+/* Task Monitor - Spans full width if needed */
 .task-monitor {
     grid-column: 1 / -1;
+    /* Span all columns in the grid */
 }
 
 .task-monitor .panel-content {
     max-height: 400px;
+    /* More space for tasks */
 }
 
 /* Task Items */
 .task-item {
     padding: 12px;
     margin-bottom: 10px;
-    background: rgba(0, 255, 65, 0.03);
+    background-color: rgba(0, 255, 65, 0.03);
     border: 1px solid rgba(0, 255, 65, 0.1);
     position: relative;
     overflow: hidden;
-    transition: all 0.3s ease;
+    transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
 }
 
 .task-item:hover {
-    background: rgba(0, 255, 65, 0.05);
+    background-color: rgba(0, 255, 65, 0.06);
     border-color: rgba(0, 255, 65, 0.3);
     transform: translateX(5px);
 }
 
 .task-item::before {
-    content: '';
+    /* Left accent border */
+    content: "";
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
     width: 3px;
-    background: var(--terminal-green);
+    background-color: var(--terminal-green);
 }
 
 .task-header {
@@ -270,22 +304,24 @@ body {
     text-transform: uppercase;
     font-weight: 600;
     letter-spacing: 1px;
+    border-radius: 3px;
+    /* Slightly rounded status badges */
 }
 
 .status-progress {
-    background: rgba(0, 191, 255, 0.2);
+    background-color: rgba(0, 191, 255, 0.2);
     color: var(--terminal-cyan);
     border: 1px solid var(--terminal-cyan);
 }
 
 .status-completed {
-    background: rgba(0, 255, 65, 0.2);
+    background-color: rgba(0, 255, 65, 0.2);
     color: var(--terminal-green);
     border: 1px solid var(--terminal-green);
 }
 
 .status-failed {
-    background: rgba(255, 68, 68, 0.2);
+    background-color: rgba(255, 68, 68, 0.2);
     color: var(--terminal-red);
     border: 1px solid var(--terminal-red);
 }
@@ -298,6 +334,7 @@ body {
 
 .task-id {
     font-family: monospace;
+    /* Ensure ID is monospaced */
     color: var(--terminal-yellow);
 }
 
@@ -310,17 +347,17 @@ body {
 
 .list-item {
     padding: 10px 12px;
-    background: rgba(0, 255, 65, 0.02);
+    background-color: rgba(0, 255, 65, 0.02);
     border: 1px solid var(--border-color);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
 .list-item:hover {
-    background: rgba(0, 255, 65, 0.05);
+    background-color: rgba(0, 255, 65, 0.05);
     border-color: var(--terminal-green);
     transform: translateX(3px);
 }
@@ -333,10 +370,12 @@ body {
 }
 
 .model-color {
+    /* For visual distinction if models have colors */
     width: 12px;
     height: 12px;
     border-radius: 2px;
-    box-shadow: 0 0 10px currentColor;
+    box-shadow: 0 0 8px currentColor;
+    /* Glow effect based on its color */
 }
 
 .list-item-info {
@@ -349,19 +388,22 @@ body {
     margin-top: 10px;
     padding: 8px;
     border: 1px dashed var(--terminal-green);
-    background: transparent;
+    background-color: transparent;
     color: var(--terminal-green);
     text-align: center;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, border-style 0.2s ease;
     font-family: inherit;
+    /* Use terminal font */
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 1px;
+    width: 100%;
+    /* Make button full width of its container */
 }
 
 .add-button:hover {
-    background: rgba(0, 255, 65, 0.1);
+    background-color: rgba(0, 255, 65, 0.1);
     border-style: solid;
 }
 
@@ -369,20 +411,21 @@ body {
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
+    /* Two columns for stats */
     gap: 10px;
 }
 
 .stat-box {
     padding: 15px;
-    background: rgba(0, 255, 65, 0.02);
+    background-color: rgba(0, 255, 65, 0.02);
     border: 1px solid var(--border-color);
     text-align: center;
-    transition: all 0.3s ease;
+    transition: border-color 0.3s ease, background-color 0.3s ease;
 }
 
 .stat-box:hover {
     border-color: var(--terminal-green);
-    background: rgba(0, 255, 65, 0.05);
+    background-color: rgba(0, 255, 65, 0.05);
 }
 
 .stat-label {
@@ -403,10 +446,11 @@ body {
 /* Command Section */
 .command-section {
     padding: 15px 20px;
-    background: var(--bg-secondary);
+    background-color: var(--bg-secondary);
     border-top: 1px solid var(--border-color);
     position: relative;
     z-index: 2;
+    /* Above scanlines */
 }
 
 .command-prompt {
@@ -422,57 +466,94 @@ body {
 
 .command-input {
     flex: 1;
-    background: transparent;
+    background-color: transparent;
     border: none;
     color: var(--terminal-green);
     font-family: inherit;
+    /* Use terminal font */
     font-size: 13px;
     outline: none;
 }
 
 .command-input::placeholder {
     color: var(--text-dim);
+    opacity: 0.7;
+    /* Make placeholder slightly less prominent */
 }
 
 .cursor {
     display: inline-block;
     width: 8px;
     height: 14px;
-    background: var(--terminal-green);
-    animation: blink 1s infinite;
+    /* Match line height */
+    background-color: var(--terminal-green);
+    animation: blink 1s infinite steps(1, end);
 }
 
 @keyframes blink {
-    0%, 50% { opacity: 1; }
-    51%, 100% { opacity: 0; }
+
+    0%,
+    50% {
+        opacity: 1;
+    }
+
+    51%,
+    100% {
+        opacity: 0;
+    }
 }
 
 /* Loading Animation */
 .loading {
     text-align: center;
-    padding: 40px;
+    padding: 40px 20px;
+    /* Add horizontal padding */
 }
 
 .loading-text {
     color: var(--terminal-green);
     margin-bottom: 20px;
-    animation: loadingPulse 1.5s infinite;
+    animation: loadingPulse 1.5s infinite ease-in-out;
 }
 
 @keyframes loadingPulse {
-    0%, 100% { opacity: 0.5; }
-    50% { opacity: 1; }
+
+    0%,
+    100% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 1;
+    }
 }
 
 .loading-bar {
     width: 200px;
     height: 4px;
-    background: var(--bg-tertiary);
+    background-color: var(--bg-tertiary);
     margin: 0 auto;
     position: relative;
     overflow: hidden;
+    border-radius: 2px;
+    /* Slightly rounded bar */
 }
 
+.loading-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    /* Start from left for a more natural progress */
+    height: 100%;
+    width: 0;
+    /* Animate width for progress */
+    background-color: var(--terminal-green);
+    animation: loadingBarFill 2s infinite linear;
+    /* Use a fill animation */
+}
+
+/* Alternative loading bar animation (sliding effect) */
+/*
 .loading-progress {
     position: absolute;
     top: 0;
@@ -485,39 +566,75 @@ body {
 
 @keyframes loadingSlide {
     0% { left: -100%; }
+    50% { left: 0; }
     100% { left: 100%; }
+}
+*/
+
+/* Using a simpler indeterminate progress bar animation */
+@keyframes loadingBarFill {
+    0% {
+        width: 0%;
+        left: 0%;
+    }
+
+    50% {
+        width: 100%;
+        left: 0%;
+    }
+
+    50.01% {
+        width: 100%;
+        left: 100%;
+    }
+
+    /* Jump to end */
+    100% {
+        width: 0%;
+        left: 100%;
+    }
 }
 
 /* Modal */
 .modal-overlay {
     display: none;
+    /* Hidden by default */
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.9);
+    background-color: rgba(0, 0, 0, 0.85);
+    /* Darker overlay */
     z-index: 999;
     backdrop-filter: blur(5px);
+    /* Frosted glass effect */
+    -webkit-backdrop-filter: blur(5px);
+    /* Safari support */
 }
 
 .modal-overlay.active {
+    /* Class to show modal */
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .modal {
-    background: var(--bg-secondary);
+    background-color: var(--bg-secondary);
     border: 1px solid var(--terminal-green);
     padding: 30px;
     max-width: 600px;
     width: 90%;
+    /* Responsive width */
     max-height: 80vh;
+    /* Prevent modal from being too tall */
     overflow-y: auto;
-    box-shadow: 0 0 50px rgba(0, 255, 65, 0.3);
+    /* Scroll content if too long */
+    box-shadow: 0 0 40px rgba(0, 255, 65, 0.25);
     position: relative;
     z-index: 1001;
+    /* Above overlay */
 }
 
 .modal-header {
@@ -531,6 +648,8 @@ body {
 
 .modal-content {
     line-height: 1.8;
+    color: var(--text-primary);
+    /* Ensure modal text uses primary color */
 }
 
 .modal-form {
@@ -554,14 +673,15 @@ body {
 }
 
 .form-input {
-    background: var(--bg-primary);
+    background-color: var(--bg-primary);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
-    padding: 8px 12px;
+    padding: 10px 12px;
+    /* Slightly more padding */
     font-family: inherit;
     font-size: 13px;
     outline: none;
-    transition: all 0.3s ease;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .form-input:focus {
@@ -572,27 +692,31 @@ body {
 .modal-buttons {
     display: flex;
     gap: 10px;
-    margin-top: 20px;
-    justify-content: center;
+    margin-top: 25px;
+    /* More space before buttons */
+    justify-content: flex-end;
+    /* Align buttons to the right */
 }
 
 .btn {
-    padding: 8px 20px;
+    padding: 10px 20px;
+    /* Larger click area */
     border: 1px solid var(--terminal-green);
-    background: transparent;
+    background-color: transparent;
     color: var(--terminal-green);
     font-family: inherit;
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 1px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .btn:hover {
-    background: var(--terminal-green);
+    background-color: var(--terminal-green);
     color: var(--bg-primary);
-    box-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
+    /* Contrast text on hover */
+    box-shadow: 0 0 15px rgba(0, 255, 65, 0.4);
 }
 
 .btn-secondary {
@@ -601,9 +725,10 @@ body {
 }
 
 .btn-secondary:hover {
-    background: var(--text-dim);
+    background-color: var(--text-dim);
     color: var(--bg-primary);
     box-shadow: none;
+    /* No glow for secondary button */
 }
 
 /* Notifications */
@@ -612,20 +737,23 @@ body {
     top: 20px;
     right: 20px;
     padding: 15px 20px;
-    background: var(--bg-secondary);
+    background-color: var(--bg-secondary);
     border: 1px solid var(--terminal-green);
     color: var(--terminal-green);
     font-size: 12px;
     z-index: 1000;
-    animation: slideIn 0.3s ease;
-    box-shadow: 0 0 30px rgba(0, 255, 65, 0.5);
+    /* Above most content, below critical modals if any */
+    animation: slideInNotification 0.4s ease-out;
+    box-shadow: 0 5px 20px rgba(0, 255, 65, 0.3);
 }
 
-@keyframes slideIn {
+@keyframes slideInNotification {
     from {
-        transform: translateX(100%);
+        transform: translateX(110%);
+        /* Start further off-screen */
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
@@ -635,74 +763,140 @@ body {
 .notification.error {
     border-color: var(--terminal-red);
     color: var(--terminal-red);
-    box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
+    box-shadow: 0 5px 20px rgba(255, 68, 68, 0.3);
 }
 
 .notification.warning {
     border-color: var(--terminal-yellow);
     color: var(--terminal-yellow);
-    box-shadow: 0 0 30px rgba(255, 189, 46, 0.5);
+    box-shadow: 0 5px 20px rgba(255, 189, 46, 0.3);
 }
 
-/* Help Content */
+/* Help Content (inside modal or page) */
 .help-commands {
     display: grid;
+    /* Using grid for layout */
     gap: 10px;
     margin-top: 20px;
 }
 
 .help-command {
     display: grid;
-    grid-template-columns: 200px 1fr;
-    gap: 20px;
+    grid-template-columns: 180px 1fr;
+    /* Adjust column width as needed */
+    gap: 15px;
+    /* Space between command and description */
     padding: 10px 0;
     border-bottom: 1px solid var(--border-color);
+}
+
+.help-command:last-child {
+    border-bottom: none;
 }
 
 .help-cmd {
     color: var(--terminal-green);
     font-weight: 600;
     font-family: monospace;
+    /* Ensure command is monospaced */
 }
 
 .help-desc {
     color: var(--text-dim);
 }
 
-/* Responsive */
+/* Responsive Design */
 @media (max-width: 768px) {
     .dashboard-grid {
         grid-template-columns: 1fr;
+        /* Stack panels on smaller screens */
     }
-    
+
     .stats-grid {
         grid-template-columns: 1fr;
+        /* Stack stats boxes */
     }
-    
+
     .ascii-header {
-        font-size: 6px;
-        padding: 15px 10px;
+        font-size: 7px;
+        /* Adjust ASCII art size for small screens */
+        padding: 15px 10px 5px;
+        line-height: 1.2;
     }
-    
+
     .help-command {
         grid-template-columns: 1fr;
+        /* Stack command and description */
         gap: 5px;
+    }
+
+    .modal {
+        width: 95%;
+        /* More width on small screens */
+        padding: 20px;
+    }
+
+    .modal-buttons {
+        flex-direction: column;
+        /* Stack modal buttons */
+        gap: 10px;
+    }
+
+    .btn {
+        width: 100%;
+        /* Full width buttons in stacked layout */
     }
 }
 
-/* Terminal Typing Effect */
+@media (max-width: 480px) {
+    body {
+        font-size: 12px;
+        /* Slightly smaller base font for very small screens */
+    }
+
+    .status-bar {
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    .command-input,
+    .prompt-symbol {
+        font-size: 12px;
+    }
+
+    .panel-header {
+        font-size: 10px;
+        padding: 10px;
+    }
+
+    .panel-content {
+        padding: 10px;
+    }
+}
+
+/* Terminal Typing Effect (if used via JS) */
 @keyframes typing {
-    from { width: 0; }
-    to { width: 100%; }
+    from {
+        width: 0;
+    }
+
+    to {
+        width: 100%;
+    }
 }
 
 .typing-effect {
     overflow: hidden;
+    /* Hides text before it's "typed" */
     white-space: nowrap;
+    /* Keeps text on a single line */
     animation: typing 2s steps(40, end);
+    /* Adjust steps and duration as needed */
+    border-right: 2px solid var(--terminal-green);
+    /* Simulates typing cursor */
 }
 
-/* Matrix Rain Effect (Optional) */
+/* Matrix Rain Effect (Canvas Styling) */
 .matrix-rain {
     position: fixed;
     top: 0;
@@ -710,11 +904,64 @@ body {
     width: 100%;
     height: 100%;
     pointer-events: none;
-    opacity: 0.05;
+    /* Canvas should not interfere with interactions */
+    opacity: 0.07;
+    /* Subtle effect, adjust as needed */
     z-index: 0;
+    /* Behind all other content */
 }
 
-/* Glitch Effect */
+/* Glitch Effect for ASCII Header or other elements */
+.glitch {
+    animation: glitchEffect 3s infinite steps(1);
+    /* More erratic glitch */
+}
+
+@keyframes glitchEffect {
+
+    0%,
+    100% {
+        text-shadow: 0 0 5px rgba(0, 255, 65, 0.5), 0 0 10px rgba(0, 255, 65, 0.4);
+        clip-path: inset(0);
+    }
+
+    5% {
+        clip-path: inset(calc(10% * random()) 0 calc(30% * random()) 0);
+        transform: translate(calc(5px * (random() - 0.5)), calc(5px * (random() - 0.5)));
+    }
+
+    10% {
+        clip-path: inset(calc(40% * random()) 0 calc(15% * random()) 0);
+        transform: translate(calc(-3px * (random() - 0.5)), calc(3px * (random() - 0.5)));
+    }
+
+    15% {
+        clip-path: inset(calc(5% * random()) 0 calc(50% * random()) 0);
+        transform: none;
+    }
+
+    20% {
+        /* Short normal period */
+        text-shadow: 0 0 5px rgba(0, 255, 65, 0.5), 0 0 10px rgba(0, 255, 65, 0.4);
+        clip-path: inset(0);
+    }
+
+    /* Add more steps for varied glitching */
+    /* The random() function is illustrative; true random needs JS or complex CSS hacks */
+    /* For CSS-only, use fixed values or pseudo-random sequences */
+    25% {
+        text-shadow: 2px 2px 0 var(--terminal-magenta), -2px -2px 0 var(--terminal-cyan), 0 0 5px rgba(0, 255, 65, 0.5);
+    }
+
+    30% {
+        text-shadow: -2px 2px 0 var(--terminal-magenta), 2px -2px 0 var(--terminal-cyan), 0 0 5px rgba(0, 255, 65, 0.5);
+    }
+
+    /* Fallback to simpler glitch if random() is not supported/desired */
+}
+
+/* Simpler Glitch (Original) if the above is too complex or not working as expected */
+/*
 @keyframes glitch {
     0%, 100% {
         text-shadow: 
@@ -734,32 +981,100 @@ body {
             0 0 10px rgba(0, 255, 65, 0.8);
     }
 }
-
 .glitch {
     animation: glitch 5s infinite;
 }
+*/
 
-/* Empty State */
+/* Empty State (for lists, etc.) */
 .empty-state {
     text-align: center;
-    padding: 60px 20px;
+    padding: 50px 20px;
+    /* More padding */
     color: var(--text-dim);
+    opacity: 0.7;
 }
 
 .empty-icon {
+    /* If you use an icon font or SVG */
     font-size: 48px;
-    margin-bottom: 20px;
-    opacity: 0.3;
+    margin-bottom: 15px;
+    opacity: 0.5;
+    /* Icon can be more subtle */
 }
 
-/* Print Styles */
+.empty-state div {
+    /* For the text message */
+    font-style: italic;
+}
+
+/* Print Styles (Basic) */
 @media print {
     body {
-        background: white;
-        color: black;
+        background-color: #fff;
+        color: #000;
+        font-size: 10pt;
+        font-family: "Courier New", monospace;
+        /* Common monospace for print */
     }
-    
-    .terminal-container {
-        border: 1px solid black;
+
+    .terminal-container,
+    .panel,
+    .status-bar,
+    .command-section {
+        border: 1px solid #ccc;
+        background-color: #fff !important;
+        /* Override dark backgrounds */
+        color: #000 !important;
+        /* Override light text */
+    }
+
+    .ascii-header,
+    .status-indicator,
+    .stat-value,
+    .prompt-symbol,
+    .command-input,
+    .task-type,
+    .help-cmd,
+    .list-item-name {
+        color: #000 !important;
+
+        /* Ensure text is black */
+        .prompt-symbol,
+        .command-input,
+        .task-type,
+        .help-cmd,
+        .list-item-name {
+            color: #000 !important;
+            /* Ensure text is black */
+            text-shadow: none !important;
+            /* Remove glow effects */
+        }
+
+        .terminal-container::before,
+        .matrix-rain,
+        .cursor,
+        .glitch {
+            display: none !important;
+            /* Hide decorative effects */
+        }
+
+        .dashboard-grid,
+        .stats-grid,
+        .help-commands {
+            grid-template-columns: 1fr !important;
+            /* Force single column for print */
+        }
+
+        a {
+            text-decoration: underline;
+            color: #0000ff;
+            /* Standard blue for links */
+        }
+
+        a::after {
+            content: " (" attr(href) ")";
+            /* Show URL for links */
+        }
     }
 }
