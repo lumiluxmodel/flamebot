@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flamebot Terminal v1.0</title>
+    <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+    <link rel="stylesheet" href="/css/terminal.css">
+</head>
+<body>
+    <div class="terminal-container">
+        <!-- ASCII Art Header -->
+        <pre class="ascii-header glitch">
+███████╗██╗      █████╗ ███╗   ███╗███████╗██████╗  ██████╗ ████████╗
+██╔════╝██║     ██╔══██╗████╗ ████║██╔════╝██╔══██╗██╔═══██╗╚══██╔══╝
+█████╗  ██║     ███████║██╔████╔██║█████╗  ██████╔╝██║   ██║   ██║   
+██╔══╝  ██║     ██╔══██║██║╚██╔╝██║██╔══╝  ██╔══██╗██║   ██║   ██║   
+██║     ███████╗██║  ██║██║ ╚═╝ ██║███████╗██████╔╝╚██████╔╝   ██║   
+╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝╚═════╝  ╚═════╝    ╚═╝   
+        T E R M I N A L   v1.0   |   T I N D E R   A U T O M A T I O N</pre>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-indicator"></div>
+                <span>System Online</span>
+            </div>
+            <div class="status-item">
+                <span id="connection-status">API Connected</span>
+            </div>
+            <div class="status-item">
+                <span id="current-time">00:00:00</span>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="terminal-content">
+            <!-- Loading State -->
+            <div id="main-loader" class="loading" style="display: none;">
+                <div class="loading-text">INITIALIZING SYSTEM...</div>
+                <div class="loading-bar">
+                    <div class="loading-progress"></div>
+                </div>
+            </div>
+
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid">
+                <!-- Active Tasks Monitor -->
+                <div class="panel task-monitor">
+                    <div class="panel-header">
+                        <span>ACTIVE TASKS</span>
+                        <span id="task-count">0 active</span>
+                    </div>
+                    <div class="panel-content" id="tasks-list">
+                        <div class="loading">
+                            <div class="loading-text">Loading tasks...</div>
+                            <div class="loading-bar">
+                                <div class="loading-progress"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Models Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span>MODELS</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="list-container" id="models-list">
+                            <!-- Models will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Channels Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span>CHANNELS</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="list-container" id="channels-list">
+                            <!-- Channels will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span>TODAY'S STATISTICS</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="stats-grid">
+                            <div class="stat-box">
+                                <div class="stat-label">Swipes</div>
+                                <div class="stat-value" id="swipes-today">0</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Matches</div>
+                                <div class="stat-value" id="matches-today">0</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Active</div>
+                                <div class="stat-value" id="active-accounts">0</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Success</div>
+                                <div class="stat-value" id="success-rate">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span>QUICK ACTIONS</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="list-container">
+                            <div class="list-item" onclick="terminal.executeCommand('monitor')">
+                                <span>🔄 Start Monitoring</span>
+                            </div>
+                            <div class="list-item" onclick="terminal.executeCommand('status')">
+                                <span>📊 System Status</span>
+                            </div>
+                            <div class="list-item" onclick="terminal.executeCommand('help')">
+                                <span>❓ Help & Commands</span>
+                            </div>
+                            <div class="list-item" onclick="terminal.executeCommand('emergency-stop')">
+                                <span>🛑 Emergency Stop</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        <span>RECENT ACTIVITY</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="list-container" id="recent-activity">
+                            <div class="empty-state">
+                                <div>No recent activity</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Command Input Section -->
+        <div class="command-section">
+            <div class="command-prompt">
+                <span class="prompt-symbol">flamebot@terminal:~$</span>
+                <input type="text" class="command-input" id="command-input" 
+                       placeholder="type 'help' for commands" 
+                       autocomplete="off" 
+                       spellcheck="false">
+                <span class="cursor"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Overlay -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal" id="modal" onclick="event.stopPropagation()">
+            <h2 class="modal-header" id="modal-header">MODAL TITLE</h2>
+            <div class="modal-content" id="modal-content">
+                <!-- Modal content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Matrix Rain Effect (Optional) -->
+    <canvas class="matrix-rain" id="matrix-rain"></canvas>
+
+    <!-- Load JavaScript -->
+    <script src="/js/terminal.js"></script>
+    
+    <!-- Optional: Matrix Rain Effect -->
+    <script>
+        // Matrix rain effect (subtle background)
+        const canvas = document.getElementById('matrix-rain');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        const matrix = "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789@#$%^&*()*&^%+-/~{[|`]}";
+        const matrixArray = matrix.split("");
+        
+        const fontSize = 10;
+        const columns = canvas.width / fontSize;
+        
+        const drops = [];
+        for(let x = 0; x < columns; x++) {
+            drops[x] = 1;
+        }
+        
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#00ff41';
+            ctx.font = fontSize + 'px monospace';
+            
+            for(let i = 0; i < drops.length; i++) {
+                const text = matrixArray[Math.floor(Math.random() * matrixArray.length)];
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                
+                if(drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+        
+        // Uncomment to enable matrix effect
+        // setInterval(drawMatrix, 35);
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

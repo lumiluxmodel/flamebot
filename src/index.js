@@ -35,7 +35,8 @@ app.use(morgan('dev'));
 
 // Serve static files (dashboard)
 app.use(express.static(path.join(__dirname, '../public')));
-
+app.use('/css', express.static(path.join(__dirname, '../public/css')));
+app.use('/js', express.static(path.join(__dirname, '../public/js')));
 // API routes
 app.use('/api/accounts', accountRoutes);
 app.use('/api/ai', aiRoutes);
@@ -44,7 +45,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Root endpoint - serve dashboard
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/dashboard.html'));
+  res.sendFile(path.join(__dirname, '../public/terminal.html'));
 });
 
 // API info endpoint

@@ -28,7 +28,10 @@ async function migrateUsernames() {
                 continue;
             }
             
-            console.log(`📄 Processing ${file} (${model}/${channel})...`);
+            // Capitalize model name for database
+            const capitalizedModel = model.charAt(0).toUpperCase() + model.slice(1).toLowerCase();
+            
+            console.log(`📄 Processing ${file} (${capitalizedModel}/${channel})...`);
             
             try {
                 // Read file content
@@ -41,7 +44,7 @@ async function migrateUsernames() {
                 console.log(`   Found ${usernames.length} usernames`);
                 
                 // Add to database
-                const result = await db.addUsernames(model, channel, usernames);
+                const result = await db.addUsernames(capitalizedModel, channel, usernames);
                 console.log(`   ✅ Migrated successfully!\n`);
                 
             } catch (error) {
@@ -74,7 +77,7 @@ async function migrateUsernames() {
         console.log('📊 Migration Summary:');
         console.log('====================');
         
-        const models = ['aura', 'lola', 'iris', 'ciara'];
+        const models = ['Aura', 'Lola', 'Iris', 'Ciara'];  // Capitalized
         const channels = ['snap', 'gram', 'of'];
         
         for (const model of models) {

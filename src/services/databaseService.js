@@ -1,23 +1,43 @@
 // src/services/databaseService.js
 const { Pool } = require('pg');
-const config = require('../config');
 
 class DatabaseService {
     constructor() {
+        // Get database config based on environment
+        const env = process.env.NODE_ENV || 'development';
+        let dbConfig;
+        
+        try {
+            dbConfig = require('../config/database')[env];
+        } catch (error) {
+            // If database.js doesn't exist, use direct config
+            dbConfig = {
+                host: process.env.DB_HOST || 'yamabiko.proxy.rlwy.net',
+                port: process.env.DB_PORT || 18827,
+                database: process.env.DB_NAME || 'railway',
+                user: process.env.DB_USER || 'postgres',
+                password: process.env.DB_PASSWORD || 'pyZSoGjkpyNLzYnfFgRpoHdBGVsQgkie',
+                ssl: {
+                    rejectUnauthorized: false
+                }
+            };
+        }
+        
         this.pool = new Pool({
-            host: config.database.host,
-            port: config.database.port,
-            database: config.database.name,
-            user: config.database.user,
-            password: config.database.password,
+            host: dbConfig.host,
+            port: dbConfig.port,
+            database: dbConfig.database,
+            user: dbConfig.user,
+            password: dbConfig.password,
             max: 20,
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 2000,
+            ssl: dbConfig.ssl || false
         });
 
         // Log connection
         this.pool.on('connect', () => {
-            console.log('✅ Database connected');
+            console.log('✅ Database connected to Railway');
         });
 
         this.pool.on('error', (err) => {
@@ -33,7 +53,7 @@ class DatabaseService {
         try {
             const res = await this.pool.query(text, params);
             const duration = Date.now() - start;
-            console.log('📊 Query executed', { text, duration, rows: res.rowCount });
+            console.log('📊 Query executed', { text: text.substring(0, 50), duration, rows: res.rowCount });
             return res;
         } catch (error) {
             console.error('❌ Query error:', error);
@@ -128,7 +148,7 @@ class DatabaseService {
     async updateAccountSpectreConfig(accountId, spectreConfig) {
         const query = `
             UPDATE accounts 
-            SET spectre_config = $2, updated_at = CURRENT_TIMESTAMP
+            SET spectre_config = $2::jsonb, updated_at = CURRENT_TIMESTAMP
             WHERE flamebot_id = $1
             RETURNING *
         `;
@@ -163,12 +183,12 @@ class DatabaseService {
         
         const query = `
             INSERT INTO tasks (task_id, type, status, account_id, payload)
-            VALUES ($1, $2, $3, (SELECT id FROM accounts WHERE flamebot_id = $4), $5)
+            VALUES ($1, $2, $3, (SELECT id FROM accounts WHERE flamebot_id = $4), $5::jsonb)
             RETURNING *
         `;
         
         const result = await this.query(query, [
-            task_id, type, status, account_id, JSON.stringify(payload)
+            task_id, type, status, account_id, JSON.stringify(payload || {})
         ]);
         
         return result.rows[0];
@@ -178,7 +198,7 @@ class DatabaseService {
         const query = `
             UPDATE tasks 
             SET status = $2, 
-                result = $3,
+                result = $3::jsonb,
                 error = $4,
                 completed_at = CASE WHEN $2 IN ('completed', 'failed') THEN CURRENT_TIMESTAMP ELSE NULL END,
                 duration_ms = CASE WHEN $2 IN ('completed', 'failed') THEN EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)) * 1000 ELSE NULL END
@@ -243,13 +263,13 @@ class DatabaseService {
             VALUES (
                 (SELECT id FROM accounts WHERE flamebot_id = $1),
                 (SELECT id FROM tasks WHERE task_id = $2),
-                $3
+                $3::jsonb
             )
             RETURNING *
         `;
         
         const result = await this.query(query, [
-            account_id, task_id, JSON.stringify(spectre_config)
+            account_id, task_id, JSON.stringify(spectre_config || {})
         ]);
         
         return result.rows[0];
@@ -281,9 +301,9 @@ class DatabaseService {
         try {
             await client.query('BEGIN');
             
-            // Get model and channel IDs
-            const modelResult = await client.query('SELECT id FROM models WHERE name = $1', [modelName]);
-            const channelResult = await client.query('SELECT id FROM channels WHERE name = $1', [channelName]);
+            // Get model and channel IDs (case-insensitive)
+            const modelResult = await client.query('SELECT id FROM models WHERE LOWER(name) = LOWER($1)', [modelName]);
+            const channelResult = await client.query('SELECT id FROM channels WHERE LOWER(name) = LOWER($1)', [channelName]);
             
             if (!modelResult.rows[0] || !channelResult.rows[0]) {
                 throw new Error('Model or channel not found');
@@ -318,9 +338,9 @@ class DatabaseService {
         try {
             await client.query('BEGIN');
             
-            // Get model and channel IDs
-            const modelResult = await client.query('SELECT id FROM models WHERE name = $1', [modelName]);
-            const channelResult = await client.query('SELECT id FROM channels WHERE name = $1', [channelName]);
+            // Get model and channel IDs (case-insensitive)
+            const modelResult = await client.query('SELECT id FROM models WHERE LOWER(name) = LOWER($1)', [modelName]);
+            const channelResult = await client.query('SELECT id FROM channels WHERE LOWER(name) = LOWER($1)', [channelName]);
             
             if (!modelResult.rows[0] || !channelResult.rows[0]) {
                 throw new Error('Model or channel not found');
@@ -467,6 +487,22 @@ class DatabaseService {
         return result.rows;
     }
 
+    // ========== ACCOUNT STATS ==========
+
+    async getAccountStats() {
+        const query = `
+            SELECT 
+                COUNT(*) as total_accounts,
+                COUNT(CASE WHEN status = 'active' THEN 1 END) as active_accounts,
+                SUM(total_swipes) as total_swipes,
+                SUM(total_matches) as total_matches
+            FROM accounts
+        `;
+        
+        const result = await this.query(query);
+        return result.rows[0];
+    }
+
     // ========== CLEANUP ==========
 
     async close() {
@@ -475,98 +511,5 @@ class DatabaseService {
     }
 }
 
+// Export a singleton instance
 module.exports = new DatabaseService();
-
-// ============================================
-// src/config/database.js
-// ============================================
-module.exports = {
-    development: {
-        host: process.env.DB_HOST || 'localhost',
-        port: process.env.DB_PORT || 5432,
-        database: process.env.DB_NAME || 'flamebot_dev',
-        user: process.env.DB_USER || 'flamebot',
-        password: process.env.DB_PASSWORD || 'flamebot123'
-    },
-    production: {
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT || 5432,
-        database: process.env.DB_NAME,
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD
-    },
-    test: {
-        host: process.env.DB_HOST || 'localhost',
-        port: process.env.DB_PORT || 5432,
-        database: process.env.DB_NAME || 'flamebot_test',
-        user: process.env.DB_USER || 'flamebot',
-        password: process.env.DB_PASSWORD || 'flamebot123'
-    }
-};
-
-// ============================================
-// scripts/setup-database.js
-// ============================================
-const { Client } = require('pg');
-const fs = require('fs').promises;
-const path = require('path');
-
-async function setupDatabase() {
-    const env = process.env.NODE_ENV || 'development';
-    const config = require('../src/config/database')[env];
-    
-    // Connect to postgres database to create our database
-    const client = new Client({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        password: config.password,
-        database: 'postgres'
-    });
-
-    try {
-        await client.connect();
-        
-        // Create database if it doesn't exist
-        const dbExists = await client.query(
-            `SELECT 1 FROM pg_database WHERE datname = $1`,
-            [config.database]
-        );
-        
-        if (dbExists.rows.length === 0) {
-            await client.query(`CREATE DATABASE ${config.database}`);
-            console.log(`✅ Database '${config.database}' created`);
-        } else {
-            console.log(`ℹ️  Database '${config.database}' already exists`);
-        }
-        
-        await client.end();
-        
-        // Now connect to our database and run schema
-        const dbClient = new Client({
-            ...config,
-            database: config.database
-        });
-        
-        await dbClient.connect();
-        
-        // Read and execute schema
-        const schemaPath = path.join(__dirname, '..', 'database', 'schema.sql');
-        const schema = await fs.readFile(schemaPath, 'utf8');
-        
-        await dbClient.query(schema);
-        console.log('✅ Database schema created');
-        
-        await dbClient.end();
-        
-    } catch (error) {
-        console.error('❌ Database setup error:', error);
-        process.exit(1);
-    }
-}
-
-if (require.main === module) {
-    setupDatabase();
-}
-
-module.exports = setupDatabase;
