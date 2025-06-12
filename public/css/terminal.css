@@ -92,10 +92,10 @@ body {
     line-height: 1.1;
     white-space: pre; /* Preserve ASCII art formatting */
     font-weight: 600;
-    text-shadow: 0 0 10px rgba(0, 255, 65, 0.7), 0 0 20px rgba(0, 255, 65, 0.5);
+    text-shadow: 0 0 8px rgba(0, 255, 65, 0.6);
     position: relative;
     z-index: 2; /* Above scanlines */
-  }
+}
   
   
 
@@ -883,80 +883,6 @@ body {
     /* Behind all other content */
 }
 
-/* Glitch Effect for ASCII Header or other elements */
-.glitch {
-    animation: glitchEffect 3s infinite steps(1);
-    /* More erratic glitch */
-}
-
-@keyframes glitchEffect {
-
-    0%,
-    100% {
-        text-shadow: 0 0 5px rgba(0, 255, 65, 0.5), 0 0 10px rgba(0, 255, 65, 0.4);
-        clip-path: inset(0);
-    }
-
-    5% {
-        clip-path: inset(calc(10% * random()) 0 calc(30% * random()) 0);
-        transform: translate(calc(5px * (random() - 0.5)), calc(5px * (random() - 0.5)));
-    }
-
-    10% {
-        clip-path: inset(calc(40% * random()) 0 calc(15% * random()) 0);
-        transform: translate(calc(-3px * (random() - 0.5)), calc(3px * (random() - 0.5)));
-    }
-
-    15% {
-        clip-path: inset(calc(5% * random()) 0 calc(50% * random()) 0);
-        transform: none;
-    }
-
-    20% {
-        /* Short normal period */
-        text-shadow: 0 0 5px rgba(0, 255, 65, 0.5), 0 0 10px rgba(0, 255, 65, 0.4);
-        clip-path: inset(0);
-    }
-
-    /* Add more steps for varied glitching */
-    /* The random() function is illustrative; true random needs JS or complex CSS hacks */
-    /* For CSS-only, use fixed values or pseudo-random sequences */
-    25% {
-        text-shadow: 2px 2px 0 var(--terminal-magenta), -2px -2px 0 var(--terminal-cyan), 0 0 5px rgba(0, 255, 65, 0.5);
-    }
-
-    30% {
-        text-shadow: -2px 2px 0 var(--terminal-magenta), 2px -2px 0 var(--terminal-cyan), 0 0 5px rgba(0, 255, 65, 0.5);
-    }
-
-    /* Fallback to simpler glitch if random() is not supported/desired */
-}
-
-/* Simpler Glitch (Original) if the above is too complex or not working as expected */
-/*
-@keyframes glitch {
-    0%, 100% {
-        text-shadow: 
-            0 0 10px rgba(0, 255, 65, 0.8),
-            0 0 20px rgba(0, 255, 65, 0.6);
-    }
-    20% {
-        text-shadow: 
-            2px 2px 0 rgba(255, 0, 255, 0.8),
-            -2px -2px 0 rgba(0, 255, 255, 0.8),
-            0 0 10px rgba(0, 255, 65, 0.8);
-    }
-    40% {
-        text-shadow: 
-            -2px 2px 0 rgba(255, 0, 255, 0.8),
-            2px -2px 0 rgba(0, 255, 255, 0.8),
-            0 0 10px rgba(0, 255, 65, 0.8);
-    }
-}
-.glitch {
-    animation: glitch 5s infinite;
-}
-*/
 
 /* Empty State (for lists, etc.) */
 .empty-state {

@@ -8,6 +8,8 @@
     padding: 0 20px;
     gap: 2px;
     overflow-x: auto;
+    position: relative;
+    z-index: 10; /* Ensure tabs are above other content */
 }
 
 .nav-tab {
@@ -23,6 +25,8 @@
     transition: all 0.3s ease;
     border-top: 3px solid transparent;
     white-space: nowrap;
+    position: relative;
+    z-index: 11;
 }
 
 .nav-tab:hover {
@@ -31,13 +35,13 @@
 }
 
 .nav-tab.active {
-    color: var(--terminal-green);
-    background-color: rgba(0, 255, 65, 0.1);
-    border-top-color: var(--terminal-green);
+    color: var(--terminal-green) !important;
+    background-color: rgba(0, 255, 65, 0.1) !important;
+    border-top-color: var(--terminal-green) !important;
     text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
 }
 
-/* ========== TAB CONTENT ========== */
+/* Ensure tab contents work */
 .tab-content {
     display: none;
     padding: 20px;
@@ -45,9 +49,17 @@
 }
 
 .tab-content.active {
-    display: block;
+    display: block !important;
 }
 
+/* Debug styles (remove after testing) */
+.nav-tab[data-debug="true"] {
+    border: 2px solid red !important;
+}
+
+.tab-content[data-debug="true"] {
+    border: 2px solid blue !important;
+}
 /* ========== OVERVIEW DASHBOARD ========== */
 .overview-grid {
     display: grid;
