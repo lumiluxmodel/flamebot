@@ -227,8 +227,8 @@ router.get('/active', asyncHandler(async (req, res) => {
                 },
                 summary: {
                     totalActive: activeExecutions.length,
-                    byWorkflowType: this.groupByWorkflowType(activeExecutions),
-                    byStatus: this.groupByStatus(activeExecutions)
+                    byWorkflowType: groupByWorkflowType(activeExecutions),
+                    byStatus: groupByStatus(activeExecutions)
                 }
             }
         });
@@ -354,7 +354,7 @@ router.get('/definitions', asyncHandler(async (req, res) => {
             name: def.name,
             description: def.description,
             totalSteps: def.steps.length,
-            estimatedDuration: this.calculateEstimatedDuration(def.steps),
+            estimatedDuration: calculateEstimatedDuration(def.steps),
             version: def.version,
             isActive: true,
             steps: def.steps.map((step, index) => ({
@@ -411,7 +411,7 @@ router.get('/definitions/:type', asyncHandler(async (req, res) => {
                 name: definition.name,
                 description: definition.description,
                 totalSteps: definition.steps.length,
-                estimatedDuration: this.calculateEstimatedDuration(definition.steps),
+                estimatedDuration: calculateEstimatedDuration(definition.steps),
                 version: definition.version,
                 steps: definition.steps.map((step, index) => ({
                     stepNumber: index + 1,
@@ -436,6 +436,600 @@ router.get('/definitions/:type', asyncHandler(async (req, res) => {
     }
 }));
 
+/**
+ * Create new workflow definition
+ * POST /api/workflows/definitions
+ */
+router.post('/definitions', asyncHandler(async (req, res) => {
+    try {
+        const { name, type, description, steps, config = {} } = req.body;
+
+        console.log(`🎨 API: Creating new workflow definition: ${type}`);
+
+        // Validation
+        if (!name || !type || !description || !steps) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: name, type, description, and steps are required'
+            });
+        }
+
+        if (!Array.isArray(steps) || steps.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Steps must be a non-empty array'
+            });
+        }
+
+        // Validate type format (alphanumeric and underscore only)
+        if (!/^[a-zA-Z0-9_]+$/.test(type)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Type must contain only letters, numbers, and underscores'
+            });
+        }
+
+        // Validate each step
+        const validActions = [
+            'wait', 
+            'add_prompt', 
+            'add_bio', 
+            'swipe_with_spectre', 
+            'activate_continuous_swipe',
+            'spectre_config',
+            'swipe'
+        ];
+
+        for (let i = 0; i < steps.length; i++) {
+            const step = steps[i];
+            
+            if (!step.id || !step.action || !step.description) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Step ${i + 1} missing required fields: id, action, description`
+                });
+            }
+
+            if (!validActions.includes(step.action)) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Step ${i + 1} has invalid action: ${step.action}. Valid actions: ${validActions.join(', ')}`
+                });
+            }
+
+            // Set default delay if not provided
+            if (step.delay === undefined) {
+                step.delay = 0;
+            }
+
+            // Validate action-specific requirements
+            if (step.action === 'swipe_with_spectre' && !step.swipeCount) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Step ${i + 1} (${step.id}): swipe_with_spectre requires swipeCount`
+                });
+            }
+
+            if (step.action === 'activate_continuous_swipe') {
+                if (!step.minSwipes || !step.maxSwipes || !step.minIntervalMs || !step.maxIntervalMs) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Step ${i + 1} (${step.id}): continuous swipe requires minSwipes, maxSwipes, minIntervalMs, maxIntervalMs`
+                    });
+                }
+            }
+        }
+
+        // Set default config values
+        const defaultConfig = {
+            maxRetries: 3,
+            retryBackoffMs: 30000,
+            timeoutMs: 300000,
+            ...config
+        };
+
+        // Create workflow definition
+        const created = await workflowDb.upsertWorkflowDefinition({
+            name,
+            type,
+            description,
+            steps,
+            config: defaultConfig
+        });
+
+        // Reload workflow definitions in executor
+        await workflowExecutor.loadWorkflowDefinitions();
+
+        console.log(`✅ Created workflow definition: ${type} (v${created.version})`);
+
+        res.status(201).json({
+            success: true,
+            message: 'Workflow definition created successfully',
+            data: {
+                id: created.id,
+                type: created.type,
+                name: created.name,
+                version: created.version,
+                totalSteps: steps.length,
+                estimatedDuration: calculateEstimatedDuration(steps)
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ API Error - Create Definition:', error);
+        
+        // Handle unique constraint violation
+        if (error.message.includes('duplicate key') || error.message.includes('already exists')) {
+            return res.status(409).json({
+                success: false,
+                error: `Workflow type '${req.body.type}' already exists. Use PUT to update.`
+            });
+        }
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+}));
+
+/**
+ * Update existing workflow definition
+ * PUT /api/workflows/definitions/:type
+ */
+router.put('/definitions/:type', asyncHandler(async (req, res) => {
+    try {
+        const { type } = req.params;
+        const { name, description, steps, config } = req.body;
+
+        console.log(`📝 API: Updating workflow definition: ${type}`);
+
+        // Check if exists
+        const existing = await workflowDb.getWorkflowDefinition(type);
+        if (!existing) {
+            return res.status(404).json({
+                success: false,
+                error: `Workflow definition '${type}' not found`
+            });
+        }
+
+        // Validate updates (similar to create)
+        if (steps) {
+            if (!Array.isArray(steps) || steps.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Steps must be a non-empty array'
+                });
+            }
+
+            // Validate each step (same as create)
+            const validActions = [
+                'wait', 
+                'add_prompt', 
+                'add_bio', 
+                'swipe_with_spectre', 
+                'activate_continuous_swipe',
+                'spectre_config',
+                'swipe'
+            ];
+
+            for (let i = 0; i < steps.length; i++) {
+                const step = steps[i];
+                
+                if (!step.id || !step.action || !step.description) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Step ${i + 1} missing required fields`
+                    });
+                }
+
+                if (!validActions.includes(step.action)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Step ${i + 1} has invalid action: ${step.action}`
+                    });
+                }
+            }
+        }
+
+        // Prepare update
+        const updateData = {
+            type,
+            name: name || existing.name,
+            description: description || existing.description,
+            steps: steps || existing.steps,
+            config: config ? { ...existing.config, ...config } : existing.config
+        };
+
+        // Update workflow
+        const updated = await workflowDb.upsertWorkflowDefinition(updateData);
+
+        // Reload workflow definitions in executor
+        await workflowExecutor.loadWorkflowDefinitions();
+
+        console.log(`✅ Updated workflow definition: ${type} (v${updated.version})`);
+
+        res.json({
+            success: true,
+            message: 'Workflow definition updated successfully',
+            data: {
+                id: updated.id,
+                type: updated.type,
+                name: updated.name,
+                version: updated.version,
+                previousVersion: existing.version
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ API Error - Update Definition:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+}));
+
+/**
+ * Delete workflow definition
+ * DELETE /api/workflows/definitions/:type
+ */
+router.delete('/definitions/:type', asyncHandler(async (req, res) => {
+    try {
+        const { type } = req.params;
+
+        console.log(`🗑️ API: Deleting workflow definition: ${type}`);
+
+        // Prevent deletion of system workflows
+        const systemWorkflows = ['default', 'aggressive', 'test'];
+        if (systemWorkflows.includes(type)) {
+            return res.status(403).json({
+                success: false,
+                error: `Cannot delete system workflow: ${type}`
+            });
+        }
+
+        // Check if exists
+        const existing = await workflowDb.getWorkflowDefinition(type);
+        if (!existing) {
+            return res.status(404).json({
+                success: false,
+                error: `Workflow definition '${type}' not found`
+            });
+        }
+
+        // Check if any active instances
+        const query = `
+            SELECT COUNT(*) as active_count
+            FROM workflow_instances wi
+            JOIN workflow_definitions wd ON wi.workflow_id = wd.id
+            WHERE wd.type = $1 AND wi.status = 'active'
+        `;
+        const result = await workflowDb.db.query(query, [type]);
+        
+        if (parseInt(result.rows[0].active_count) > 0) {
+            return res.status(409).json({
+                success: false,
+                error: `Cannot delete workflow with active instances. Found ${result.rows[0].active_count} active workflows.`
+            });
+        }
+
+        // Soft delete (deactivate)
+        const deleteQuery = `
+            UPDATE workflow_definitions 
+            SET is_active = false, updated_at = CURRENT_TIMESTAMP 
+            WHERE type = $1
+            RETURNING *
+        `;
+        await workflowDb.db.query(deleteQuery, [type]);
+
+        // Reload workflow definitions
+        await workflowExecutor.loadWorkflowDefinitions();
+
+        console.log(`✅ Deleted workflow definition: ${type}`);
+
+        res.json({
+            success: true,
+            message: 'Workflow definition deleted successfully',
+            data: {
+                type,
+                name: existing.name
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ API Error - Delete Definition:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+}));
+
+/**
+ * Activate/Deactivate workflow definition
+ * PATCH /api/workflows/definitions/:type/status
+ */
+router.patch('/definitions/:type/status', asyncHandler(async (req, res) => {
+    try {
+        const { type } = req.params;
+        const { active } = req.body;
+
+        if (typeof active !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                error: 'Active status must be a boolean'
+            });
+        }
+
+        console.log(`🔄 API: ${active ? 'Activating' : 'Deactivating'} workflow: ${type}`);
+
+        const query = `
+            UPDATE workflow_definitions 
+            SET is_active = $2, updated_at = CURRENT_TIMESTAMP 
+            WHERE type = $1
+            RETURNING *
+        `;
+        const result = await workflowDb.db.query(query, [type, active]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: `Workflow definition '${type}' not found`
+            });
+        }
+
+        // Reload workflow definitions
+        await workflowExecutor.loadWorkflowDefinitions();
+
+        res.json({
+            success: true,
+            message: `Workflow ${active ? 'activated' : 'deactivated'} successfully`,
+            data: {
+                type,
+                name: result.rows[0].name,
+                active: result.rows[0].is_active
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ API Error - Update Status:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+}));
+
+/**
+ * Clone existing workflow definition
+ * POST /api/workflows/definitions/:type/clone
+ */
+router.post('/definitions/:type/clone', asyncHandler(async (req, res) => {
+    try {
+        const { type } = req.params;
+        const { newType, newName, newDescription } = req.body;
+
+        console.log(`📋 API: Cloning workflow definition: ${type} → ${newType}`);
+
+        // Validation
+        if (!newType || !newName) {
+            return res.status(400).json({
+                success: false,
+                error: 'newType and newName are required'
+            });
+        }
+
+        // Validate new type format
+        if (!/^[a-zA-Z0-9_]+$/.test(newType)) {
+            return res.status(400).json({
+                success: false,
+                error: 'newType must contain only letters, numbers, and underscores'
+            });
+        }
+
+        // Get source workflow
+        const source = await workflowDb.getWorkflowDefinition(type);
+        if (!source) {
+            return res.status(404).json({
+                success: false,
+                error: `Source workflow '${type}' not found`
+            });
+        }
+
+        // Create cloned workflow
+        const cloned = await workflowDb.upsertWorkflowDefinition({
+            name: newName,
+            type: newType,
+            description: newDescription || `${source.description} (cloned from ${type})`,
+            steps: source.steps,
+            config: source.config
+        });
+
+        // Reload workflow definitions
+        await workflowExecutor.loadWorkflowDefinitions();
+
+        console.log(`✅ Cloned workflow: ${type} → ${newType}`);
+
+        res.status(201).json({
+            success: true,
+            message: 'Workflow cloned successfully',
+            data: {
+                sourceType: type,
+                newType: cloned.type,
+                name: cloned.name,
+                version: cloned.version,
+                totalSteps: cloned.steps.length
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ API Error - Clone Definition:', error);
+        
+        if (error.message.includes('duplicate key')) {
+            return res.status(409).json({
+                success: false,
+                error: `Workflow type '${req.body.newType}' already exists`
+            });
+        }
+        
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+}));
+
+/**
+ * Get workflow definition examples
+ * GET /api/workflows/examples
+ */
+router.get('/examples', asyncHandler(async (req, res) => {
+    const examples = {
+        minimal: {
+            name: "Minimal Workflow",
+            type: "minimal",
+            description: "Simple workflow with just prompt and swipes",
+            steps: [
+                {
+                    id: "wait_30min",
+                    action: "wait",
+                    delay: 1800000, // 30 minutes
+                    description: "Wait 30 minutes after import"
+                },
+                {
+                    id: "add_prompt",
+                    action: "add_prompt",
+                    delay: 0,
+                    description: "Add AI-generated prompt",
+                    critical: true
+                },
+                {
+                    id: "first_swipe",
+                    action: "swipe_with_spectre",
+                    delay: 900000, // 15 minutes
+                    swipeCount: 20,
+                    description: "First swipe session - 20 swipes"
+                }
+            ],
+            config: {
+                maxRetries: 3,
+                retryBackoffMs: 30000
+            }
+        },
+        fast_test: {
+            name: "Fast Test Workflow",
+            type: "fast_test",
+            description: "Quick workflow for testing (minutes instead of hours)",
+            steps: [
+                {
+                    id: "quick_wait",
+                    action: "wait",
+                    delay: 60000, // 1 minute
+                    description: "Wait 1 minute"
+                },
+                {
+                    id: "test_prompt",
+                    action: "add_prompt",
+                    delay: 0,
+                    description: "Add test prompt"
+                },
+                {
+                    id: "test_swipe",
+                    action: "swipe_with_spectre",
+                    delay: 60000, // 1 minute
+                    swipeCount: 5,
+                    description: "Test 5 swipes"
+                },
+                {
+                    id: "test_bio",
+                    action: "add_bio",
+                    delay: 120000, // 2 minutes
+                    description: "Add test bio"
+                }
+            ]
+        },
+        premium: {
+            name: "Premium Account Workflow",
+            type: "premium",
+            description: "Advanced workflow with continuous swipes and optimized timing",
+            steps: [
+                {
+                    id: "initial_wait",
+                    action: "wait",
+                    delay: 3600000, // 1 hour
+                    description: "Premium wait period"
+                },
+                {
+                    id: "premium_prompt",
+                    action: "add_prompt",
+                    delay: 0,
+                    description: "Add premium AI prompt",
+                    critical: true,
+                    timeout: 120000
+                },
+                {
+                    id: "warmup_swipes",
+                    action: "swipe_with_spectre",
+                    delay: 900000, // 15 min
+                    swipeCount: 15,
+                    description: "Warmup swipes"
+                },
+                {
+                    id: "main_swipes",
+                    action: "swipe_with_spectre",
+                    delay: 3600000, // 1 hour
+                    swipeCount: 30,
+                    description: "Main swipe session"
+                },
+                {
+                    id: "premium_continuous",
+                    action: "activate_continuous_swipe",
+                    delay: 0,
+                    minSwipes: 25,
+                    maxSwipes: 40,
+                    minIntervalMs: 7200000, // 2 hours
+                    maxIntervalMs: 14400000, // 4 hours
+                    description: "Premium continuous swipes"
+                },
+                {
+                    id: "premium_bio",
+                    action: "add_bio",
+                    delay: 86400000, // 24 hours
+                    description: "Add premium bio after 24h"
+                }
+            ],
+            config: {
+                maxRetries: 5,
+                retryBackoffMs: 60000,
+                timeoutMs: 300000
+            }
+        }
+    };
+
+    res.json({
+        success: true,
+        message: "Workflow examples for creating custom workflows",
+        data: examples,
+        usage: {
+            create: "POST /api/workflows/definitions with any example",
+            validActions: [
+                "wait - Wait for specified delay",
+                "add_prompt - Generate and add AI prompt", 
+                "add_bio - Generate and add AI bio",
+                "swipe_with_spectre - Configure Spectre and swipe (requires: swipeCount)",
+                "activate_continuous_swipe - Start infinite random swipes (requires: min/maxSwipes, min/maxIntervalMs)"
+            ],
+            tips: [
+                "All delays are in milliseconds",
+                "Mark critical steps with critical: true to fail workflow if they fail",
+                "Non-critical steps will be skipped on failure",
+                "Use timeout to override default step timeout"
+            ]
+        }
+    });
+}));
+
 // ============================
 // MONITORING & CONTROL ENDPOINTS
 // ============================
@@ -458,10 +1052,10 @@ router.get('/monitoring/dashboard', asyncHandler(async (req, res) => {
             // Workflow-specific metrics
             workflows: {
                 active: activeExecutions.length,
-                byType: this.groupByWorkflowType(activeExecutions),
-                byStatus: this.groupByStatus(activeExecutions),
-                recentlyCompleted: await this.getRecentlyCompletedWorkflows(10),
-                recentlyFailed: await this.getRecentlyFailedWorkflows(5)
+                byType: groupByWorkflowType(activeExecutions),
+                byStatus: groupByStatus(activeExecutions),
+                recentlyCompleted: await getRecentlyCompletedWorkflows(10),
+                recentlyFailed: await getRecentlyFailedWorkflows(5)
             },
 
             // System status

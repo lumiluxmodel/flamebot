@@ -7,7 +7,7 @@ module.exports = {
         user: process.env.DB_USER || 'postgres',
         password: process.env.DB_PASSWORD || 'pyZSoGjkpyNLzYnfFgRpoHdBGVsQgkie',
         ssl: {
-            rejectUnauthorized: false  // Railway requiere SSL
+            rejectUnauthorized: false  // Railway requiere SSL  
         }
     },
     production: {

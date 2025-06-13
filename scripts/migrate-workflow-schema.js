@@ -141,10 +141,12 @@ class WorkflowSchemaMigration {
                 result JSONB,
                 error_message TEXT,
                 duration_ms INTEGER,
-                executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                
-                INDEX (workflow_instance_id, executed_at DESC)
+                executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
+            
+            -- Create index separately
+            CREATE INDEX IF NOT EXISTS idx_execution_log_workflow_and_time 
+            ON workflow_execution_log(workflow_instance_id, executed_at DESC);
         `;
         
         await this.pool.query(query);
