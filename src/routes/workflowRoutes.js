@@ -1319,11 +1319,15 @@ function calculateEstimatedDuration(steps) {
 async function getRecentlyCompletedWorkflows(limit = 10) {
     try {
         const query = `
-            SELECT account_id, workflow_type, completed_at, 
-                   EXTRACT(EPOCH FROM (completed_at - started_at)) * 1000 as duration_ms
-            FROM workflow_instances 
-            WHERE status = 'completed' 
-            ORDER BY completed_at DESC 
+            SELECT 
+                wi.account_id, 
+                wd.type as workflow_type,  -- Obtenemos el type desde workflow_definitions
+                wi.completed_at, 
+                EXTRACT(EPOCH FROM (wi.completed_at - wi.started_at)) * 1000 as duration_ms
+            FROM workflow_instances wi
+            JOIN workflow_definitions wd ON wi.workflow_id = wd.id  -- JOIN con workflow_definitions
+            WHERE wi.status = 'completed' 
+            ORDER BY wi.completed_at DESC 
             LIMIT $1
         `;
         const result = await workflowDb.db.query(query, [limit]);
@@ -1333,15 +1337,19 @@ async function getRecentlyCompletedWorkflows(limit = 10) {
         return [];
     }
 }
-
 // Get recently failed workflows
 async function getRecentlyFailedWorkflows(limit = 5) {
     try {
         const query = `
-            SELECT account_id, workflow_type, failed_at, final_error
-            FROM workflow_instances 
-            WHERE status = 'failed' 
-            ORDER BY failed_at DESC 
+            SELECT 
+                wi.account_id, 
+                wd.type as workflow_type,  -- Obtenemos el type desde workflow_definitions
+                wi.failed_at, 
+                wi.final_error
+            FROM workflow_instances wi
+            JOIN workflow_definitions wd ON wi.workflow_id = wd.id  -- JOIN con workflow_definitions
+            WHERE wi.status = 'failed' 
+            ORDER BY wi.failed_at DESC 
             LIMIT $1
         `;
         const result = await workflowDb.db.query(query, [limit]);

@@ -273,41 +273,42 @@ class WorkflowController {
      * Get recent activity across all workflows
      */
     async getRecentActivity(limit = 50) {
-        try {
-            const query = `
-                SELECT 
-                    wel.step_id,
-                    wel.action,
-                    wel.success,
-                    wel.executed_at,
-                    wel.duration_ms,
-                    wel.error_message,
-                    wi.account_id,
-                    wi.workflow_type
-                FROM workflow_execution_log wel
-                JOIN workflow_instances wi ON wel.workflow_instance_id = wi.id
-                ORDER BY wel.executed_at DESC
-                LIMIT $1
-            `;
-            
-            const result = await workflowDb.db.query(query, [limit]);
-            
-            return result.rows.map(row => ({
-                stepId: row.step_id,
-                action: row.action,
-                success: row.success,
-                executedAt: row.executed_at,
-                duration: row.duration_ms,
-                error: row.error_message,
-                accountId: row.account_id,
-                workflowType: row.workflow_type
-            }));
+    try {
+        const query = `
+            SELECT 
+                wel.step_id,
+                wel.action,
+                wel.success,
+                wel.executed_at,
+                wel.duration_ms,
+                wel.error_message,
+                wi.account_id,
+                wd.type as workflow_type  -- Cambiado: obtenemos type desde workflow_definitions
+            FROM workflow_execution_log wel
+            JOIN workflow_instances wi ON wel.workflow_instance_id = wi.id
+            JOIN workflow_definitions wd ON wi.workflow_id = wd.id  -- Agregado: JOIN con definitions
+            ORDER BY wel.executed_at DESC
+            LIMIT $1
+        `;
+        
+        const result = await workflowDb.db.query(query, [limit]);
+        
+        return result.rows.map(row => ({
+            stepId: row.step_id,
+            action: row.action,
+            success: row.success,
+            executedAt: row.executed_at,
+            duration: row.duration_ms,
+            error: row.error_message,
+            accountId: row.account_id,
+            workflowType: row.workflow_type
+        }));
 
-        } catch (error) {
-            console.error('Error getting recent activity:', error);
-            return [];
-        }
+    } catch (error) {
+        console.error('Error getting recent activity:', error);
+        return [];
     }
+}
 }
 
 module.exports = new WorkflowController();
