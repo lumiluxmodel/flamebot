@@ -2,7 +2,6 @@
   "name": "@flamebot/backend",
   "private": true,
   "version": "2.0.0",
-  "type": "module",
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
@@ -11,15 +10,16 @@
     "lint": "eslint . --ext js --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
-    "express": "^4.18.2",
+    "@flamebot/shared": "*",
+    "axios": "^1.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "axios": "^1.6.0",
+    "express": "^4.18.2",
     "node-cron": "^3.0.3",
-    "@flamebot/shared": "*"
+    "openai": "^5.3.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2",
-    "eslint": "^8.55.0"
+    "eslint": "^8.55.0",
+    "nodemon": "^3.0.2"
   }
-} 
+}

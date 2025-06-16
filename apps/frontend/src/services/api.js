@@ -104,7 +104,7 @@ class ApiService {
 
   // Get available models and colors
   async getModels() {
-    return this.get('/api/accounts/models');
+    return this.get('/api/models');
   }
 
   // Health check (includes workflow status)
