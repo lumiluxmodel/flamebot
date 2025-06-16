@@ -1,20 +1,33 @@
-// src/index.js - Backend Server with Real Routes Integration
+// src/index.js - Updated with Workflow Manager Initialization
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
 const path = require('path');
+const config = require('./config');
 
-// Import route files (existing structure)
+// Services
+const workflowManager = require('./services/workflowManager');
+
+// Routes
 const accountRoutes = require('./routes/accountRoutes');
-const workflowRoutes = require('./routes/workflowRoutes');
-const actionsRoutes = require('./routes/actionsRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const actionsRoutes = require('./routes/actionsRoutes');
+const workflowRoutes = require('./routes/workflowRoutes');
+
+
+// Middleware
+const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
 
 // Create Express app
 const app = express();
 
+// Security middleware
+app.use(helmet());
+
 // CORS configuration
 app.use(cors({
-  origin: '*',
+  origin: '*', // Configure according to your needs
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -23,31 +36,33 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files (if needed)
-// app.use(express.static(path.join(__dirname, '../../../public')));
+// Logging middleware
+app.use(morgan('dev'));
+
+// Serve static files (dashboard)
+app.use(express.static(path.join(__dirname, '../public')));
+app.use('/css', express.static(path.join(__dirname, '../public/css')));
+app.use('/js', express.static(path.join(__dirname, '../public/js')));
 
 // API routes
 app.use('/api/accounts', accountRoutes);
-app.use('/api/workflows', workflowRoutes);
-app.use('/api/actions', actionsRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/actions', actionsRoutes);
+app.use('/api/workflows', workflowRoutes); 
 
-// Root endpoint
+
+
+// Root endpoint - serve dashboard
 app.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Flamebot Backend API v2.0',
-    version: '2.0.0',
-    status: 'running'
-  });
+  res.sendFile(path.join(__dirname, '../public/terminal.html'));
 });
 
-// API info endpoint
+// API info endpoint (updated with workflow endpoints)
 app.get('/api', (req, res) => {
   res.json({
     success: true,
     message: 'Flamebot Backend API with Workflow Automation',
-    version: '2.0.0',
+    version: '1.0.0',
     features: [
       'Account Import with Auto-Workflow',
       'AI-Powered Bio & Prompt Generation',
@@ -56,108 +71,134 @@ app.get('/api', (req, res) => {
       'Scalable Multi-Account Management'
     ],
     endpoints: {
-      // Account Management (from accountRoutes.js)
-      accountHealth: 'GET /api/accounts/health',
-      getModels: 'GET /api/accounts/models',
+      // Account endpoints (updated)
       importAccount: 'POST /api/accounts/import',
       importMultiple: 'POST /api/accounts/import-multiple',
-      getAccountWorkflow: 'GET /api/accounts/workflow/:accountId',
-      stopAccountAutomation: 'POST /api/accounts/workflow/:accountId/stop',
-      getAllActiveWorkflows: 'GET /api/accounts/workflows/active',
+      getModels: 'GET /api/accounts/models',
+      accountHealth: 'GET /api/accounts/health',
+      
+      // Workflow endpoints (NEW)
+      getWorkflowStatus: 'GET /api/accounts/workflow/:accountId',
+      stopWorkflow: 'POST /api/accounts/workflow/:accountId/stop',
+      getActiveWorkflows: 'GET /api/accounts/workflows/active',
       getWorkflowStats: 'GET /api/accounts/workflows/stats',
-      pauseAllWorkflows: 'POST /api/accounts/workflows/pause-all',
-      resumeAllWorkflows: 'POST /api/accounts/workflows/resume-all',
+      pauseWorkflows: 'POST /api/accounts/workflows/pause-all',
+      resumeWorkflows: 'POST /api/accounts/workflows/resume-all',
       
-      // Workflow Management (from workflowRoutes.js)
-      startWorkflow: 'POST /api/workflows/start',
-      getWorkflowStatus: 'GET /api/workflows/status/:accountId',
-      stopWorkflow: 'POST /api/workflows/stop/:accountId',
-      getActiveWorkflows: 'GET /api/workflows/active',
-      getWorkflowDefinitions: 'GET /api/workflows/definitions',
-      getWorkflowDefinition: 'GET /api/workflows/definitions/:type',
-      createDefinition: 'POST /api/workflows/definitions',
+      // AI endpoints
+      generatePrompt: 'POST /api/ai/generate-prompt',
+      generateBios: 'POST /api/ai/generate-bios',
+      aiHealth: 'GET /api/ai/health',
       
-      // Actions Management (from actionsRoutes.js)
-      startSwipe: 'POST /api/actions/swipe',
-      getSwipeStatus: 'GET /api/actions/swipe/status/:taskId',
-      stopSwipe: 'POST /api/actions/swipe/stop/:taskId',
-      getActiveSwipes: 'GET /api/actions/swipe/active',
-      enableSpectre: 'POST /api/actions/spectre/enable',
-      updateBio: 'POST /api/actions/bio/update',
-      updatePrompt: 'POST /api/actions/prompt/update',
-      actionsHealth: 'GET /api/actions/health',
-      
-      // AI Services (from aiRoutes.js)
-      aiHealth: 'GET /api/ai/health'
+      // Actions endpoints
+      swipe: 'POST /api/actions/swipe',
+      spectreEnable: 'POST /api/actions/spectre/enable',
+      bioUpdate: 'POST /api/actions/bio/update',
+      promptUpdate: 'POST /api/actions/prompt/update',
+      actionsHealth: 'GET /api/actions/health'
     }
   });
 });
 
 // Error handling
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Endpoint not found'
-  });
-});
+app.use(notFoundHandler);
+app.use(errorHandler);
 
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    success: false,
-    message: 'Internal server error'
-  });
-});
+// ============================
+// SERVER STARTUP WITH WORKFLOW MANAGER
+// ============================
 
-// Start server
 async function startServer() {
-  const PORT = process.env.PORT || 3090;
+  const PORT = config.server.port;
   
   try {
     console.log(`
 ╔═══════════════════════════════════════╗
-║     Flamebot Backend Server v2.0      ║
+║     Flamebot Backend Server           ║
 ║        WITH WORKFLOW AUTOMATION       ║
 ╠═══════════════════════════════════════╣
 ║  🚀 Starting server...                ║
+║  🌍 Environment: ${config.server.env.padEnd(19)}║
 ╚═══════════════════════════════════════╝
     `);
 
+    // Initialize Workflow Manager BEFORE starting server
+    console.log('🤖 Initializing Workflow Manager...');
+    await workflowManager.initialize();
+
+    // Start Express server
     const server = app.listen(PORT, () => {
       console.log(`
 ╔═══════════════════════════════════════╗
 ║          🎉 SERVER READY 🎉           ║
 ╠═══════════════════════════════════════╣
 ║  🚀 Server running on port ${PORT}      ║
-║  🌍 Environment: development          ║
+║  🌍 Environment: ${config.server.env}         ║
+║  🤖 Workflow Engine: ACTIVE          ║
 ║                                       ║
-║  📊 API Endpoints:                    ║
+║  📊 Dashboard UI:                     ║
+║  👉 http://localhost:${PORT}              ║
+║                                       ║
+║  🔌 API Endpoints:                    ║
 ║  👉 http://localhost:${PORT}/api          ║
-║  👉 http://localhost:${PORT}/api/accounts/health ║
-║  👉 http://localhost:${PORT}/api/workflows/stats ║
 ║                                       ║
-║  🔥 Ready for frontend connection!    ║
+║  📚 API Documentation:                ║
+║  👉 http://localhost:${PORT}/api-docs     ║
+║                                       ║
+║  ⚡ Workflow Management:              ║
+║  👉 http://localhost:${PORT}/api/accounts/workflows/active ║
+║                                       ║
+║  🎯 Features:                         ║
+║  • Automatic workflow start on import║
+║  • AI-powered bio & prompt generation║
+║  • Scheduled swipe campaigns         ║
+║  • Real-time monitoring              ║
+║  • Multi-account automation          ║
 ╚═══════════════════════════════════════╝
+
+🔥 Ready to automate Tinder accounts!
+📝 Import accounts and workflows will start automatically.
+📊 Monitor active workflows in the dashboard.
 
 Press CTRL+C to stop the server
       `);
     });
 
-    // Graceful shutdown
-    process.on('SIGTERM', () => {
-      console.log('🛑 Shutting down gracefully...');
-      server.close(() => {
-        console.log('✅ Server closed');
+    // Graceful shutdown handling
+    const gracefulShutdown = async (signal) => {
+      console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+      
+      try {
+        // Stop accepting new connections
+        server.close(() => {
+          console.log('✅ HTTP server closed');
+        });
+
+        // Shutdown workflow manager
+        console.log('🤖 Shutting down Workflow Manager...');
+        await workflowManager.shutdown();
+
+        console.log('✅ Graceful shutdown completed');
         process.exit(0);
-      });
+      } catch (error) {
+        console.error('❌ Error during shutdown:', error);
+        process.exit(1);
+      }
+    };
+
+    // Setup signal handlers
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', async (error) => {
+      console.error('💥 Uncaught Exception:', error);
+      await gracefulShutdown('UNCAUGHT_EXCEPTION');
     });
 
-    process.on('SIGINT', () => {
-      console.log('🛑 Shutting down gracefully...');
-      server.close(() => {
-        console.log('✅ Server closed');
-        process.exit(0);
-      });
+    process.on('unhandledRejection', async (reason, promise) => {
+      console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+      await gracefulShutdown('UNHANDLED_REJECTION');
     });
 
   } catch (error) {
