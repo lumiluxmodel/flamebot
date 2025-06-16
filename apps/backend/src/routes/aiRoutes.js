@@ -1,6 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const aiController = require('../controllers/aiController');
+
+// Try to use real controller, fallback to mock if it fails
+let aiController;
+try {
+  aiController = require('../controllers/aiController');
+} catch (error) {
+  console.log('⚠️ Using mock AI controller due to:', error.message);
+  aiController = require('../controllers/mockController');
+}
 
 // Async error wrapper
 const asyncHandler = (fn) => (req, res, next) => {

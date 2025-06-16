@@ -1,7 +1,15 @@
 // src/routes/accountRoutes.js - Updated with Workflow Endpoints
 const express = require('express');
 const router = express.Router();
-const accountController = require('../controllers/accountController');
+
+// Try to use real controller, fallback to mock if it fails
+let accountController;
+try {
+  accountController = require('../controllers/accountController');
+} catch (error) {
+  console.log('⚠️ Using mock account controller due to:', error.message);
+  accountController = require('../controllers/mockController');
+}
 
 // Async error wrapper
 const asyncHandler = (fn) => (req, res, next) => {

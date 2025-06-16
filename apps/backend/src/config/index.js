@@ -1,5 +1,10 @@
 // src/config/index.js
-require('dotenv').config();
+const path = require('path');
+
+// Load .env from the backend directory
+require('dotenv').config({ 
+  path: path.join(__dirname, '../../.env') 
+});
 
 const config = {
   server: {
