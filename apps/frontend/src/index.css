@@ -999,7 +999,7 @@ body::before {
 
 /* Utility Classes */
 .text-success { 
-    color: var(--terminal-green);
+    color: var(--terminal-green); 
     text-shadow: var(--glow-green);
 }
 
