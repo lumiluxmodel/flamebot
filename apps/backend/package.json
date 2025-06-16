@@ -1,0 +1,25 @@
+{
+  "name": "@flamebot/backend",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "build": "echo 'Backend built'",
+    "lint": "eslint . --ext js --report-unused-disable-directives --max-warnings 0"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.0",
+    "node-cron": "^3.0.3",
+    "@flamebot/shared": "*"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "eslint": "^8.55.0"
+  }
+} 

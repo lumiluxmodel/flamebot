@@ -1,4 +1,0 @@
-iris_snap1
-iris_snap2
-iris_snap3
-iris_snap4
