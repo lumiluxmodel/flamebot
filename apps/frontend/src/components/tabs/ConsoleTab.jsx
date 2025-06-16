@@ -1,298 +1,495 @@
-import React, { useState, useEffect } from 'react'
-import LoadingSpinner from '../LoadingSpinner'
-import { useApi } from '../../hooks/useApi'
+import React, { useState, useEffect, useRef } from 'react';
+import { useAccounts } from '../../hooks/useAccounts';
+import { useActions } from '../../hooks/useActions';
+import { useWorkflows } from '../../hooks/useWorkflows';
+import LoadingSpinner from '../LoadingSpinner';
 
 const ConsoleTab = () => {
-  const [tasks, setTasks] = useState([])
-  const [models, setModels] = useState([])
-  const [channels, setChannels] = useState([])
-  const [stats, setStats] = useState({})
-  
-  const { data: tasksData, loading: tasksLoading } = useApi('/api/accounts/workflows/active')
-  const { data: modelsData } = useApi('/api/accounts/models')
-  const { data: statsData } = useApi('/api/workflows/stats')
+  const [newAccountData, setNewAccountData] = useState({
+    model: '',
+    cookie: '',
+    workflowType: 'default'
+  });
+  const [bulkImportData, setBulkImportData] = useState('');
+  const [consoleOutput, setConsoleOutput] = useState([]);
+  const [isImporting, setIsImporting] = useState(false);
+  const consoleRef = useRef(null);
 
-  // Mock data for the legacy console view
+  const {
+    accounts,
+    models,
+    loading: accountsLoading,
+    importAccount,
+    importMultipleAccounts,
+    importAccountWithWorkflow,
+    getAccountsSummary,
+    startPolling: startAccountPolling,
+    stopPolling: stopAccountPolling
+  } = useAccounts();
+
+  const {
+    activeTasks: allActiveTasks,
+    models: actionModels,
+    loading: actionsLoading,
+    getTasksByType,
+    getTasksByStatus
+  } = useActions();
+
+  const {
+    workflows,
+    definitions,
+    statistics: workflowStats,
+    loading: workflowLoading
+  } = useWorkflows();
+
+  // Auto-scroll console output
   useEffect(() => {
-    // Mock active tasks
-    setTasks([
-      {
-        id: 'task_001',
-        accountId: '684ac67f',
-        type: 'Default Workflow',
-        status: 'Running',
-        progress: 75,
-        currentAction: 'Swipe Campaign',
-        startTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        eta: '25 min'
-      },
-      {
-        id: 'task_002',
-        accountId: '684ac2d6',
-        type: 'Aggressive Workflow',
-        status: 'Running',
-        progress: 45,
-        currentAction: 'Bio Update',
-        startTime: new Date(Date.now() - 45 * 60 * 1000),
-        eta: '1h 15min'
-      },
-      {
-        id: 'task_003',
-        accountId: '684ac123',
-        type: 'Test Workflow',
-        status: 'Paused',
-        progress: 20,
-        currentAction: 'Prompt Addition',
-        startTime: new Date(Date.now() - 3 * 60 * 60 * 1000),
-        eta: 'Paused'
-      }
-    ])
-
-    // Mock models
-    setModels([
-      { name: 'GPT-4 Turbo', status: 'Online', color: '#00ff41' },
-      { name: 'Claude 3.5', status: 'Online', color: '#00ffff' },
-      { name: 'Gemini Pro', status: 'Online', color: '#ff9500' },
-      { name: 'Local LLM', status: 'Offline', color: '#666666' }
-    ])
-
-    // Mock channels
-    setChannels([
-      { name: 'Tinder API', status: 'Connected', color: '#00ff41' },
-      { name: 'Bumble API', status: 'Connected', color: '#00ff41' },
-      { name: 'Hinge API', status: 'Maintenance', color: '#ffff00' },
-      { name: 'Match API', status: 'Disconnected', color: '#ff0040' }
-    ])
-
-    // Mock today's statistics
-    setStats({
-      swipesToday: 1247,
-      matchesToday: 23,
-      activeAccounts: 8,
-      successRate: 89.2
-    })
-  }, [])
-
-  const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
-      case 'running':
-      case 'online':
-      case 'connected':
-        return '#00ff00'
-      case 'paused':
-      case 'maintenance':
-        return '#ffff00'
-      case 'failed':
-      case 'offline':
-      case 'disconnected':
-        return '#ff0040'
-      default:
-        return '#666666'
+    if (consoleRef.current) {
+      consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
     }
+  }, [consoleOutput]);
+
+  // Start polling for live updates
+  useEffect(() => {
+    startAccountPolling(30000);
+    return () => stopAccountPolling();
+  }, []);
+
+  // Add system startup message
+  useEffect(() => {
+    addToConsole('system', 'FLAMEBOT CONSOLE INITIALIZED');
+    addToConsole('system', 'Ready for account import and workflow management');
+  }, []);
+
+  const addToConsole = (type, message, data = null) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setConsoleOutput(prev => [...prev.slice(-99), { // Keep last 100 entries
+      id: Date.now() + Math.random(),
+      type,
+      message,
+      timestamp,
+      data
+    }]);
+  };
+
+  const handleSingleImport = async () => {
+    if (!newAccountData.model || !newAccountData.cookie) {
+      addToConsole('error', 'Model and cookie are required');
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      addToConsole('info', `Starting import for model: ${newAccountData.model}`);
+      
+      const result = await importAccountWithWorkflow({
+        model: newAccountData.model,
+        cookie: newAccountData.cookie
+      }, newAccountData.workflowType);
+
+      if (result.success) {
+        addToConsole('success', 
+          `✅ Account imported successfully: ${result.data.import.accountId}`,
+          result.data
+        );
+        addToConsole('info', 
+          `🚀 Workflow started: ${result.data.workflow.executionId} (${newAccountData.workflowType})`
+        );
+        
+        // Clear form
+        setNewAccountData({
+          model: '',
+          cookie: '',
+          workflowType: 'default'
+        });
+      } else {
+        addToConsole('error', `❌ Import failed: ${result.error}`);
+      }
+    } catch (error) {
+      addToConsole('error', `❌ Import error: ${error.message}`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleBulkImport = async () => {
+    if (!bulkImportData.trim()) {
+      addToConsole('error', 'Please provide account data for bulk import');
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      // Parse bulk import data (expecting JSON or CSV format)
+      const lines = bulkImportData.trim().split('\n');
+      const accountsToImport = [];
+
+      lines.forEach((line, index) => {
+        try {
+          if (line.trim()) {
+            // Try parsing as JSON first
+            if (line.includes('{')) {
+              const accountData = JSON.parse(line);
+              accountsToImport.push(accountData);
+            } else {
+              // Try parsing as comma-separated values: model,cookie
+              const [model, cookie] = line.split(',').map(s => s.trim());
+              if (model && cookie) {
+                accountsToImport.push({ model, cookie });
+              }
+            }
+          }
+        } catch (error) {
+          addToConsole('warning', `Line ${index + 1} could not be parsed: ${line}`);
+        }
+      });
+
+      if (accountsToImport.length === 0) {
+        addToConsole('error', 'No valid accounts found in bulk data');
+        return;
+      }
+
+      addToConsole('info', `Starting bulk import for ${accountsToImport.length} accounts`);
+
+      const result = await importMultipleAccounts(accountsToImport, true);
+
+      if (result.success) {
+        addToConsole('success', 
+          `✅ Bulk import completed: ${result.data.successCount}/${accountsToImport.length} successful`
+        );
+        
+        if (result.data.failedCount > 0) {
+          addToConsole('warning', 
+            `⚠️ ${result.data.failedCount} accounts failed to import`
+          );
+        }
+
+        // Clear bulk data
+        setBulkImportData('');
+      } else {
+        addToConsole('error', `❌ Bulk import failed: ${result.error}`);
+      }
+    } catch (error) {
+      addToConsole('error', `❌ Bulk import error: ${error.message}`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const clearConsole = () => {
+    setConsoleOutput([]);
+    addToConsole('system', 'Console cleared');
+  };
+
+  const exportConsoleLog = () => {
+    const logText = consoleOutput.map(entry => 
+      `[${entry.timestamp}] ${entry.type.toUpperCase()}: ${entry.message}`
+    ).join('\n');
+    
+    const blob = new Blob([logText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `flamebot-console-${new Date().toISOString().split('T')[0]}.log`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    addToConsole('info', 'Console log exported');
+  };
+
+  if (accountsLoading || actionsLoading || workflowLoading) {
+    return <LoadingSpinner text="INITIALIZING CONSOLE..." />;
   }
 
-  const formatDuration = (startTime) => {
-    const now = new Date()
-    const diff = now - startTime
-    const hours = Math.floor(diff / (1000 * 60 * 60))
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-    return `${hours}h ${minutes}m`
-  }
+  // Calculate summary data
+  const accountsSummary = getAccountsSummary();
+  const activeTasks = getTasksByStatus('active');
+  const completedTasks = getTasksByStatus('completed');
+  const swipeTasks = getTasksByType('swipe');
+  const bioTasks = getTasksByType('bio_update');
+  
+  const availableModels = models.length > 0 ? models : actionModels;
+  const availableWorkflowTypes = definitions.map(def => def.type);
 
-  if (tasksLoading) {
-    return <LoadingSpinner text="LOADING CONSOLE DATA..." />
-  }
+  // Console message styling
+  const getMessageClass = (type) => {
+    switch (type) {
+      case 'success': return 'console-success';
+      case 'error': return 'console-error';
+      case 'warning': return 'console-warning';
+      case 'info': return 'console-info';
+      case 'system': return 'console-system';
+      default: return 'console-default';
+    }
+  };
 
   return (
-    <div className="console-dashboard">
-      {/* Original Dashboard Grid */}
-      <div className="dashboard-grid">
-        {/* Legacy Task Monitor */}
-        <div className="panel task-monitor">
-          <div className="panel-header">
-            <span>ACTIVE TASKS</span>
-            <span className="task-count">{tasks.length} active</span>
-          </div>
-          <div className="panel-content">
-            <div className="tasks-list">
-              {tasks.map(task => (
-                <div key={task.id} className="task-item">
-                  <div className="task-header">
-                    <div className="task-type">{task.type}</div>
-                    <div 
-                      className="task-status"
-                      style={{ color: getStatusColor(task.status) }}
-                    >
-                      {task.status.toUpperCase()}
-                    </div>
-                  </div>
-                  
-                  <div className="task-details">
-                    <div className="task-id">Account: {task.accountId}</div>
-                    <div className="task-action">Action: {task.currentAction}</div>
-                    <div className="task-timing">
-                      Duration: {formatDuration(task.startTime)} | ETA: {task.eta}
-                    </div>
-                  </div>
-
-                  <div className="task-progress">
-                    <div className="progress-bar">
-                      <div 
-                        className="progress-fill"
-                        style={{ 
-                          width: `${task.progress}%`,
-                          backgroundColor: getStatusColor(task.status)
-                        }}
-                      ></div>
-                    </div>
-                    <div className="progress-text">{task.progress}%</div>
-                  </div>
-                </div>
-              ))}
-
-              {tasks.length === 0 && (
-                <div className="empty-state-small">
-                  <div className="empty-message">No active tasks</div>
-                </div>
-              )}
-            </div>
+    <>
+      {/* Import Section */}
+      <div className="console-section">
+        <div className="section-header">
+          <span className="section-title">ACCOUNT IMPORT</span>
+          <div className="section-stats">
+            <span>Total: {accountsSummary.total}</span>
+            <span>Active: {accountsSummary.active}</span>
+            <span>Success: {accountsSummary.success}</span>
           </div>
         </div>
 
-        {/* Models Panel */}
-        <div className="panel">
-          <div className="panel-header">
-            <span>MODELS</span>
-          </div>
-          <div className="panel-content">
-            <div className="list-container">
-              {models.map((model, index) => (
-                <div key={index} className="list-item">
-                  <div 
-                    className="model-color"
-                    style={{ backgroundColor: model.color }}
-                  ></div>
-                  <div className="list-item-content">
-                    <div className="list-item-name">{model.name}</div>
-                    <div 
-                      className="list-item-info"
-                      style={{ color: getStatusColor(model.status) }}
-                    >
-                      {model.status}
-                    </div>
-                  </div>
-                </div>
-              ))}
+        <div className="import-forms">
+          {/* Single Account Import */}
+          <div className="import-form">
+            <div className="form-header">
+              <span className="form-title">Single Account</span>
+            </div>
+            <div className="form-content">
+              <div className="form-row">
+                <label>Model:</label>
+                <select 
+                  className="form-select"
+                  value={newAccountData.model}
+                  onChange={(e) => setNewAccountData(prev => ({
+                    ...prev,
+                    model: e.target.value
+                  }))}
+                  disabled={isImporting}
+                >
+                  <option value="">Select Model</option>
+                  {availableModels.map(model => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
+              </div>
               
-              <div className="list-item add-item">
-                <div className="add-button">
-                  <span>+ Add Model</span>
-                </div>
+              <div className="form-row">
+                <label>Workflow Type:</label>
+                <select 
+                  className="form-select"
+                  value={newAccountData.workflowType}
+                  onChange={(e) => setNewAccountData(prev => ({
+                    ...prev,
+                    workflowType: e.target.value
+                  }))}
+                  disabled={isImporting}
+                >
+                  {availableWorkflowTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-row">
+                <label>Cookie:</label>
+                <textarea
+                  className="form-textarea"
+                  value={newAccountData.cookie}
+                  onChange={(e) => setNewAccountData(prev => ({
+                    ...prev,
+                    cookie: e.target.value
+                  }))}
+                  placeholder="Paste cookie data here..."
+                  rows="3"
+                  disabled={isImporting}
+                />
+              </div>
+
+              <div className="form-actions">
+                <button 
+                  className="btn btn-primary"
+                  onClick={handleSingleImport}
+                  disabled={isImporting || !newAccountData.model || !newAccountData.cookie}
+                >
+                  {isImporting ? '⏳ Importing...' : '🚀 Import & Start Workflow'}
+                </button>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Channels Panel */}
-        <div className="panel">
-          <div className="panel-header">
-            <span>CHANNELS</span>
-          </div>
-          <div className="panel-content">
-            <div className="list-container">
-              {channels.map((channel, index) => (
-                <div key={index} className="list-item">
-                  <div 
-                    className="model-color"
-                    style={{ backgroundColor: channel.color }}
-                  ></div>
-                  <div className="list-item-content">
-                    <div className="list-item-name">{channel.name}</div>
-                    <div 
-                      className="list-item-info"
-                      style={{ color: getStatusColor(channel.status) }}
-                    >
-                      {channel.status}
-                    </div>
-                  </div>
-                </div>
-              ))}
+          {/* Bulk Import */}
+          <div className="import-form">
+            <div className="form-header">
+              <span className="form-title">Bulk Import</span>
+              <span className="form-help">JSON objects or CSV format (model,cookie)</span>
+            </div>
+            <div className="form-content">
+              <div className="form-row">
+                <label>Accounts Data:</label>
+                <textarea
+                  className="form-textarea bulk-textarea"
+                  value={bulkImportData}
+                  onChange={(e) => setBulkImportData(e.target.value)}
+                  placeholder={`Formats supported:
+1. JSON per line: {"model": "model_name", "cookie": "cookie_data"}
+2. CSV format: model_name,cookie_data
+
+Example:
+{"model": "eva_cute", "cookie": "_gid=GA1.2.123..."}
+alice_wild,_gid=GA1.2.456...`}
+                  rows="6"
+                  disabled={isImporting}
+                />
+              </div>
               
-              <div className="list-item add-item">
-                <div className="add-button">
-                  <span>+ Add Channel</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Statistics Panel */}
-        <div className="panel">
-          <div className="panel-header">
-            <span>TODAY'S STATISTICS</span>
-          </div>
-          <div className="panel-content">
-            <div className="stats-grid">
-              <div className="stat-box">
-                <div className="stat-label">Swipes</div>
-                <div className="stat-value">{stats.swipesToday?.toLocaleString() || 0}</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-label">Matches</div>
-                <div className="stat-value">{stats.matchesToday || 0}</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-label">Active</div>
-                <div className="stat-value">{stats.activeAccounts || 0}</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-label">Success</div>
-                <div className="stat-value">{stats.successRate || 0}%</div>
+              <div className="form-actions">
+                <button 
+                  className="btn btn-primary"
+                  onClick={handleBulkImport}
+                  disabled={isImporting || !bulkImportData.trim()}
+                >
+                  {isImporting ? '⏳ Importing...' : '📦 Bulk Import'}
+                </button>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Legacy Terminal Output */}
-      <div className="panel terminal-output">
-        <div className="panel-header">
-          <span>SYSTEM OUTPUT</span>
-          <button className="panel-action">Clear</button>
+      {/* Stats Overview */}
+      <div className="console-section">
+        <div className="section-header">
+          <span className="section-title">LIVE STATISTICS</span>
         </div>
-        <div className="panel-content">
-          <div className="terminal-log">
-            <div className="log-entry">
-              <span className="log-timestamp">[{new Date().toLocaleTimeString()}]</span>
-              <span className="log-level info">INFO</span>
-              <span className="log-message">Workflow engine initialized successfully</span>
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-header">
+              <span className="stat-title">ACCOUNTS</span>
             </div>
-            <div className="log-entry">
-              <span className="log-timestamp">[{new Date(Date.now() - 30000).toLocaleTimeString()}]</span>
-              <span className="log-level success">SUCCESS</span>
-              <span className="log-message">Account 684ac67f: Swipe campaign completed</span>
+            <div className="stat-content">
+              <div className="stat-row">
+                <span className="stat-label">Total:</span>
+                <span className="stat-value">{accountsSummary.total}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Active Workflows:</span>
+                <span className="stat-value success">{accountsSummary.active}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Imported:</span>
+                <span className="stat-value">{accountsSummary.imported}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Failed:</span>
+                <span className="stat-value error">{accountsSummary.failed}</span>
+              </div>
             </div>
-            <div className="log-entry">
-              <span className="log-timestamp">[{new Date(Date.now() - 60000).toLocaleTimeString()}]</span>
-              <span className="log-level warning">WARNING</span>
-              <span className="log-message">Rate limit approaching for account 684ac2d6</span>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-header">
+              <span className="stat-title">WORKFLOWS</span>
             </div>
-            <div className="log-entry">
-              <span className="log-timestamp">[{new Date(Date.now() - 90000).toLocaleTimeString()}]</span>
-              <span className="log-level success">SUCCESS</span>
-              <span className="log-message">Bio update completed for account 684ac123</span>
+            <div className="stat-content">
+              <div className="stat-row">
+                <span className="stat-label">Active:</span>
+                <span className="stat-value success">{workflows.length}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Total Executed:</span>
+                <span className="stat-value">{workflowStats?.executor?.totalExecutions || 0}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Success Rate:</span>
+                <span className="stat-value">
+                  {workflowStats?.executor?.successRate ? 
+                    `${Math.round(workflowStats.executor.successRate)}%` : 'N/A'}
+                </span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Definitions:</span>
+                <span className="stat-value">{definitions.length}</span>
+              </div>
             </div>
-            <div className="log-entry">
-              <span className="log-timestamp">[{new Date(Date.now() - 120000).toLocaleTimeString()}]</span>
-              <span className="log-level info">INFO</span>
-              <span className="log-message">Health check passed for all services</span>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-header">
+              <span className="stat-title">TASKS</span>
+            </div>
+            <div className="stat-content">
+              <div className="stat-row">
+                <span className="stat-label">Active:</span>
+                <span className="stat-value success">{activeTasks.length}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Completed:</span>
+                <span className="stat-value">{completedTasks.length}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Swipe Tasks:</span>
+                <span className="stat-value">{swipeTasks.length}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Bio Tasks:</span>
+                <span className="stat-value">{bioTasks.length}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-header">
+              <span className="stat-title">SYSTEM</span>
+            </div>
+            <div className="stat-content">
+              <div className="stat-row">
+                <span className="stat-label">Models Available:</span>
+                <span className="stat-value">{availableModels.length}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Workflow Types:</span>
+                <span className="stat-value">{availableWorkflowTypes.length}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Console Entries:</span>
+                <span className="stat-value">{consoleOutput.length}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Status:</span>
+                <span className="stat-value success">OPERATIONAL</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  )
-}
 
-export default ConsoleTab
+      {/* Console Output */}
+      <div className="console-section">
+        <div className="section-header">
+          <span className="section-title">CONSOLE OUTPUT</span>
+          <div className="console-actions">
+            <button className="btn btn-secondary" onClick={exportConsoleLog}>
+              💾 Export Log
+            </button>
+            <button className="btn btn-warning" onClick={clearConsole}>
+              🗑️ Clear Console
+            </button>
+          </div>
+        </div>
+        
+        <div className="console-container">
+          <div className="console-output" ref={consoleRef}>
+            {consoleOutput.map(entry => (
+              <div key={entry.id} className={`console-line ${getMessageClass(entry.type)}`}>
+                <span className="console-timestamp">[{entry.timestamp}]</span>
+                <span className="console-type">{entry.type.toUpperCase()}:</span>
+                <span className="console-message">{entry.message}</span>
+                {entry.data && (
+                  <div className="console-data">
+                    <pre>{JSON.stringify(entry.data, null, 2)}</pre>
+                  </div>
+                )}
+              </div>
+            ))}
+            
+            {consoleOutput.length === 0 && (
+              <div className="console-line console-system">
+                <span className="console-message">Console is empty. Import accounts to see activity.</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default ConsoleTab;

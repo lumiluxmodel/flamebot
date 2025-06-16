@@ -1,43 +1,143 @@
-import React from 'react'
-import LoadingSpinner from '../LoadingSpinner'
-import { useApi } from '../../hooks/useApi'
+import React, { useEffect, useState } from 'react';
+import { useMonitoring } from '../../hooks/useMonitoring';
+import { useWorkflows } from '../../hooks/useWorkflows';
+import { useAccounts } from '../../hooks/useAccounts';
+import LoadingSpinner from '../LoadingSpinner';
 
 const DashboardTab = () => {
-  const { data: statsData, loading: statsLoading } = useApi('/api/workflows/stats')
-  const { data: dashboardData, loading: dashboardLoading } = useApi('/api/workflows/monitoring/dashboard')
+  const { 
+    dashboardData, 
+    alerts, 
+    systemHealth, 
+    loading: monitoringLoading, 
+    startPolling: startMonitoringPolling,
+    stopPolling: stopMonitoringPolling,
+    getAlertStatistics,
+    getSystemHealthSummary,
+    refreshAllData
+  } = useMonitoring();
 
-  if (statsLoading || dashboardLoading) {
-    return <LoadingSpinner text="LOADING WORKFLOW DATA..." />
+  const { 
+    statistics: workflowStats, 
+    workflows: activeWorkflows,
+    loading: workflowLoading,
+    startPolling: startWorkflowPolling,
+    stopPolling: stopWorkflowPolling,
+    getWorkflowsByType
+  } = useWorkflows();
+
+  const {
+    accounts,
+    loading: accountsLoading,
+    getAccountsSummary
+  } = useAccounts();
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Start polling on mount
+  useEffect(() => {
+    startMonitoringPolling(30000); // Poll every 30 seconds
+    startWorkflowPolling(30000);
+
+    return () => {
+      stopMonitoringPolling();
+      stopWorkflowPolling();
+    };
+  }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshAllData();
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  if (monitoringLoading || workflowLoading || accountsLoading) {
+    return <LoadingSpinner text="LOADING DASHBOARD DATA..." />;
   }
 
-  const stats = statsData?.data || {}
-  const dashboard = dashboardData?.data || {}
+  // Calculate real-time metrics
+  const alertStats = getAlertStatistics();
+  const healthSummary = getSystemHealthSummary();
+  const accountsSummary = getAccountsSummary();
+  
+  // Workflow distribution by type
+  const workflowDistribution = {};
+  if (activeWorkflows && activeWorkflows.length > 0) {
+    activeWorkflows.forEach(workflow => {
+      const type = workflow.workflowType || 'unknown';
+      workflowDistribution[type] = (workflowDistribution[type] || 0) + 1;
+    });
+  }
+
+  const totalWorkflows = activeWorkflows?.length || 0;
+
+  // Recent alerts (last 5)
+  const recentAlerts = alerts?.slice(0, 5) || [];
+
+  // System status color
+  const getSystemStatusColor = () => {
+    const status = healthSummary.overall;
+    switch (status) {
+      case 'healthy': return 'success';
+      case 'warning': 
+      case 'degraded': return 'warning';
+      case 'critical': return 'error';
+      default: return 'info';
+    }
+  };
+
+  // Format duration
+  const formatDuration = (ms) => {
+    if (!ms) return 'N/A';
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${minutes}m`;
+  };
+
+  // Format uptime
+  const formatUptime = (ms) => {
+    if (!ms) return 'N/A';
+    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    return `${days}d ${hours}h`;
+  };
 
   return (
     <>
-      {/* System Overview Grid - Match original design */}
+      {/* System Overview Grid - Real Data */}
       <div className="overview-grid">
         <div className="overview-card">
           <div className="card-header">
             <span className="card-title">SYSTEM OVERVIEW</span>
-            <span className="card-status" id="system-health">HEALTHY</span>
+            <span className={`card-status ${getSystemStatusColor()}`}>
+              {healthSummary.overall.toUpperCase()}
+            </span>
           </div>
           <div className="card-content">
             <div className="metric-row">
               <span className="metric-label">Active Workflows:</span>
-              <span className="metric-value">{stats.activeExecutions || 0}</span>
+              <span className="metric-value">{totalWorkflows}</span>
             </div>
             <div className="metric-row">
-              <span className="metric-label">Total Executions:</span>
-              <span className="metric-value">{stats.totalExecutions || 0}</span>
+              <span className="metric-label">Total Accounts:</span>
+              <span className="metric-value">{accountsSummary.total}</span>
             </div>
             <div className="metric-row">
               <span className="metric-label">Success Rate:</span>
-              <span className="metric-value">{Math.round(stats.successRate || 0)}%</span>
+              <span className="metric-value">
+                {workflowStats?.executor?.successRate ? 
+                  `${Math.round(workflowStats.executor.successRate)}%` : 'N/A'
+                }
+              </span>
             </div>
             <div className="metric-row">
-              <span className="metric-label">Avg Duration:</span>
-              <span className="metric-value">2.5h</span>
+              <span className="metric-label">System Health:</span>
+              <span className="metric-value">{healthSummary.score}%</span>
             </div>
           </div>
         </div>
@@ -48,27 +148,30 @@ const DashboardTab = () => {
           </div>
           <div className="card-content">
             <div className="workflow-types">
-              <div className="workflow-type-bar">
-                <div className="workflow-type-label">Default</div>
-                <div className="workflow-type-progress">
-                  <div className="workflow-type-fill" style={{ width: '70%' }}></div>
+              {Object.entries(workflowDistribution).map(([type, count]) => {
+                const percentage = totalWorkflows > 0 ? (count / totalWorkflows) * 100 : 0;
+                return (
+                  <div key={type} className="workflow-type-bar">
+                    <div className="workflow-type-label">{type}</div>
+                    <div className="workflow-type-progress">
+                      <div 
+                        className="workflow-type-fill" 
+                        style={{ width: `${percentage}%` }}
+                      ></div>
+                    </div>
+                    <div className="workflow-type-count">{count}</div>
+                  </div>
+                );
+              })}
+              {Object.keys(workflowDistribution).length === 0 && (
+                <div className="workflow-type-bar">
+                  <div className="workflow-type-label">No active workflows</div>
+                  <div className="workflow-type-progress">
+                    <div className="workflow-type-fill" style={{ width: '0%' }}></div>
+                  </div>
+                  <div className="workflow-type-count">0</div>
                 </div>
-                <div className="workflow-type-count">14</div>
-              </div>
-              <div className="workflow-type-bar">
-                <div className="workflow-type-label">Aggressive</div>
-                <div className="workflow-type-progress">
-                  <div className="workflow-type-fill" style={{ width: '20%' }}></div>
-                </div>
-                <div className="workflow-type-count">4</div>
-              </div>
-              <div className="workflow-type-bar">
-                <div className="workflow-type-label">Test</div>
-                <div className="workflow-type-progress">
-                  <div className="workflow-type-fill" style={{ width: '10%' }}></div>
-                </div>
-                <div className="workflow-type-count">2</div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -79,20 +182,28 @@ const DashboardTab = () => {
           </div>
           <div className="card-content">
             <div className="metric-row">
-              <span className="metric-label">Cron Jobs:</span>
-              <span className="metric-value">{stats.cronSystem?.totalCronJobs || 0}</span>
+              <span className="metric-label">Active Cron Jobs:</span>
+              <span className="metric-value">
+                {workflowStats?.cronSystem?.activeCronJobs || 0}
+              </span>
             </div>
             <div className="metric-row">
               <span className="metric-label">Queued Tasks:</span>
-              <span className="metric-value">{stats.taskScheduler?.queuedTasks || 0}</span>
+              <span className="metric-value">
+                {workflowStats?.taskScheduler?.queuedTasks || 0}
+              </span>
             </div>
             <div className="metric-row">
-              <span className="metric-label">Memory Usage:</span>
-              <span className="metric-value">245MB</span>
+              <span className="metric-label">Avg Execution:</span>
+              <span className="metric-value">
+                {formatDuration(workflowStats?.executor?.averageExecutionTime)}
+              </span>
             </div>
             <div className="metric-row">
               <span className="metric-label">Uptime:</span>
-              <span className="metric-value">2d 14h</span>
+              <span className="metric-value">
+                {formatUptime(systemHealth?.uptime)}
+              </span>
             </div>
           </div>
         </div>
@@ -104,58 +215,80 @@ const DashboardTab = () => {
           </div>
           <div className="card-content">
             <div className="alerts-list">
-              <div className="alert-item">
-                <div className="alert-severity warning">WARNING</div>
-                <div className="alert-message">High queue size detected</div>
-                <div className="alert-time">2m ago</div>
-              </div>
-              <div className="alert-item">
-                <div className="alert-severity info">INFO</div>
-                <div className="alert-message">Workflow completed successfully</div>
-                <div className="alert-time">5m ago</div>
-              </div>
+              {recentAlerts.length > 0 ? recentAlerts.map((alert, index) => (
+                <div key={alert.id || index} className="alert-item">
+                  <div className={`alert-severity ${alert.severity}`}>
+                    {alert.severity.toUpperCase()}
+                  </div>
+                  <div className="alert-message">{alert.message}</div>
+                  <div className="alert-time">
+                    {new Date(alert.timestamp).toLocaleTimeString()}
+                  </div>
+                </div>
+              )) : (
+                <div className="alert-item">
+                  <div className="alert-severity info">INFO</div>
+                  <div className="alert-message">No recent alerts</div>
+                  <div className="alert-time">System healthy</div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Recent Activity - Full Width */}
+      {/* Recent Activity - Real workflow activity */}
       <div className="panel">
         <div className="panel-header">
           <span>RECENT ACTIVITY</span>
-          <button className="panel-action">Refresh</button>
+          <button 
+            className="panel-action" 
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
         </div>
         <div className="panel-content">
           <div className="activity-timeline">
-            <div className="activity-item">
-              <div className="activity-icon success">✓</div>
-              <div className="activity-content">
-                <div className="activity-description">Account 684ac67f - Default workflow completed</div>
-                <div className="activity-meta">Duration: 2h 15m</div>
-              </div>
-              <div className="activity-time">3m ago</div>
-            </div>
-            <div className="activity-item">
-              <div className="activity-icon success">✓</div>
-              <div className="activity-content">
-                <div className="activity-description">Account 684ac2d6 - Prompt added successfully</div>
-                <div className="activity-meta">Step: add_prompt</div>
-              </div>
-              <div className="activity-time">7m ago</div>
-            </div>
-            <div className="activity-item">
-              <div className="activity-icon error">✗</div>
-              <div className="activity-content">
-                <div className="activity-description">Account 684ac123 - Swipe task failed</div>
-                <div className="activity-meta">Error: Rate limit exceeded</div>
-              </div>
-              <div className="activity-time">12m ago</div>
-            </div>
+            {activeWorkflows && activeWorkflows.length > 0 ? 
+              activeWorkflows.slice(0, 10).map((workflow, index) => (
+                <div key={workflow.executionId || index} className="activity-item">
+                  <div className={`activity-icon ${workflow.status === 'active' ? 'success' : 
+                    workflow.status === 'failed' ? 'error' : 'info'}`}>
+                    {workflow.status === 'active' ? '⚡' : 
+                     workflow.status === 'completed' ? '✓' : 
+                     workflow.status === 'failed' ? '✗' : '○'}
+                  </div>
+                  <div className="activity-content">
+                    <div className="activity-description">
+                      Account {workflow.accountId} - {workflow.workflowType} workflow {workflow.status}
+                    </div>
+                    <div className="activity-meta">
+                      Progress: {Math.round(workflow.progress || 0)}% | 
+                      Step: {workflow.currentStep || 'N/A'}
+                    </div>
+                  </div>
+                  <div className="activity-time">
+                    {new Date(workflow.startedAt).toLocaleTimeString()}
+                  </div>
+                </div>
+              )) : (
+                <div className="activity-item">
+                  <div className="activity-icon info">○</div>
+                  <div className="activity-content">
+                    <div className="activity-description">No active workflows</div>
+                    <div className="activity-meta">System ready for new workflows</div>
+                  </div>
+                  <div className="activity-time">Now</div>
+                </div>
+              )
+            }
           </div>
         </div>
       </div>
     </>
-  )
-}
+  );
+};
 
-export default DashboardTab
+export default DashboardTab;

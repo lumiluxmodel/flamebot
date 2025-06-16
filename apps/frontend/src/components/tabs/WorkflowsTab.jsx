@@ -1,50 +1,136 @@
 import React, { useState, useEffect } from 'react'
+import { useWorkflows } from '../../hooks/useWorkflows'
+import { useAccounts } from '../../hooks/useAccounts'
 import LoadingSpinner from '../LoadingSpinner'
-import { useApi } from '../../hooks/useApi'
 
 const WorkflowsTab = () => {
   const [selectedType, setSelectedType] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('')
-  
-  const { data: workflowsData, loading: workflowsLoading } = useApi('/api/workflows/active')
-  const { data: statsData } = useApi('/api/workflows/stats')
+  const [selectedWorkflows, setSelectedWorkflows] = useState(new Set())
+  const [refreshing, setRefreshing] = useState(false)
 
-  // Mock data for demo (replace with real API data later)
-  const workflows = [
-    {
-      id: 'wf_684ac67f',
-      accountId: '684ac67f',
-      type: 'default',
-      status: 'active',
-      startTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      currentStep: 'swipe_campaign',
-      progress: 75,
-      swipes: 120,
-      matches: 8
-    },
-    {
-      id: 'wf_684ac2d6',
-      accountId: '684ac2d6', 
-      type: 'aggressive',
-      status: 'active',
-      startTime: new Date(Date.now() - 45 * 60 * 1000),
-      currentStep: 'add_prompt',
-      progress: 45,
-      swipes: 67,
-      matches: 3
-    },
-    {
-      id: 'wf_684ac123',
-      accountId: '684ac123',
-      type: 'test',
-      status: 'paused',
-      startTime: new Date(Date.now() - 3 * 60 * 60 * 1000),
-      currentStep: 'bio_update',
-      progress: 20,
-      swipes: 23,
-      matches: 1
+  const { 
+    workflows,
+    definitions,
+    loading: workflowLoading,
+    error: workflowError,
+    stopWorkflow,
+    pauseAllWorkflows,
+    resumeAllWorkflows,
+    getWorkflowsByType,
+    getWorkflowsByStatus,
+    refreshData: refreshWorkflows,
+    startPolling,
+    stopPolling
+  } = useWorkflows()
+
+  const {
+    accounts,
+    getAccountById
+  } = useAccounts()
+
+  // Start real-time polling
+  useEffect(() => {
+    startPolling(15000) // Poll every 15 seconds for active workflows
+    return () => stopPolling()
+  }, [])
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await refreshWorkflows()
+    } catch (error) {
+      console.error('Error refreshing workflows:', error)
+    } finally {
+      setRefreshing(false)
     }
+  }
+
+  const handleStopWorkflow = async (accountId) => {
+    try {
+      await stopWorkflow(accountId)
+      console.log('✅ Workflow stopped:', accountId)
+    } catch (error) {
+      console.error('❌ Failed to stop workflow:', error)
+    }
+  }
+
+  const handlePauseAllWorkflows = async () => {
+    try {
+      await pauseAllWorkflows()
+      console.log('✅ All workflows paused')
+    } catch (error) {
+      console.error('❌ Failed to pause workflows:', error)
+    }
+  }
+
+  const handleResumeAllWorkflows = async () => {
+    try {
+      await resumeAllWorkflows()
+      console.log('✅ All workflows resumed')
+    } catch (error) {
+      console.error('❌ Failed to resume workflows:', error)
+    }
+  }
+
+  const handleStopSelected = async () => {
+    if (selectedWorkflows.size === 0) return
+    
+    try {
+      const stopPromises = Array.from(selectedWorkflows).map(accountId => 
+        stopWorkflow(accountId)
+      )
+      await Promise.all(stopPromises)
+      setSelectedWorkflows(new Set())
+      console.log('✅ Selected workflows stopped')
+    } catch (error) {
+      console.error('❌ Failed to stop selected workflows:', error)
+    }
+  }
+
+  const toggleWorkflowSelection = (accountId) => {
+    const newSelection = new Set(selectedWorkflows)
+    if (newSelection.has(accountId)) {
+      newSelection.delete(accountId)
+    } else {
+      newSelection.add(accountId)
+    }
+    setSelectedWorkflows(newSelection)
+  }
+
+  const selectAllVisible = () => {
+    const visibleWorkflows = filteredWorkflows.map(w => w.accountId)
+    setSelectedWorkflows(new Set(visibleWorkflows))
+  }
+
+  const clearSelection = () => {
+    setSelectedWorkflows(new Set())
+  }
+
+  if (workflowLoading) {
+    return <LoadingSpinner text="LOADING ACTIVE WORKFLOWS..." />
+  }
+
+  // Get unique workflow types from definitions and active workflows
+  const workflowTypes = [
+    ...new Set([
+      ...definitions.map(def => def.type),
+      ...workflows.map(wf => wf.workflowType)
+    ])
   ]
+
+  // Filter workflows based on selected criteria
+  const filteredWorkflows = workflows.filter(workflow => {
+    const typeMatch = !selectedType || workflow.workflowType === selectedType
+    const statusMatch = !selectedStatus || workflow.status === selectedStatus
+    return typeMatch && statusMatch
+  })
+
+  // Calculate workflow statistics
+  const activeCount = workflows.filter(w => w.status === 'active').length
+  const pausedCount = workflows.filter(w => w.status === 'paused').length
+  const completedCount = workflows.filter(w => w.status === 'completed').length
+  const failedCount = workflows.filter(w => w.status === 'failed').length
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -61,37 +147,33 @@ const WorkflowsTab = () => {
       case 'default': return '#00ff41'
       case 'aggressive': return '#ff0040'
       case 'test': return '#0080ff'
+      case 'premium': return '#ff8000'
       default: return '#666666'
     }
   }
 
   const formatDuration = (startTime) => {
+    if (!startTime) return 'N/A'
     const now = new Date()
-    const diff = now - startTime
+    const start = new Date(startTime)
+    const diff = now - start
     const hours = Math.floor(diff / (1000 * 60 * 60))
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
     return `${hours}h ${minutes}m`
   }
 
-  const handleStopWorkflow = (workflowId) => {
-    console.log('Stopping workflow:', workflowId)
-    // TODO: Implement API call
+  const formatTimeRemaining = (workflow) => {
+    if (!workflow.estimatedCompletionTime) return 'N/A'
+    const completion = new Date(workflow.estimatedCompletionTime)
+    const now = new Date()
+    const diff = completion - now
+    
+    if (diff <= 0) return 'Overdue'
+    
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+    return `${hours}h ${minutes}m remaining`
   }
-
-  const handlePauseWorkflow = (workflowId) => {
-    console.log('Pausing workflow:', workflowId)
-    // TODO: Implement API call
-  }
-
-  if (workflowsLoading) {
-    return <LoadingSpinner text="LOADING ACTIVE WORKFLOWS..." />
-  }
-
-  const filteredWorkflows = workflows.filter(workflow => {
-    const typeMatch = !selectedType || workflow.type === selectedType
-    const statusMatch = !selectedStatus || workflow.status === selectedStatus
-    return typeMatch && statusMatch
-  })
 
   return (
     <>
@@ -104,10 +186,15 @@ const WorkflowsTab = () => {
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
           >
-            <option value="">All Types</option>
-            <option value="default">Default</option>
-            <option value="aggressive">Aggressive</option>
-            <option value="test">Test</option>
+            <option value="">All Types ({workflows.length})</option>
+            {workflowTypes.map(type => {
+              const count = workflows.filter(w => w.workflowType === type).length
+              return (
+                <option key={type} value={type}>
+                  {type} ({count})
+                </option>
+              )
+            })}
           </select>
         </div>
         <div className="control-group">
@@ -117,120 +204,209 @@ const WorkflowsTab = () => {
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
           >
-            <option value="">All Status</option>
-            <option value="active">Active</option>
-            <option value="paused">Paused</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
+            <option value="">All Status ({workflows.length})</option>
+            <option value="active">Active ({activeCount})</option>
+            <option value="paused">Paused ({pausedCount})</option>
+            <option value="completed">Completed ({completedCount})</option>
+            <option value="failed">Failed ({failedCount})</option>
           </select>
         </div>
         <div className="control-group">
-          <button className="btn btn-primary">🔄 Refresh</button>
-          <button className="btn btn-warning">🛑 Stop Selected</button>
+          <button 
+            className="btn btn-primary" 
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            {refreshing ? '🔄 Refreshing...' : '🔄 Refresh'}
+          </button>
+          <button 
+            className="btn btn-warning" 
+            onClick={handleStopSelected}
+            disabled={selectedWorkflows.size === 0}
+          >
+            🛑 Stop Selected ({selectedWorkflows.size})
+          </button>
+        </div>
+        <div className="control-group">
+          <button 
+            className="btn btn-secondary" 
+            onClick={selectAllVisible}
+            disabled={filteredWorkflows.length === 0}
+          >
+            ✅ Select All
+          </button>
+          <button 
+            className="btn btn-secondary" 
+            onClick={clearSelection}
+            disabled={selectedWorkflows.size === 0}
+          >
+            ❌ Clear Selection
+          </button>
+        </div>
+        <div className="control-group">
+          <button 
+            className="btn btn-warning" 
+            onClick={handlePauseAllWorkflows}
+            disabled={activeCount === 0}
+          >
+            ⏸️ Pause All
+          </button>
+          <button 
+            className="btn btn-success" 
+            onClick={handleResumeAllWorkflows}
+            disabled={pausedCount === 0}
+          >
+            ▶️ Resume All
+          </button>
         </div>
       </div>
 
+      {/* Error Display */}
+      {workflowError && (
+        <div className="error-banner">
+          <div className="error-content">
+            <span className="error-icon">⚠️</span>
+            <span className="error-message">{workflowError}</span>
+            <button className="error-dismiss" onClick={() => setError(null)}>×</button>
+          </div>
+        </div>
+      )}
+
       {/* Workflows Grid */}
       <div className="workflows-grid">
-        {filteredWorkflows.map(workflow => (
-          <div key={workflow.id} className="workflow-card">
-            <div className="workflow-header">
-              <div className="workflow-id">
-                <span className="workflow-label">WORKFLOW</span>
-                <span className="workflow-value">{workflow.id}</span>
-              </div>
-              <div className="workflow-status">
-                <div 
-                  className="status-indicator"
-                  style={{ backgroundColor: getStatusColor(workflow.status) }}
-                ></div>
-                <span className="status-text">{workflow.status.toUpperCase()}</span>
-              </div>
-            </div>
-
-            <div className="workflow-content">
-              <div className="workflow-info">
-                <div className="info-row">
-                  <span className="info-label">Account:</span>
-                  <span className="info-value">{workflow.accountId}</span>
+        {filteredWorkflows.map(workflow => {
+          const account = getAccountById(workflow.accountId)
+          const isSelected = selectedWorkflows.has(workflow.accountId)
+          
+          return (
+            <div 
+              key={workflow.executionId || workflow.accountId} 
+              className={`workflow-card ${isSelected ? 'selected' : ''}`}
+            >
+              <div className="workflow-header">
+                <div className="workflow-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleWorkflowSelection(workflow.accountId)}
+                  />
                 </div>
-                <div className="info-row">
-                  <span className="info-label">Type:</span>
-                  <span 
-                    className="info-value type-badge"
-                    style={{ color: getTypeColor(workflow.type) }}
-                  >
-                    {workflow.type.toUpperCase()}
-                  </span>
+                <div className="workflow-id">
+                  <span className="workflow-label">WORKFLOW</span>
+                  <span className="workflow-value">{workflow.accountId}</span>
                 </div>
-                <div className="info-row">
-                  <span className="info-label">Duration:</span>
-                  <span className="info-value">{formatDuration(workflow.startTime)}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Current Step:</span>
-                  <span className="info-value">{workflow.currentStep}</span>
-                </div>
-              </div>
-
-              <div className="workflow-progress">
-                <div className="progress-header">
-                  <span className="progress-label">Progress</span>
-                  <span className="progress-percentage">{workflow.progress}%</span>
-                </div>
-                <div className="progress-bar">
+                <div className="workflow-status">
                   <div 
-                    className="progress-fill"
-                    style={{ width: `${workflow.progress}%` }}
+                    className="status-indicator"
+                    style={{ backgroundColor: getStatusColor(workflow.status) }}
                   ></div>
+                  <span className="status-text">{workflow.status.toUpperCase()}</span>
                 </div>
               </div>
 
-              <div className="workflow-stats">
-                <div className="stat-item">
-                  <span className="stat-value">{workflow.swipes}</span>
-                  <span className="stat-label">Swipes</span>
+              <div className="workflow-content">
+                <div className="workflow-info">
+                  <div className="info-row">
+                    <span className="info-label">Account:</span>
+                    <span className="info-value">{workflow.accountId}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Type:</span>
+                    <span 
+                      className="info-value type-badge"
+                      style={{ color: getTypeColor(workflow.workflowType) }}
+                    >
+                      {workflow.workflowType.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Duration:</span>
+                    <span className="info-value">{formatDuration(workflow.startedAt)}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Current Step:</span>
+                    <span className="info-value">{workflow.currentStep || 'N/A'}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Remaining:</span>
+                    <span className="info-value">{formatTimeRemaining(workflow)}</span>
+                  </div>
                 </div>
-                <div className="stat-item">
-                  <span className="stat-value">{workflow.matches}</span>
-                  <span className="stat-label">Matches</span>
+
+                <div className="workflow-progress">
+                  <div className="progress-header">
+                    <span className="progress-label">Progress</span>
+                    <span className="progress-percentage">{Math.round(workflow.progress || 0)}%</span>
+                  </div>
+                  <div className="progress-bar">
+                    <div 
+                      className="progress-fill"
+                      style={{ width: `${workflow.progress || 0}%` }}
+                    ></div>
+                  </div>
+                  <div className="progress-steps">
+                    <span className="steps-completed">{workflow.completedSteps || 0}</span>
+                    <span className="steps-separator">/</span>
+                    <span className="steps-total">{workflow.totalSteps || 0}</span>
+                    <span className="steps-label">steps</span>
+                  </div>
                 </div>
-                <div className="stat-item">
-                  <span className="stat-value">{Math.round((workflow.matches / workflow.swipes) * 100) || 0}%</span>
-                  <span className="stat-label">Success</span>
+
+                <div className="workflow-stats">
+                  <div className="stat-item">
+                    <span className="stat-value">{workflow.actionsCompleted || 0}</span>
+                    <span className="stat-label">Actions</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-value">{workflow.successfulActions || 0}</span>
+                    <span className="stat-label">Success</span>
+                  </div>
+                  <div className="stat-item">
+                    <span className="stat-value">
+                      {workflow.actionsCompleted > 0 ? 
+                        Math.round((workflow.successfulActions / workflow.actionsCompleted) * 100) : 0}%
+                    </span>
+                    <span className="stat-label">Rate</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="workflow-actions">
-              {workflow.status === 'active' && (
+              <div className="workflow-actions">
+                {workflow.status === 'active' && (
+                  <button 
+                    className="action-btn pause-btn"
+                    onClick={() => handlePauseAllWorkflows()}
+                    title="Pause workflow"
+                  >
+                    ⏸️ Pause
+                  </button>
+                )}
+                {workflow.status === 'paused' && (
+                  <button 
+                    className="action-btn resume-btn"
+                    onClick={() => handleResumeAllWorkflows()}
+                    title="Resume workflow"
+                  >
+                    ▶️ Resume
+                  </button>
+                )}
                 <button 
-                  className="action-btn pause-btn"
-                  onClick={() => handlePauseWorkflow(workflow.id)}
+                  className="action-btn stop-btn"
+                  onClick={() => handleStopWorkflow(workflow.accountId)}
+                  title="Stop workflow"
                 >
-                  ⏸️ Pause
+                  🛑 Stop
                 </button>
-              )}
-              {workflow.status === 'paused' && (
                 <button 
-                  className="action-btn resume-btn"
-                  onClick={() => handlePauseWorkflow(workflow.id)}
+                  className="action-btn details-btn"
+                  title="View workflow details"
                 >
-                  ▶️ Resume
+                  📊 Details
                 </button>
-              )}
-              <button 
-                className="action-btn stop-btn"
-                onClick={() => handleStopWorkflow(workflow.id)}
-              >
-                🛑 Stop
-              </button>
-              <button className="action-btn details-btn">
-                📊 Details
-              </button>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {filteredWorkflows.length === 0 && (
@@ -239,9 +415,15 @@ const WorkflowsTab = () => {
           <div className="empty-message">No workflows found</div>
           <div className="empty-description">
             {selectedType || selectedStatus 
-              ? 'Try adjusting your filters' 
-              : 'No active workflows at the moment'}
+              ? 'Try adjusting your filters to see more workflows' 
+              : 'No active workflows at the moment. Import accounts to start workflows.'}
           </div>
+          {!selectedType && !selectedStatus && (
+            <div className="empty-actions">
+              <button className="btn btn-primary">+ Import Accounts</button>
+              <button className="btn btn-secondary">📖 View Definitions</button>
+            </div>
+          )}
         </div>
       )}
     </>

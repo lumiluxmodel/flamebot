@@ -1,288 +1,404 @@
 import React, { useState, useEffect } from 'react'
+import { useMonitoring } from '../../hooks/useMonitoring'
+import { useWorkflows } from '../../hooks/useWorkflows'
 import LoadingSpinner from '../LoadingSpinner'
-import { useApi } from '../../hooks/useApi'
 
 const MonitoringTab = () => {
-  const [selectedTimeRange, setSelectedTimeRange] = useState('1h')
-  const [showCriticalOnly, setShowCriticalOnly] = useState(false)
-  
-  const { data: healthData, loading: healthLoading } = useApi('/api/accounts/health')
-  const { data: statsData } = useApi('/api/workflows/stats')
+  const [selectedSeverity, setSelectedSeverity] = useState('')
+  const [showUnacknowledgedOnly, setShowUnacknowledgedOnly] = useState(false)
+  const [selectedAlerts, setSelectedAlerts] = useState(new Set())
 
-  // Mock system health data
-  const systemHealth = {
-    overall: 'healthy',
-    components: [
-      { name: 'API Server', status: 'healthy', uptime: '99.9%', responseTime: '45ms' },
-      { name: 'Database', status: 'healthy', uptime: '99.8%', responseTime: '12ms' },
-      { name: 'Workflow Engine', status: 'healthy', uptime: '99.7%', responseTime: '23ms' },
-      { name: 'AI Service', status: 'warning', uptime: '98.5%', responseTime: '156ms' },
-      { name: 'Queue System', status: 'healthy', uptime: '99.9%', responseTime: '8ms' }
-    ]
+  const {
+    dashboardData,
+    alerts,
+    systemHealth,
+    loading: monitoringLoading,
+    error: monitoringError,
+    acknowledgeAlert,
+    acknowledgeMultipleAlerts,
+    updateAlertFilters,
+    getFilteredAlerts,
+    getAlertStatistics,
+    getSystemHealthSummary,
+    getPerformanceMetrics,
+    isSystemHealthy,
+    hasUnacknowledgedCriticalAlerts,
+    startPolling,
+    stopPolling,
+    refreshAllData
+  } = useMonitoring()
+
+  const {
+    statistics: workflowStats,
+    loading: workflowLoading
+  } = useWorkflows()
+
+  const [refreshing, setRefreshing] = useState(false)
+
+  // Start real-time monitoring
+  useEffect(() => {
+    startPolling(10000) // Poll every 10 seconds for monitoring data
+    return () => stopPolling()
+  }, [])
+
+  // Update filters when local state changes
+  useEffect(() => {
+    updateAlertFilters({
+      severity: selectedSeverity || null,
+      unacknowledged: showUnacknowledgedOnly
+    })
+  }, [selectedSeverity, showUnacknowledgedOnly])
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await refreshAllData()
+    } catch (error) {
+      console.error('Error refreshing monitoring data:', error)
+    } finally {
+      setRefreshing(false)
+    }
   }
 
-  // Mock performance metrics
-  const performanceMetrics = [
-    { name: 'CPU Usage', value: 45, max: 100, unit: '%', status: 'healthy' },
-    { name: 'Memory Usage', value: 2.8, max: 8, unit: 'GB', status: 'healthy' },
-    { name: 'Disk Usage', value: 156, max: 500, unit: 'GB', status: 'healthy' },
-    { name: 'Network I/O', value: 12.5, max: 100, unit: 'MB/s', status: 'healthy' },
-    { name: 'Active Connections', value: 43, max: 1000, unit: '', status: 'healthy' },
-    { name: 'Queue Size', value: 8, max: 100, unit: 'tasks', status: 'healthy' }
-  ]
-
-  // Mock alerts data
-  const alerts = [
-    {
-      id: 'alert_001',
-      severity: 'warning',
-      title: 'High Response Time Detected',
-      message: 'AI Service response time exceeded 150ms threshold',
-      timestamp: new Date(Date.now() - 10 * 60 * 1000),
-      source: 'AI Service',
-      acknowledged: false
-    },
-    {
-      id: 'alert_002',
-      severity: 'info',
-      title: 'Workflow Completed Successfully',
-      message: 'Account 684ac67f completed default workflow',
-      timestamp: new Date(Date.now() - 25 * 60 * 1000),
-      source: 'Workflow Engine',
-      acknowledged: true
-    },
-    {
-      id: 'alert_003',
-      severity: 'error',
-      title: 'Rate Limit Exceeded',
-      message: 'Account 684ac123 hit rate limit during swipe task',
-      timestamp: new Date(Date.now() - 45 * 60 * 1000),
-      source: 'Actions Service',
-      acknowledged: false
-    },
-    {
-      id: 'alert_004',
-      severity: 'critical',
-      title: 'Database Connection Lost',
-      message: 'Temporary connection loss to primary database',
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      source: 'Database',
-      acknowledged: true
+  const handleAcknowledgeAlert = async (alertId) => {
+    try {
+      await acknowledgeAlert(alertId)
+      console.log('✅ Alert acknowledged:', alertId)
+    } catch (error) {
+      console.error('❌ Failed to acknowledge alert:', error)
     }
-  ]
+  }
 
-  const getStatusColor = (status) => {
+  const handleAcknowledgeSelected = async () => {
+    if (selectedAlerts.size === 0) return
+    
+    try {
+      await acknowledgeMultipleAlerts(Array.from(selectedAlerts))
+      setSelectedAlerts(new Set())
+      console.log('✅ Selected alerts acknowledged')
+    } catch (error) {
+      console.error('❌ Failed to acknowledge selected alerts:', error)
+    }
+  }
+
+  const toggleAlertSelection = (alertId) => {
+    const newSelection = new Set(selectedAlerts)
+    if (newSelection.has(alertId)) {
+      newSelection.delete(alertId)
+    } else {
+      newSelection.add(alertId)
+    }
+    setSelectedAlerts(newSelection)
+  }
+
+  const selectAllVisible = () => {
+    const visibleAlerts = filteredAlerts.map(alert => alert.id)
+    setSelectedAlerts(new Set(visibleAlerts))
+  }
+
+  const clearSelection = () => {
+    setSelectedAlerts(new Set())
+  }
+
+  if (monitoringLoading || workflowLoading) {
+    return <LoadingSpinner text="LOADING MONITORING DATA..." />
+  }
+
+  // Get processed data
+  const alertStats = getAlertStatistics()
+  const healthSummary = getSystemHealthSummary()
+  const performanceMetrics = getPerformanceMetrics()
+  const filteredAlerts = getFilteredAlerts()
+
+  // System health indicators
+  const getHealthColor = (status) => {
     switch (status) {
       case 'healthy': return '#00ff00'
-      case 'warning': return '#ffff00'
-      case 'error': return '#ff0040'
-      case 'critical': return '#ff0040'
+      case 'warning':
+      case 'degraded': return '#ffff00'
+      case 'critical': return '#ff0000'
       default: return '#666666'
     }
   }
 
   const getSeverityColor = (severity) => {
     switch (severity) {
-      case 'info': return '#00ffff'
+      case 'critical': return '#ff0000'
+      case 'error': return '#ff6600'
       case 'warning': return '#ffff00'
-      case 'error': return '#ff0040'
-      case 'critical': return '#ff0040'
+      case 'info': return '#00ffff'
       default: return '#666666'
     }
   }
 
-  const formatTimeAgo = (timestamp) => {
+  const formatUptime = (uptime) => {
+    if (!uptime) return 'N/A'
+    const days = Math.floor(uptime / (1000 * 60 * 60 * 24))
+    const hours = Math.floor((uptime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+    return `${days}d ${hours}h`
+  }
+
+  const formatTimestamp = (timestamp) => {
+    return new Date(timestamp).toLocaleString()
+  }
+
+  const getTimeAgo = (timestamp) => {
     const now = new Date()
-    const diff = now - timestamp
-    const minutes = Math.floor(diff / 60000)
-    const hours = Math.floor(minutes / 60)
+    const time = new Date(timestamp)
+    const diff = now - time
     
+    const minutes = Math.floor(diff / (1000 * 60))
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+    
+    if (days > 0) return `${days}d ago`
     if (hours > 0) return `${hours}h ago`
-    return `${minutes}m ago`
+    if (minutes > 0) return `${minutes}m ago`
+    return 'Just now'
   }
-
-  const handleAcknowledgeAlert = (alertId) => {
-    console.log('Acknowledging alert:', alertId)
-    // TODO: Implement API call
-  }
-
-  const handleAcknowledgeAll = () => {
-    console.log('Acknowledging all alerts')
-    // TODO: Implement API call
-  }
-
-  if (healthLoading) {
-    return <LoadingSpinner text="LOADING SYSTEM MONITORING..." />
-  }
-
-  const filteredAlerts = showCriticalOnly 
-    ? alerts.filter(alert => alert.severity === 'critical' || alert.severity === 'error')
-    : alerts
 
   return (
     <>
       {/* System Health Dashboard */}
-      <div className="monitoring-grid">
-        {/* System Health Card */}
-        <div className="monitoring-card">
-          <div className="card-header">
-            <span className="card-title">SYSTEM HEALTH</span>
-            <div 
-              className="health-indicator"
-              style={{ backgroundColor: getStatusColor(systemHealth.overall) }}
-            >
-              ●
+      <div className="monitoring-overview">
+        <div className="health-cards">
+          <div className="health-card">
+            <div className="health-header">
+              <span className="health-title">SYSTEM HEALTH</span>
+              <div 
+                className="health-indicator"
+                style={{ backgroundColor: getHealthColor(healthSummary.overall) }}
+              ></div>
             </div>
-          </div>
-          <div className="card-content">
-            <div className="health-components">
-              {systemHealth.components.map((component, index) => (
-                <div key={index} className="health-component">
-                  <div className="component-header">
-                    <span className="component-name">{component.name}</span>
+            <div className="health-content">
+              <div className="health-score">
+                <span className="score-value">{healthSummary.score}%</span>
+                <span className="score-label">{healthSummary.overall.toUpperCase()}</span>
+              </div>
+              <div className="health-components">
+                {Object.entries(healthSummary.components).map(([name, component]) => (
+                  <div key={name} className="component-status">
+                    <span className="component-name">{name}</span>
                     <div 
-                      className="component-status"
-                      style={{ color: getStatusColor(component.status) }}
-                    >
-                      {component.status.toUpperCase()}
-                    </div>
+                      className="component-indicator"
+                      style={{ backgroundColor: component.healthy ? '#00ff00' : '#ff0000' }}
+                    ></div>
                   </div>
-                  <div className="component-metrics">
-                    <div className="component-metric">
-                      <span className="metric-label">Uptime:</span>
-                      <span className="metric-value">{component.uptime}</span>
-                    </div>
-                    <div className="component-metric">
-                      <span className="metric-label">Response:</span>
-                      <span className="metric-value">{component.responseTime}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Performance Metrics Card */}
-        <div className="monitoring-card">
-          <div className="card-header">
-            <span className="card-title">PERFORMANCE METRICS</span>
-            <select 
-              className="time-range-select"
-              value={selectedTimeRange}
-              onChange={(e) => setSelectedTimeRange(e.target.value)}
-            >
-              <option value="1h">Last Hour</option>
-              <option value="6h">Last 6 Hours</option>
-              <option value="24h">Last 24 Hours</option>
-              <option value="7d">Last 7 Days</option>
-            </select>
+          <div className="health-card">
+            <div className="health-header">
+              <span className="health-title">PERFORMANCE</span>
+            </div>
+            <div className="health-content">
+              <div className="metric-row">
+                <span className="metric-label">Success Rate:</span>
+                <span className="metric-value">
+                  {performanceMetrics?.workflowSuccessRate ? 
+                    `${Math.round(performanceMetrics.workflowSuccessRate)}%` : 'N/A'}
+                </span>
+              </div>
+              <div className="metric-row">
+                <span className="metric-label">Avg Execution:</span>
+                <span className="metric-value">
+                  {performanceMetrics?.averageExecutionTime ? 
+                    `${Math.round(performanceMetrics.averageExecutionTime / 1000 / 60)}m` : 'N/A'}
+                </span>
+              </div>
+              <div className="metric-row">
+                <span className="metric-label">Active Workflows:</span>
+                <span className="metric-value">
+                  {performanceMetrics?.systemLoad?.activeWorkflows || 0}
+                </span>
+              </div>
+              <div className="metric-row">
+                <span className="metric-label">Uptime:</span>
+                <span className="metric-value">{formatUptime(systemHealth?.uptime)}</span>
+              </div>
+            </div>
           </div>
-          <div className="card-content">
-            <div className="metrics-grid">
-              {performanceMetrics.map((metric, index) => (
-                <div key={index} className="metric-card">
-                  <div className="metric-header">
-                    <span className="metric-name">{metric.name}</span>
-                    <div 
-                      className="metric-status"
-                      style={{ backgroundColor: getStatusColor(metric.status) }}
-                    ></div>
-                  </div>
-                  <div className="metric-value-container">
-                    <span className="metric-current-value">
-                      {metric.value}{metric.unit}
-                    </span>
-                    <span className="metric-max-value">
-                      / {metric.max}{metric.unit}
-                    </span>
-                  </div>
-                  <div className="metric-progress">
-                    <div 
-                      className="metric-progress-fill"
-                      style={{ 
-                        width: `${(metric.value / metric.max) * 100}%`,
-                        backgroundColor: getStatusColor(metric.status)
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              ))}
+
+          <div className="health-card">
+            <div className="health-header">
+              <span className="health-title">ALERTS SUMMARY</span>
+              {hasUnacknowledgedCriticalAlerts() && (
+                <span className="critical-badge">CRITICAL</span>
+              )}
+            </div>
+            <div className="health-content">
+              <div className="metric-row">
+                <span className="metric-label">Total:</span>
+                <span className="metric-value">{alertStats.total}</span>
+              </div>
+              <div className="metric-row">
+                <span className="metric-label">Unacknowledged:</span>
+                <span className="metric-value critical">{alertStats.unacknowledged}</span>
+              </div>
+              <div className="metric-row">
+                <span className="metric-label">Critical:</span>
+                <span className="metric-value error">{alertStats.critical}</span>
+              </div>
+              <div className="metric-row">
+                <span className="metric-label">Recent (24h):</span>
+                <span className="metric-value">{alertStats.recent}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* System Alerts */}
-      <div className="monitoring-card full-width">
-        <div className="card-header">
-          <span className="card-title">SYSTEM ALERTS</span>
-          <div className="alert-controls">
+      {/* Alert Management */}
+      <div className="alerts-section">
+        <div className="alerts-header">
+          <div className="alerts-title">
+            <span>SYSTEM ALERTS</span>
+            <span className="alerts-count">({filteredAlerts.length})</span>
+          </div>
+          
+          <div className="alerts-controls">
+            <div className="filter-group">
+              <label>Severity:</label>
+              <select 
+                className="form-select" 
+                value={selectedSeverity}
+                onChange={(e) => setSelectedSeverity(e.target.value)}
+              >
+                <option value="">All ({alertStats.total})</option>
+                <option value="critical">Critical ({alertStats.critical})</option>
+                <option value="error">Error ({alertStats.error})</option>
+                <option value="warning">Warning ({alertStats.warning})</option>
+                <option value="info">Info ({alertStats.info})</option>
+              </select>
+            </div>
+
+            <div className="filter-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showUnacknowledgedOnly}
+                  onChange={(e) => setShowUnacknowledgedOnly(e.target.checked)}
+                />
+                Unacknowledged Only
+              </label>
+            </div>
+          </div>
+
+          <div className="alerts-actions">
             <button 
-              className="btn btn-primary"
-              onClick={handleAcknowledgeAll}
+              className="btn btn-primary" 
+              onClick={handleRefresh}
+              disabled={refreshing}
             >
-              Acknowledge All
+              {refreshing ? '🔄 Refreshing...' : '🔄 Refresh'}
             </button>
             <button 
-              className={`btn ${showCriticalOnly ? 'btn-warning' : ''}`}
-              onClick={() => setShowCriticalOnly(!showCriticalOnly)}
+              className="btn btn-success" 
+              onClick={handleAcknowledgeSelected}
+              disabled={selectedAlerts.size === 0}
             >
-              {showCriticalOnly ? 'Show All' : 'Critical Only'}
+              ✅ Acknowledge Selected ({selectedAlerts.size})
+            </button>
+            <button 
+              className="btn btn-secondary" 
+              onClick={selectAllVisible}
+              disabled={filteredAlerts.length === 0}
+            >
+              Select All
+            </button>
+            <button 
+              className="btn btn-secondary" 
+              onClick={clearSelection}
+              disabled={selectedAlerts.size === 0}
+            >
+              Clear
             </button>
           </div>
         </div>
-        <div className="card-content">
-          <div className="alerts-table">
-            {filteredAlerts.map(alert => (
-              <div 
-                key={alert.id} 
-                className={`alert-row ${alert.acknowledged ? 'acknowledged' : ''}`}
-              >
-                <div className="alert-severity-col">
+
+        {/* Error Display */}
+        {monitoringError && (
+          <div className="error-banner">
+            <div className="error-content">
+              <span className="error-icon">⚠️</span>
+              <span className="error-message">{monitoringError}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Alerts List */}
+        <div className="alerts-list">
+          {filteredAlerts.length > 0 ? (
+            filteredAlerts.map((alert) => {
+              const isSelected = selectedAlerts.has(alert.id)
+              
+              return (
+                <div 
+                  key={alert.id} 
+                  className={`alert-item ${alert.severity} ${alert.acknowledged ? 'acknowledged' : 'unacknowledged'} ${isSelected ? 'selected' : ''}`}
+                >
+                  <div className="alert-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleAlertSelection(alert.id)}
+                    />
+                  </div>
+
                   <div 
                     className="alert-severity-badge"
-                    style={{ 
-                      borderColor: getSeverityColor(alert.severity),
-                      color: getSeverityColor(alert.severity)
-                    }}
+                    style={{ backgroundColor: getSeverityColor(alert.severity) }}
                   >
                     {alert.severity.toUpperCase()}
                   </div>
-                </div>
-                <div className="alert-content-col">
-                  <div className="alert-title">{alert.title}</div>
-                  <div className="alert-message">{alert.message}</div>
-                  <div className="alert-meta">
-                    <span className="alert-source">Source: {alert.source}</span>
-                    <span className="alert-timestamp">{formatTimeAgo(alert.timestamp)}</span>
+
+                  <div className="alert-content">
+                    <div className="alert-message">{alert.message}</div>
+                    <div className="alert-details">
+                      {alert.component && (
+                        <span className="alert-component">Component: {alert.component}</span>
+                      )}
+                      {alert.source && (
+                        <span className="alert-source">Source: {alert.source}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="alert-timestamp">
+                    <div className="alert-time">{getTimeAgo(alert.timestamp)}</div>
+                    <div className="alert-full-time">{formatTimestamp(alert.timestamp)}</div>
+                  </div>
+
+                  <div className="alert-actions">
+                    {!alert.acknowledged ? (
+                      <button
+                        className="action-btn acknowledge-btn"
+                        onClick={() => handleAcknowledgeAlert(alert.id)}
+                      >
+                        ✅ Acknowledge
+                      </button>
+                    ) : (
+                      <div className="acknowledged-badge">
+                        <span>✅ Acknowledged</span>
+                        <div className="acknowledged-time">
+                          {formatTimestamp(alert.acknowledgedAt)}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="alert-actions-col">
-                  {!alert.acknowledged && (
-                    <button 
-                      className="acknowledge-btn"
-                      onClick={() => handleAcknowledgeAlert(alert.id)}
-                    >
-                      ✓ Acknowledge
-                    </button>
-                  )}
-                  {alert.acknowledged && (
-                    <span className="acknowledged-badge">✓ Acknowledged</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {filteredAlerts.length === 0 && (
+              )
+            })
+          ) : (
             <div className="empty-state">
               <div className="empty-icon">🎯</div>
               <div className="empty-message">No alerts found</div>
               <div className="empty-description">
-                {showCriticalOnly 
-                  ? 'No critical alerts at the moment' 
-                  : 'All systems operating normally'}
+                {selectedSeverity || showUnacknowledgedOnly
+                  ? 'Try adjusting your filters to see more alerts'
+                  : 'System is running smoothly with no alerts'}
               </div>
             </div>
           )}
