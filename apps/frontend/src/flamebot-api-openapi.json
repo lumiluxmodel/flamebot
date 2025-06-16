@@ -1,0 +1,565 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+      "title": "Flamebot Backend API",
+      "description": "Backend service for managing Flamebot accounts with automatic import and status tracking capabilities. This API provides endpoints to import single or multiple accounts, track import progress, and manage different model configurations.",
+      "version": "1.0.0",
+      "contact": {
+        "name": "API Support",
+        "email": "support@flamebot.com"
+      },
+      "license": {
+        "name": "ISC",
+        "url": "https://opensource.org/licenses/ISC"
+      }
+    },
+    "servers": [
+      {
+        "url": "http://localhost:3090",
+        "description": "Development server"
+      },
+      {
+        "url": "https://api.flamebot.com",
+        "description": "Production server"
+      }
+    ],
+    "tags": [
+      {
+        "name": "Accounts",
+        "description": "Account management operations"
+      },
+      {
+        "name": "Health",
+        "description": "System health and status endpoints"
+      },
+      {
+        "name": "Models",
+        "description": "Model configuration endpoints"
+      }
+    ],
+    "paths": {
+      "/": {
+        "get": {
+          "summary": "API Root",
+          "description": "Returns basic API information and available endpoints",
+          "operationId": "getApiRoot",
+          "tags": ["Health"],
+          "responses": {
+            "200": {
+              "description": "API information",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "success": {
+                        "type": "boolean",
+                        "example": true
+                      },
+                      "message": {
+                        "type": "string",
+                        "example": "Flamebot Backend API"
+                      },
+                      "version": {
+                        "type": "string",
+                        "example": "1.0.0"
+                      },
+                      "endpoints": {
+                        "type": "object",
+                        "properties": {
+                          "importAccount": {
+                            "type": "string",
+                            "example": "POST /api/accounts/import"
+                          },
+                          "importMultiple": {
+                            "type": "string",
+                            "example": "POST /api/accounts/import-multiple"
+                          },
+                          "getModels": {
+                            "type": "string",
+                            "example": "GET /api/accounts/models"
+                          },
+                          "health": {
+                            "type": "string",
+                            "example": "GET /api/accounts/health"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/accounts/import": {
+        "post": {
+          "summary": "Import Single Account",
+          "description": "Imports a single account to Flamebot with automatic status tracking. The account string is formatted with 7 parts: auth_token:persistent_id:refresh_token:host:port:user:password",
+          "operationId": "importAccount",
+          "tags": ["Accounts"],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountImportRequest"
+                },
+                "examples": {
+                  "complete": {
+                    "summary": "Complete account data",
+                    "value": {
+                      "authToken": "9d2b1326-0286-4d10-a65c-dbb552614449",
+                      "proxy": "gate.nodemaven.com:1080:lumiluxmodels_gmail_com-country-us-zip-15202-sid-257407378079-ttl-24h-filter-high:hbif188pi7",
+                      "model": "Iris",
+                      "location": "40.50529861450195,-80.06849670410156",
+                      "refreshToken": "eyJhbGciOiJIUzI1NiJ9.MTU0MTUxNzQ2NTE.azhSbgIGmaawxQTT5fiMHLu59FrlW06eMQZ88jzt-y0",
+                      "deviceId": "D5654DBD-452F-4BA3-9424-EBEE1BD73CC4",
+                      "persistentId": "a6bf872290eb42c5aa01916b9b3773c1",
+                      "waitForCompletion": true
+                    }
+                  },
+                  "minimal": {
+                    "summary": "Minimal required data",
+                    "value": {
+                      "authToken": "test-auth-token",
+                      "proxy": "gate.nodemaven.com:1080:testuser:testpass",
+                      "model": "Aura"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Account imported successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AccountImportResponse"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Bad request - Missing required fields or invalid model",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Internal server error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/accounts/import-multiple": {
+        "post": {
+          "summary": "Import Multiple Accounts",
+          "description": "Imports multiple accounts in a single request with sequential processing and rate limiting protection",
+          "operationId": "importMultipleAccounts",
+          "tags": ["Accounts"],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["accounts"],
+                  "properties": {
+                    "accounts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AccountData"
+                      },
+                      "minItems": 1
+                    },
+                    "waitForCompletion": {
+                      "type": "boolean",
+                      "default": true,
+                      "description": "Whether to wait for each import to complete before proceeding"
+                    }
+                  }
+                },
+                "example": {
+                  "accounts": [
+                    {
+                      "authToken": "auth-token-1",
+                      "proxy": "gate.nodemaven.com:1080:user1:pass1",
+                      "model": "Iris"
+                    },
+                    {
+                      "authToken": "auth-token-2",
+                      "proxy": "gate.nodemaven.com:1080:user2:pass2",
+                      "model": "Aura"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Batch import completed",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/BatchImportResponse"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Bad request - Invalid accounts data",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/accounts/models": {
+        "get": {
+          "summary": "Get Available Models",
+          "description": "Returns list of available models and their associated colors",
+          "operationId": "getModels",
+          "tags": ["Models"],
+          "responses": {
+            "200": {
+              "description": "Available models retrieved successfully",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "success": {
+                        "type": "boolean",
+                        "example": true
+                      },
+                      "data": {
+                        "type": "object",
+                        "properties": {
+                          "models": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "example": ["Lola", "Aura", "Ciara", "Iris"]
+                          },
+                          "colors": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "example": {
+                              "Lola": "#e00000",
+                              "Aura": "#23d100",
+                              "Ciara": "#295eff",
+                              "Iris": "#ffb3f5"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/accounts/health": {
+        "get": {
+          "summary": "Health Check",
+          "description": "Checks the health status of the API and Flamebot connection",
+          "operationId": "healthCheck",
+          "tags": ["Health"],
+          "responses": {
+            "200": {
+              "description": "Service is healthy",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HealthResponse"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "Service is unhealthy",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HealthResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "AccountData": {
+          "type": "object",
+          "required": ["authToken", "proxy", "model"],
+          "properties": {
+            "authToken": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Authentication token (UUID format)",
+              "example": "9d2b1326-0286-4d10-a65c-dbb552614449"
+            },
+            "proxy": {
+              "type": "string",
+              "description": "Proxy configuration in format host:port:username:password",
+              "example": "gate.nodemaven.com:1080:lumiluxmodels_gmail_com-country-us-zip-15202-sid-257407378079-ttl-24h-filter-high:hbif188pi7"
+            },
+            "model": {
+              "type": "string",
+              "description": "Model name (case-sensitive)",
+              "enum": ["Lola", "Aura", "Ciara", "Iris"],
+              "example": "Iris"
+            },
+            "location": {
+              "type": "string",
+              "description": "Geographic coordinates (latitude,longitude)",
+              "example": "40.50529861450195,-80.06849670410156"
+            },
+            "refreshToken": {
+              "type": "string",
+              "description": "JWT refresh token",
+              "example": "eyJhbGciOiJIUzI1NiJ9.MTU0MTUxNzQ2NTE.azhSbgIGmaawxQTT5fiMHLu59FrlW06eMQZ88jzt-y0"
+            },
+            "deviceId": {
+              "type": "string",
+              "description": "Device identifier",
+              "example": "D5654DBD-452F-4BA3-9424-EBEE1BD73CC4"
+            },
+            "persistentId": {
+              "type": "string",
+              "description": "Persistent identifier",
+              "example": "a6bf872290eb42c5aa01916b9b3773c1"
+            }
+          }
+        },
+        "AccountImportRequest": {
+          "allOf": [
+            {
+              "$ref": "#/components/schemas/AccountData"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "waitForCompletion": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Whether to wait for import completion and poll status"
+                }
+              }
+            }
+          ]
+        },
+        "AccountImportResponse": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "boolean",
+              "example": true
+            },
+            "message": {
+              "type": "string",
+              "example": "Account imported successfully"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "accountId": {
+                  "type": "string",
+                  "description": "Imported account ID"
+                },
+                "taskId": {
+                  "type": "string",
+                  "description": "Import task ID for status tracking",
+                  "example": "dcc15f1a-c312-469f-b42d-8aac8c36920a"
+                },
+                "model": {
+                  "type": "string",
+                  "example": "Iris"
+                },
+                "importedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "example": "2025-06-09T21:38:17.297Z"
+                },
+                "taskStatus": {
+                  "type": "object",
+                  "properties": {
+                    "task_id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["PENDING", "COMPLETED", "FAILED"]
+                    },
+                    "progress": {
+                      "type": "string",
+                      "example": "100%"
+                    },
+                    "successful": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "failed": {
+                      "type": "integer",
+                      "example": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "BatchImportResponse": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "boolean",
+              "example": true
+            },
+            "message": {
+              "type": "string",
+              "example": "Imported 2 of 3 accounts"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "successful": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "authToken": {
+                        "type": "string"
+                      },
+                      "model": {
+                        "type": "string"
+                      },
+                      "accountId": {
+                        "type": "string"
+                      },
+                      "taskId": {
+                        "type": "string"
+                      },
+                      "taskStatus": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                },
+                "failed": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "authToken": {
+                        "type": "string"
+                      },
+                      "model": {
+                        "type": "string"
+                      },
+                      "error": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "total": {
+                  "type": "integer",
+                  "example": 3
+                }
+              }
+            }
+          }
+        },
+        "HealthResponse": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "boolean"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "healthy": {
+                  "type": "boolean"
+                },
+                "statusCode": {
+                  "type": "integer"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        },
+        "ErrorResponse": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "boolean",
+              "example": false
+            },
+            "error": {
+              "type": "string",
+              "description": "Error message"
+            },
+            "message": {
+              "type": "string",
+              "description": "Detailed error description"
+            },
+            "path": {
+              "type": "string",
+              "description": "Request path (for 404 errors)"
+            },
+            "stack": {
+              "type": "string",
+              "description": "Stack trace (only in development)"
+            }
+          }
+        }
+      },
+      "securitySchemes": {
+        "bearerAuth": {
+          "type": "http",
+          "scheme": "bearer",
+          "bearerFormat": "JWT",
+          "description": "Bearer token authentication using Flamebot API key"
+        }
+      }
+    },
+    "security": []
+  }
