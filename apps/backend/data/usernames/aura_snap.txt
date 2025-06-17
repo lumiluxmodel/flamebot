@@ -1,0 +1,4 @@
+aura_snap1
+aura_snap2
+aura_snap3
+aura_snap4
