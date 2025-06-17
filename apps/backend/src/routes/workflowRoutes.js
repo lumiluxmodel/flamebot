@@ -1290,6 +1290,102 @@ router.get('/health', asyncHandler(async (req, res) => {
     }
 }));
 
+/**
+ * Test workflow endpoint - Ejecuta en el mismo proceso del servidor
+ * POST /api/workflows/test
+ */
+router.post('/test', asyncHandler(async (req, res) => {
+    try {
+        const { 
+            accountId = `test_${Date.now()}`,
+            workflowType = 'test',
+            accountData
+        } = req.body;
+
+        console.log(`\n🧪 TEST WORKFLOW ENDPOINT`);
+        console.log(`   Account ID: ${accountId}`);
+        console.log(`   Workflow Type: ${workflowType}`);
+
+        // Datos de cuenta por defecto para pruebas
+        const testAccountData = accountData || {
+            model: 'Aura',
+            channel: 'gram',
+            authToken: 'test_token_' + Date.now(),
+            importedAt: new Date().toISOString()
+        };
+
+        // Iniciar workflow usando el servicio local
+        const workflowManager = require('../services/workflowManager');
+        
+        // Asegurar que está inicializado
+        if (!workflowManager.isInitialized) {
+            await workflowManager.initialize();
+        }
+
+        const result = await workflowManager.startAccountAutomation(
+            accountId,
+            testAccountData,
+            workflowType
+        );
+
+        if (result.success) {
+            // Obtener estado inicial
+            const status = workflowManager.getAccountWorkflowStatus(accountId);
+            
+            res.status(201).json({
+                success: true,
+                message: 'Test workflow started successfully',
+                data: {
+                    ...result,
+                    currentStatus: status ? {
+                        progress: status.progress,
+                        currentStep: status.currentStep,
+                        totalSteps: status.totalSteps,
+                        nextStep: status.nextStep?.description,
+                        nextExecutionTime: status.nextStep ? 
+                            new Date(Date.now() + (status.nextStep.delay || 0)) : null
+                    } : null,
+                    monitoringUrl: `/api/workflows/status/${accountId}`,
+                    tip: 'Use GET /api/workflows/status/:accountId to monitor progress'
+                }
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                error: result.error,
+                message: 'Failed to start test workflow'
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Test workflow endpoint error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            message: 'Internal error during test workflow execution'
+        });
+    }
+}));
+
+/**
+ * Quick test endpoint - Inicia un test rápido
+ * GET /api/workflows/test/quick
+ */
+router.get('/test/quick', asyncHandler(async (req, res) => {
+    const accountId = `quick_test_${Date.now()}`;
+    
+    console.log(`\n⚡ QUICK TEST - Starting workflow for ${accountId}`);
+    
+    // Redirigir al endpoint POST con datos de prueba
+    req.body = {
+        accountId,
+        workflowType: 'test'
+    };
+    
+    // Llamar al handler del POST
+    return router.handle(req, res);
+}));
+
 // ============================
 // UTILITY METHODS
 // ============================
@@ -1359,5 +1455,7 @@ async function getRecentlyFailedWorkflows(limit = 5) {
         return [];
     }
 }
+
+
 
 module.exports = router;

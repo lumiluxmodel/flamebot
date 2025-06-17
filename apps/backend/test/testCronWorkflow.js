@@ -1,17 +1,10 @@
-const path = require('path');
-require('dotenv').config({ 
-  path: path.join(__dirname, '../.env') 
-});
-const axios = require('axios');
+// test/testCronWorkflow.js
+const workflowManager = require('../src/services/workflowManager');
+const workflowExecutor = require('../src/services/workflowExecutor');
+const cronMonitor = require('../src/services/cronMonitor');
+const db = require('../src/services/databaseService');
 
-// Test configuration
-const PORT = process.env.PORT || 3090;
-const API_BASE_URL = `http://localhost:${PORT}/api`;
-
-// Get account ID from command line or use default
-let TEST_ACCOUNT_ID = process.argv[2] || "YOUR_ACCOUNT_ID_HERE";
-
-// Color codes for console output
+// Colores para la consola
 const colors = {
     reset: '\x1b[0m',
     bright: '\x1b[1m',
@@ -19,371 +12,499 @@ const colors = {
     green: '\x1b[32m',
     yellow: '\x1b[33m',
     blue: '\x1b[34m',
-    cyan: '\x1b[36m',
     magenta: '\x1b[35m',
-    gray: '\x1b[90m'
+    cyan: '\x1b[36m'
 };
 
-// Progress bar function
-function createProgressBar(current, total, width = 30) {
-    const percentage = Math.round((current / total) * 100);
-    const filled = Math.round((current / total) * width);
-    const empty = width - filled;
-    const bar = '█'.repeat(filled) + '░'.repeat(empty);
-    return `[${bar}] ${percentage}%`;
+// Función para imprimir con color
+function log(message, color = 'reset') {
+    console.log(`${colors[color]}${message}${colors.reset}`);
 }
 
-// Format duration
+// Función para mostrar ayuda
+function showHelp() {
+    console.log(`
+${colors.cyan}🚀 Workflow Test Tool${colors.reset}
+
+${colors.bright}Uso:${colors.reset}
+  node test/testCronWorkflow.js <comando> [opciones]
+
+${colors.bright}Comandos:${colors.reset}
+  start <accountId> <workflowType>    Inicia un workflow para una cuenta
+  monitor [accountId]                  Monitorea workflows activos
+  status <accountId>                   Muestra el estado de un workflow
+  stop <accountId>                     Detiene un workflow
+  stats                                Muestra estadísticas del sistema
+  health                               Verifica la salud del sistema
+  list                                 Lista todos los workflows activos
+  test-quick <accountId>               Ejecuta un test rápido (workflow test)
+
+${colors.bright}Tipos de Workflow:${colors.reset}
+  default     - Workflow estándar (1h espera → prompt → swipes → bio 24h)
+  aggressive  - Workflow agresivo (tiempos reducidos)
+  test        - Workflow de prueba (30s → prompt → 5 swipes → bio 2min)
+
+${colors.bright}Ejemplos:${colors.reset}
+  node test/testCronWorkflow.js start 68511f93ec6acd2798f3811d default
+  node test/testCronWorkflow.js monitor
+  node test/testCronWorkflow.js monitor 68511f93ec6acd2798f3811d
+  node test/testCronWorkflow.js status 68511f93ec6acd2798f3811d
+  node test/testCronWorkflow.js test-quick myTestAccount001
+`);
+}
+
+// Función principal
+async function main() {
+    const args = process.argv.slice(2);
+    
+    if (args.length === 0) {
+        showHelp();
+        process.exit(0);
+    }
+
+    const command = args[0].toLowerCase();
+
+    try {
+        // Inicializar el sistema
+        log('\n⚙️  Inicializando sistema de workflows...', 'cyan');
+        await workflowManager.initialize();
+        log('✅ Sistema inicializado correctamente\n', 'green');
+
+        switch (command) {
+            case 'start':
+                await startWorkflow(args[1], args[2]);
+                break;
+                
+            case 'monitor':
+                await monitorWorkflows(args[1]);
+                break;
+                
+            case 'status':
+                await showWorkflowStatus(args[1]);
+                break;
+                
+            case 'stop':
+                await stopWorkflow(args[1]);
+                break;
+                
+            case 'stats':
+                await showStats();
+                break;
+                
+            case 'health':
+                await checkHealth();
+                break;
+                
+            case 'list':
+                await listActiveWorkflows();
+                break;
+                
+            case 'test-quick':
+                await runQuickTest(args[1]);
+                break;
+                
+            case 'help':
+            case '--help':
+            case '-h':
+                showHelp();
+                break;
+                
+            default:
+                log(`❌ Comando desconocido: ${command}`, 'red');
+                showHelp();
+                process.exit(1);
+        }
+
+    } catch (error) {
+        log(`\n❌ Error: ${error.message}`, 'red');
+        console.error(error);
+        process.exit(1);
+    }
+}
+
+// Función para iniciar un workflow
+async function startWorkflow(accountId, workflowType = 'default') {
+    if (!accountId) {
+        log('❌ Error: Se requiere accountId', 'red');
+        return;
+    }
+
+    const validTypes = ['default', 'aggressive', 'test'];
+    if (!validTypes.includes(workflowType)) {
+        log(`❌ Error: Tipo de workflow inválido. Usa: ${validTypes.join(', ')}`, 'red');
+        return;
+    }
+
+    log(`\n🚀 Iniciando workflow...`, 'cyan');
+    log(`   Account ID: ${accountId}`, 'yellow');
+    log(`   Workflow: ${workflowType}`, 'yellow');
+
+    // Datos de cuenta simulados para la prueba
+    const accountData = {
+        model: 'Aura',
+        channel: 'gram',
+        authToken: 'test_token',
+        importedAt: new Date().toISOString()
+    };
+
+    const result = await workflowManager.startAccountAutomation(accountId, accountData, workflowType);
+
+    if (result.success) {
+        log(`\n✅ Workflow iniciado exitosamente!`, 'green');
+        log(`   Execution ID: ${result.executionId}`, 'cyan');
+        log(`   Total pasos: ${result.totalSteps}`, 'cyan');
+        log(`   Duración estimada: ${formatDuration(result.estimatedDuration)}`, 'cyan');
+        
+        // Mostrar los primeros pasos
+        const status = workflowManager.getAccountWorkflowStatus(accountId);
+        if (status && status.nextStep) {
+            log(`\n   Próximo paso: ${status.nextStep.description}`, 'yellow');
+            log(`   Se ejecutará en: ${new Date(Date.now() + (status.nextStep.delay || 0)).toLocaleString()}`, 'yellow');
+        }
+    } else {
+        log(`\n❌ Error al iniciar workflow: ${result.error}`, 'red');
+    }
+}
+
+// Función para monitorear workflows
+async function monitorWorkflows(accountId = null) {
+    log(`\n📊 Monitoreando workflows...`, 'cyan');
+    
+    let monitoring = true;
+    let lastUpdate = new Date();
+    
+    // Capturar Ctrl+C para salir limpiamente
+    process.on('SIGINT', () => {
+        monitoring = false;
+        log('\n\n⏹️  Deteniendo monitoreo...', 'yellow');
+        setTimeout(() => process.exit(0), 1000);
+    });
+
+    while (monitoring) {
+        console.clear();
+        log(`🔍 Monitor de Workflows - ${new Date().toLocaleString()}`, 'cyan');
+        log('═'.repeat(60), 'cyan');
+
+        if (accountId) {
+            // Monitorear cuenta específica
+            const status = workflowManager.getAccountWorkflowStatus(accountId);
+            
+            if (status) {
+                displayWorkflowStatus(status, true);
+                
+                // Mostrar log de ejecución
+                if (status.executionLog && status.executionLog.length > 0) {
+                    log('\n📋 Últimas actividades:', 'yellow');
+                    status.executionLog.forEach(entry => {
+                        const icon = entry.success ? '✅' : '❌';
+                        const color = entry.success ? 'green' : 'red';
+                        log(`   ${icon} ${entry.stepId} - ${formatTime(entry.timestamp)}`, color);
+                    });
+                }
+            } else {
+                log(`\n⚠️  No se encontró workflow activo para: ${accountId}`, 'yellow');
+            }
+        } else {
+            // Monitorear todos los workflows
+            const activeWorkflows = workflowManager.getAllActiveWorkflows();
+            
+            if (activeWorkflows.length === 0) {
+                log('\n📭 No hay workflows activos', 'yellow');
+            } else {
+                log(`\n📊 Workflows activos: ${activeWorkflows.length}`, 'green');
+                
+                activeWorkflows.forEach((workflow, index) => {
+                    log(`\n${index + 1}. Account: ${workflow.accountId}`, 'bright');
+                    log(`   Tipo: ${workflow.workflowType} | Progreso: ${workflow.progress}%`, 'cyan');
+                    log(`   Paso: ${workflow.currentStep}/${workflow.totalSteps}`, 'yellow');
+                    log(`   Iniciado: ${formatTime(workflow.startedAt)}`, 'blue');
+                    log(`   Última actividad: ${formatTime(workflow.lastActivity)}`, 'blue');
+                });
+            }
+        }
+
+        // Mostrar estadísticas del sistema
+        const stats = workflowManager.getWorkflowStats();
+        log('\n📈 Estadísticas del Sistema:', 'magenta');
+        log(`   Total ejecutados: ${stats.totalExecutions}`, 'cyan');
+        log(`   Exitosos: ${stats.successfulExecutions} (${stats.successRate.toFixed(1)}%)`, 'green');
+        log(`   Fallidos: ${stats.failedExecutions}`, 'red');
+        log(`   Activos: ${stats.activeExecutions}`, 'yellow');
+
+        // Mostrar alertas si hay
+        const alerts = workflowManager.getAlerts(true);
+        if (alerts.length > 0) {
+            log(`\n🚨 Alertas sin reconocer: ${alerts.length}`, 'red');
+            alerts.slice(0, 3).forEach(alert => {
+                log(`   [${alert.severity}] ${alert.message}`, 'yellow');
+            });
+        }
+
+        log('\n' + '─'.repeat(60), 'cyan');
+        log('Presiona Ctrl+C para salir | Actualizando cada 5 segundos...', 'blue');
+
+        // Esperar 5 segundos antes de actualizar
+        await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+}
+
+// Función para mostrar el estado de un workflow
+async function showWorkflowStatus(accountId) {
+    if (!accountId) {
+        log('❌ Error: Se requiere accountId', 'red');
+        return;
+    }
+
+    const status = workflowManager.getAccountWorkflowStatus(accountId);
+    
+    if (!status) {
+        log(`\n⚠️  No se encontró workflow activo para: ${accountId}`, 'yellow');
+        return;
+    }
+
+    displayWorkflowStatus(status);
+}
+
+// Función para detener un workflow
+async function stopWorkflow(accountId) {
+    if (!accountId) {
+        log('❌ Error: Se requiere accountId', 'red');
+        return;
+    }
+
+    log(`\n🛑 Deteniendo workflow para: ${accountId}`, 'yellow');
+    
+    const result = await workflowManager.stopAccountAutomation(accountId);
+    
+    if (result.success) {
+        log('✅ Workflow detenido exitosamente', 'green');
+    } else {
+        log(`❌ Error al detener workflow: ${result.error}`, 'red');
+    }
+}
+
+// Función para mostrar estadísticas
+async function showStats() {
+    const stats = workflowManager.getWorkflowStats();
+    const dashboard = workflowManager.getMonitoringDashboard();
+
+    log('\n📊 ESTADÍSTICAS DEL SISTEMA', 'cyan');
+    log('═'.repeat(50), 'cyan');
+
+    log('\n🎯 Workflows:', 'yellow');
+    log(`   Total ejecutados: ${stats.totalExecutions}`, 'bright');
+    log(`   Exitosos: ${stats.successfulExecutions} (${stats.successRate.toFixed(1)}%)`, 'green');
+    log(`   Fallidos: ${stats.failedExecutions}`, 'red');
+    log(`   Activos ahora: ${stats.activeExecutions}`, 'yellow');
+    log(`   Tiempo promedio: ${formatDuration(stats.averageExecutionTime)}`, 'cyan');
+
+    log('\n⚙️  Sistema Cron:', 'yellow');
+    log(`   Estado: ${stats.cronSystem.isRunning ? 'Activo' : 'Detenido'}`, stats.cronSystem.isRunning ? 'green' : 'red');
+    log(`   Jobs activos: ${stats.cronSystem.totalCronJobs}`, 'bright');
+    log(`   Tareas programadas: ${stats.cronSystem.scheduledTasks}`, 'bright');
+    log(`   Tareas ejecutadas: ${stats.cronSystem.executedTasks}`, 'green');
+    log(`   Tareas fallidas: ${stats.cronSystem.failedTasks}`, 'red');
+
+    log('\n📋 Task Scheduler:', 'yellow');
+    log(`   Tareas activas: ${stats.taskScheduler.stats.activeTasks}`, 'bright');
+    log(`   En cola: ${stats.taskScheduler.queuedTasks}`, 'yellow');
+    log(`   Completadas: ${stats.taskScheduler.stats.completedTasks}`, 'green');
+    log(`   Fallidas: ${stats.taskScheduler.stats.failedTasks}`, 'red');
+
+    log('\n🔔 Alertas:', 'yellow');
+    log(`   Total: ${dashboard.alerts.summary.total}`, 'bright');
+    log(`   Sin reconocer: ${dashboard.alerts.summary.unacknowledged}`, 'yellow');
+    log(`   Críticas: ${dashboard.alerts.summary.critical}`, 'red');
+    log(`   Advertencias: ${dashboard.alerts.summary.warnings}`, 'yellow');
+
+    log('\n💚 Salud del Sistema:', 'yellow');
+    log(`   Estado general: ${stats.overallHealth}`, stats.overallHealth === 'healthy' ? 'green' : 'red');
+    log(`   Última verificación: ${formatTime(stats.lastUpdate)}`, 'cyan');
+}
+
+// Función para verificar la salud del sistema
+async function checkHealth() {
+    log('\n🏥 Verificando salud del sistema...', 'cyan');
+    
+    const health = workflowManager.getHealthStatus();
+    
+    log(`\n${health.healthy ? '✅' : '❌'} Estado general: ${health.healthy ? 'SALUDABLE' : 'CON PROBLEMAS'}`, health.healthy ? 'green' : 'red');
+    
+    log('\n📊 Componentes:', 'yellow');
+    
+    // Workflow Executor
+    const executor = health.components.workflowExecutor;
+    log(`\n   Workflow Executor:`, 'bright');
+    log(`     Estado: ${executor.initialized ? 'Inicializado' : 'No inicializado'}`, executor.initialized ? 'green' : 'red');
+    log(`     Ejecuciones activas: ${executor.activeExecutions}`, 'cyan');
+    log(`     Total ejecutados: ${executor.totalExecutions}`, 'cyan');
+    log(`     Tasa de éxito: ${executor.successRate.toFixed(1)}%`, executor.successRate > 90 ? 'green' : 'yellow');
+    
+    // Cron Manager
+    const cron = health.components.cronManager;
+    log(`\n   Cron Manager:`, 'bright');
+    log(`     Estado: ${cron.running ? 'Ejecutándose' : 'Detenido'}`, cron.running ? 'green' : 'red');
+    log(`     Jobs activos: ${cron.totalCronJobs}`, 'cyan');
+    log(`     Tareas programadas: ${cron.scheduledTasks}`, 'cyan');
+    log(`     Tareas ejecutadas: ${cron.executedTasks}`, 'green');
+    log(`     Tareas fallidas: ${cron.failedTasks}`, cron.failedTasks > 0 ? 'yellow' : 'green');
+    
+    // Task Scheduler
+    const scheduler = health.components.taskScheduler;
+    log(`\n   Task Scheduler:`, 'bright');
+    log(`     Tareas activas: ${scheduler.activeTasks}`, 'cyan');
+    log(`     Completadas: ${scheduler.completedTasks}`, 'green');
+    log(`     Fallidas: ${scheduler.failedTasks}`, scheduler.failedTasks > 0 ? 'yellow' : 'green');
+    log(`     En cola: ${scheduler.queuedTasks}`, scheduler.queuedTasks > 10 ? 'yellow' : 'cyan');
+    
+    // Cron Monitor
+    const monitor = health.components.cronMonitor;
+    log(`\n   Cron Monitor:`, 'bright');
+    log(`     Estado: ${monitor.monitoring ? 'Monitoreando' : 'Inactivo'}`, monitor.monitoring ? 'green' : 'red');
+    log(`     Salud del sistema: ${monitor.systemHealth}`, monitor.systemHealth === 'healthy' ? 'green' : 'red');
+    log(`     Tasa de éxito: ${monitor.successRate.toFixed(1)}%`, monitor.successRate > 90 ? 'green' : 'yellow');
+    log(`     Alertas sin reconocer: ${monitor.unacknowledgedAlerts}`, monitor.unacknowledgedAlerts > 0 ? 'yellow' : 'green');
+}
+
+// Función para listar workflows activos
+async function listActiveWorkflows() {
+    const activeWorkflows = workflowManager.getAllActiveWorkflows();
+    
+    log('\n📋 WORKFLOWS ACTIVOS', 'cyan');
+    log('═'.repeat(80), 'cyan');
+    
+    if (activeWorkflows.length === 0) {
+        log('\n📭 No hay workflows activos en este momento', 'yellow');
+        return;
+    }
+    
+    log(`\nTotal: ${activeWorkflows.length} workflows activos\n`, 'green');
+    
+    activeWorkflows.forEach((workflow, index) => {
+        log(`${index + 1}. ${workflow.accountId}`, 'bright');
+        log(`   ├─ Tipo: ${workflow.workflowType}`, 'cyan');
+        log(`   ├─ Progreso: ${'█'.repeat(Math.floor(workflow.progress / 10))}${'░'.repeat(10 - Math.floor(workflow.progress / 10))} ${workflow.progress}%`, 'yellow');
+        log(`   ├─ Paso actual: ${workflow.currentStep}/${workflow.totalSteps}`, 'blue');
+        log(`   ├─ Iniciado: ${formatTime(workflow.startedAt)}`, 'magenta');
+        log(`   └─ Última actividad: ${formatTime(workflow.lastActivity)}\n`, 'magenta');
+    });
+}
+
+// Función para ejecutar un test rápido
+async function runQuickTest(accountId) {
+    if (!accountId) {
+        accountId = `test_${Date.now()}`;
+        log(`\n📝 Generando ID de cuenta de prueba: ${accountId}`, 'yellow');
+    }
+
+    log('\n🧪 Ejecutando test rápido con workflow "test"', 'cyan');
+    log('   Este workflow tiene delays cortos para pruebas:\n', 'yellow');
+    log('   1. Espera 30 segundos', 'blue');
+    log('   2. Agrega prompt (inmediato)', 'blue');
+    log('   3. Ejecuta 5 swipes (inmediato)', 'blue');
+    log('   4. Agrega bio después de 2 minutos\n', 'blue');
+
+    await startWorkflow(accountId, 'test');
+    
+    log('\n📊 Iniciando monitoreo automático del test...', 'green');
+    log('   (El monitoreo se detendrá cuando el workflow complete)\n', 'yellow');
+    
+    // Esperar un momento antes de iniciar el monitoreo
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Monitorear hasta que complete
+    let completed = false;
+    while (!completed) {
+        const status = workflowManager.getAccountWorkflowStatus(accountId);
+        
+        if (!status) {
+            completed = true;
+            log('\n✅ Workflow completado o detenido', 'green');
+        } else {
+            console.clear();
+            log('🧪 TEST RÁPIDO EN PROGRESO', 'cyan');
+            log('═'.repeat(50), 'cyan');
+            displayWorkflowStatus(status, true);
+            
+            if (status.status !== 'active') {
+                completed = true;
+            }
+        }
+        
+        if (!completed) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+    }
+    
+    log('\n✅ Test completado!', 'green');
+}
+
+// Función auxiliar para mostrar el estado de un workflow
+function displayWorkflowStatus(status, detailed = false) {
+    log(`\n📄 Workflow: ${status.accountId}`, 'bright');
+    log(`   Tipo: ${status.workflowType}`, 'cyan');
+    log(`   Estado: ${status.status}`, status.status === 'active' ? 'green' : 'yellow');
+    log(`   Progreso: ${'█'.repeat(Math.floor(status.progress / 10))}${'░'.repeat(10 - Math.floor(status.progress / 10))} ${status.progress}%`, 'yellow');
+    log(`   Paso actual: ${status.currentStep}/${status.totalSteps}`, 'blue');
+    
+    if (status.nextStep) {
+        log(`\n   📍 Próximo paso: ${status.nextStep.description}`, 'magenta');
+        const nextExecution = new Date(Date.now() + (status.nextStep.delay || 0));
+        log(`   ⏰ Se ejecutará: ${nextExecution.toLocaleString()}`, 'cyan');
+    }
+    
+    if (detailed) {
+        log(`\n   🕐 Iniciado: ${formatTime(status.startedAt)}`, 'blue');
+        log(`   🕐 Última actividad: ${formatTime(status.lastActivity)}`, 'blue');
+        
+        if (status.retryCount > 0) {
+            log(`   🔄 Reintentos: ${status.retryCount}/${status.maxRetries}`, 'yellow');
+        }
+        
+        if (status.lastError) {
+            log(`   ❌ Último error: ${status.lastError}`, 'red');
+        }
+        
+        if (status.continuousSwipeActive) {
+            log(`   🔄 Swipe continuo: ACTIVO`, 'green');
+        }
+    }
+}
+
+// Funciones auxiliares
 function formatDuration(ms) {
+    if (!ms || ms === 0) return '0s';
+    
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
-    
-    if (hours > 0) return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ${hours % 24}h`;
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
     if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
     return `${seconds}s`;
 }
 
-async function checkServerRunning() {
+function formatTime(date) {
+    if (!date) return 'N/A';
+    const d = new Date(date);
+    return d.toLocaleTimeString();
+}
+
+// Manejo de salida limpia
+process.on('exit', async () => {
     try {
-        await axios.get(`${API_BASE_URL}/accounts/health`);
-        return true;
+        await db.close();
+        log('\n👋 Conexión cerrada correctamente', 'green');
     } catch (error) {
-        return false;
+        // Ignorar errores al cerrar
     }
-}
+});
 
-async function startTestWorkflow(accountId) {
-    console.log(`\n${colors.bright}🚀 Starting DEFAULT Workflow${colors.reset}`);
-    console.log(`   Using Account ID: ${colors.cyan}${accountId}${colors.reset}`);
-    console.log(`   Workflow Type: ${colors.magenta}default${colors.reset}`);
-    console.log(`   Expected Duration: ~25+ hours (bio after 24h)`);
-    
-    try {
-        // For testing, we'll use the direct workflow start endpoint
-        const response = await axios.post(`${API_BASE_URL}/workflows/start`, {
-            accountId: accountId,
-            accountData: {
-                model: 'Lola',
-                channel: 'gram',
-                authToken: `test-token-${Date.now()}`,
-                importedAt: new Date().toISOString()
-            },
-            workflowType: 'default'  // Changed to default
-        });
-        
-        if (response.data.success) {
-            console.log(`${colors.green}✅ Default workflow started successfully!${colors.reset}`);
-            console.log(`   Execution ID: ${response.data.data.executionId}`);
-            console.log(`   Total Steps: ${response.data.data.totalSteps}`);
-            console.log(`   Estimated Duration: ${formatDuration(response.data.data.estimatedDuration)}`);
-            console.log(`\n   ${colors.bright}Default Workflow Steps:${colors.reset}`);
-            console.log(`   1️⃣  Wait 1 hour after import`);
-            console.log(`   2️⃣  Add AI-generated prompt`);
-            console.log(`   3️⃣  Wait 15 minutes`);
-            console.log(`   4️⃣  First swipe - 10 swipes`);
-            console.log(`   5️⃣  Wait 1 hour`);
-            console.log(`   6️⃣  Second swipe - 20 swipes`);
-            console.log(`   7️⃣  Wait 1 hour`);
-            console.log(`   8️⃣  Third swipe - 20 swipes`);
-            console.log(`   9️⃣  Activate continuous swipes (20-30 every 90-180 min)`);
-            console.log(`   🔟  Add bio after 24 hours`);
-            
-            return {
-                success: true,
-                accountId: accountId,
-                executionId: response.data.data.executionId
-            };
-        } else {
-            throw new Error(response.data.error || 'Workflow failed to start');
-        }
-    } catch (error) {
-        console.error(`${colors.red}❌ Failed to start workflow:${colors.reset}`, error.response?.data || error.message);
-        return { success: false, error: error.message };
-    }
-}
-
-async function getCronSystemStatus() {
-    try {
-        // Use the health endpoint which has the correct structure
-        const response = await axios.get(`${API_BASE_URL}/accounts/health`);
-        const healthData = response.data.data.workflows;
-        
-        console.log(`\n${colors.bright}⚙️  Cron System Status${colors.reset}`);
-        console.log(`   ${colors.green}✓${colors.reset} Cron Manager: ${healthData.components.cronManager.running ? 'RUNNING' : 'STOPPED'}`);
-        console.log(`   ${colors.green}✓${colors.reset} Total Cron Jobs: ${healthData.components.cronManager.totalCronJobs}`);
-        console.log(`   ${colors.green}✓${colors.reset} Scheduled Tasks: ${healthData.components.cronManager.scheduledTasks}`);
-        console.log(`   ${colors.green}✓${colors.reset} Executed Tasks: ${healthData.components.cronManager.executedTasks}`);
-        console.log(`   ${colors.green}✓${colors.reset} Failed Tasks: ${healthData.components.cronManager.failedTasks}`);
-        
-        console.log(`\n   ${colors.bright}Task Scheduler:${colors.reset}`);
-        console.log(`   ${colors.cyan}•${colors.reset} Active Tasks: ${healthData.components.taskScheduler.activeTasks}`);
-        console.log(`   ${colors.cyan}•${colors.reset} Queued Tasks: ${healthData.components.taskScheduler.queuedTasks}`);
-        console.log(`   ${colors.cyan}•${colors.reset} Completed: ${healthData.components.taskScheduler.completedTasks}`);
-        console.log(`   ${colors.cyan}•${colors.reset} Failed: ${healthData.components.taskScheduler.failedTasks}`);
-        
-        return healthData;
-    } catch (error) {
-        console.error(`${colors.red}❌ Failed to get cron status:${colors.reset}`, error.message);
-        return null;
-    }
-}
-
-async function getWorkflowStatus(accountId) {
-    try {
-        const response = await axios.get(`${API_BASE_URL}/accounts/workflow/${accountId}`);
-        const workflow = response.data.data;
-        
-        console.log(`\n${colors.bright}📊 Workflow Status${colors.reset}`);
-        console.log(`   Status: ${colors.cyan}${workflow.status.toUpperCase()}${colors.reset}`);
-        console.log(`   Progress: ${createProgressBar(workflow.currentStep, workflow.totalSteps)}`);
-        console.log(`   Step: ${workflow.currentStep}/${workflow.totalSteps}`);
-        
-        if (workflow.nextStep) {
-            console.log(`   Next: ${workflow.nextStep.description}`);
-            const delayMs = workflow.nextStep.delay || 0;
-            if (delayMs > 0) {
-                console.log(`   Wait: ${formatDuration(delayMs)}`);
-            }
-        }
-        
-        const elapsed = Date.now() - new Date(workflow.startedAt).getTime();
-        console.log(`   Elapsed: ${formatDuration(elapsed)}`);
-        
-        if (workflow.lastError) {
-            console.log(`   ${colors.red}Last Error: ${workflow.lastError}${colors.reset}`);
-        }
-        
-        // Show recent execution log
-        if (workflow.executionLog && workflow.executionLog.length > 0) {
-            console.log(`\n   ${colors.bright}Recent Activity:${colors.reset}`);
-            workflow.executionLog.forEach(log => {
-                const icon = log.success ? '✅' : '❌';
-                const timestamp = new Date(log.timestamp).toLocaleTimeString();
-                console.log(`   ${icon} [${timestamp}] ${log.stepId} (${log.duration}ms)`);
-            });
-        }
-        
-        return workflow;
-    } catch (error) {
-        if (error.response?.status === 404) {
-            console.log(`\n${colors.yellow}⚠️  No active workflow found for account${colors.reset}`);
-        } else {
-            console.error(`${colors.red}❌ Failed to get workflow status:${colors.reset}`, error.message);
-        }
-        return null;
-    }
-}
-
-async function getMonitoringDashboard() {
-    try {
-        const response = await axios.get(`${API_BASE_URL}/accounts/health`);
-        const healthData = response.data.data.workflows;
-        
-        console.log(`\n${colors.bright}📈 System Monitoring${colors.reset}`);
-        console.log(`   System Health: ${healthData.healthy ? 
-            `${colors.green}HEALTHY${colors.reset}` : 
-            `${colors.red}UNHEALTHY${colors.reset}`}`);
-        console.log(`   Success Rate: ${(healthData.metrics.successRate * 100).toFixed(1)}%`);
-        console.log(`   Avg Execution: ${formatDuration(healthData.metrics.avgExecutionTime)}`);
-        console.log(`   Total Executions: ${healthData.metrics.totalExecutions}`);
-        
-        if (healthData.alerts.total > 0) {
-            console.log(`\n   ${colors.yellow}⚠️  Alerts:${colors.reset}`);
-            console.log(`   Total: ${healthData.alerts.total}`);
-            console.log(`   Unacknowledged: ${healthData.alerts.unacknowledged}`);
-            console.log(`   Critical: ${healthData.alerts.critical}`);
-        }
-        
-        return healthData;
-    } catch (error) {
-        console.error(`${colors.red}❌ Failed to get monitoring data:${colors.reset}`, error.message);
-        return null;
-    }
-}
-
-async function monitorWorkflow(accountId, intervalMs = 5000, maxChecks = 60) {
-    console.log(`\n${colors.bright}👀 Monitoring Workflow Progress${colors.reset}`);
-    console.log(`   Checking every ${intervalMs/1000} seconds...`);
-    console.log(`   Will monitor for ${(intervalMs * maxChecks) / 60000} minutes`);
-    console.log(`   Press Ctrl+C to stop monitoring\n`);
-    
-    let checkCount = 0;
-    let lastStep = -1;
-    
-    const monitorInterval = setInterval(async () => {
-        checkCount++;
-        
-        // Clear previous output (optional - comment out if you want to keep history)
-        // process.stdout.write('\033[2J\033[0f');
-        
-        console.log(`\n${colors.gray}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
-        console.log(`${colors.bright}Check #${checkCount} - ${new Date().toLocaleTimeString()}${colors.reset}`);
-        
-        // Get workflow status
-        const workflow = await getWorkflowStatus(accountId);
-        
-        if (!workflow) {
-            console.log(`${colors.red}❌ Workflow not found or completed${colors.reset}`);
-            clearInterval(monitorInterval);
-            return;
-        }
-        
-        // Check if step changed
-        if (workflow.currentStep !== lastStep && workflow.currentStep > 0) {
-            console.log(`\n${colors.green}🎉 STEP ${lastStep + 1} COMPLETED!${colors.reset}`);
-            lastStep = workflow.currentStep;
-        }
-        
-        // Check if workflow completed
-        if (workflow.status === 'completed') {
-            console.log(`\n${colors.green}🎊 WORKFLOW COMPLETED SUCCESSFULLY!${colors.reset}`);
-            clearInterval(monitorInterval);
-            
-            // Final cron stats
-            await getCronSystemStatus();
-            return;
-        }
-        
-        // Check if workflow failed
-        if (workflow.status === 'failed') {
-            console.log(`\n${colors.red}💥 WORKFLOW FAILED!${colors.reset}`);
-            clearInterval(monitorInterval);
-            return;
-        }
-        
-        // Get cron system status every 3 checks
-        if (checkCount % 3 === 0) {
-            await getCronSystemStatus();
-        }
-        
-        // Stop after max checks
-        if (checkCount >= maxChecks) {
-            console.log(`\n${colors.yellow}⏱️  Max monitoring time reached${colors.reset}`);
-            clearInterval(monitorInterval);
-        }
-        
-    }, intervalMs);
-}
-
-async function testCronWorkflow() {
-    console.log(`
-${colors.bright}╔═══════════════════════════════════════╗
-║      Cron & Workflow Test Suite       ║
-║       Testing DEFAULT Workflow        ║
-║         (24+ Hour Automation)         ║
-╚═══════════════════════════════════════╝${colors.reset}
-    `);
-
-    // Validate account ID
-    if (TEST_ACCOUNT_ID === "YOUR_ACCOUNT_ID_HERE") {
-        console.error(`${colors.red}❌ Please provide an account ID:${colors.reset}`);
-        console.log(`   Usage: npm run test:cron-workflow YOUR_ACCOUNT_ID`);
-        console.log(`   Example: npm run test:cron-workflow 684ac67faa9ff42adb90e24a`);
-        process.exit(1);
-    }
-
-    // Check if server is running
-    const serverRunning = await checkServerRunning();
-    if (!serverRunning) {
-        console.error(`${colors.red}❌ Server is not running!${colors.reset}`);
-        console.log(`   Run: ${colors.cyan}npm run dev${colors.reset} or ${colors.cyan}npm start${colors.reset}`);
-        process.exit(1);
-    }
-
-    console.log(`${colors.green}✅ Environment OK${colors.reset}`);
-    console.log(`${colors.cyan}🎯 Testing with Account ID: ${TEST_ACCOUNT_ID}${colors.reset}\n`);
-
-    // Step 1: Check initial cron system status
-    console.log(`${colors.bright}Step 1: Checking Cron System${colors.reset}`);
-    const initialStats = await getCronSystemStatus();
-    
-    if (!initialStats || !initialStats.components.cronManager.running) {
-        console.error(`${colors.red}❌ Cron system is not running properly!${colors.reset}`);
-        return;
-    }
-
-    // Step 2: Get monitoring dashboard
-    console.log(`\n${colors.bright}Step 2: System Health Check${colors.reset}`);
-    await getMonitoringDashboard();
-
-    // Step 3: Check if workflow already exists
-    console.log(`\n${colors.bright}Step 3: Checking Existing Workflow${colors.reset}`);
-    const existingWorkflow = await getWorkflowStatus(TEST_ACCOUNT_ID);
-    
-    if (existingWorkflow && existingWorkflow.status === 'active') {
-        console.log(`${colors.yellow}⚠️  Account already has an active workflow!${colors.reset}`);
-        console.log(`   Monitoring existing workflow instead...`);
-        
-        // Monitor the existing workflow
-        await monitorWorkflow(TEST_ACCOUNT_ID, 10000, 90); // 10 seconds, max 15 minutes
-        return;
-    }
-
-    // Step 4: Start test workflow
-    console.log(`\n${colors.bright}Step 4: Starting Default Workflow${colors.reset}`);
-    const workflowResult = await startTestWorkflow(TEST_ACCOUNT_ID);
-    
-    if (!workflowResult.success) {
-        console.log(`${colors.red}❌ Failed to start workflow${colors.reset}`);
-        return;
-    }
-
-    // Wait a moment for workflow to initialize
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Step 5: Monitor workflow progress
-    console.log(`\n${colors.bright}Step 5: Monitoring Workflow Execution${colors.reset}`);
-    console.log(`${colors.yellow}⚠️  Note: First step is a 1-hour wait. You'll see progress after that.${colors.reset}`);
-    console.log(`${colors.yellow}⚠️  This is a 24+ hour workflow. Monitor will run for 15 minutes then exit.${colors.reset}`);
-    console.log(`${colors.cyan}💡 Tip: Use 'node test/testCronWorkflow.js monitor ${TEST_ACCOUNT_ID}' to continue monitoring later${colors.reset}`);
-    await monitorWorkflow(TEST_ACCOUNT_ID, 10000, 90); // Check every 10s, max 15 min
-
-    // Final summary
-    console.log(`\n${colors.green}✨ Test Completed!${colors.reset}`);
-    console.log(`\n${colors.bright}Summary:${colors.reset}`);
-    console.log(`   ${colors.cyan}•${colors.reset} Cron system is operational`);
-    console.log(`   ${colors.cyan}•${colors.reset} Task scheduler is working`);
-    console.log(`   ${colors.cyan}•${colors.reset} Default workflow started`);
-    console.log(`   ${colors.cyan}•${colors.reset} All systems functioning correctly`);
-    
-    console.log(`\n${colors.bright}Default Workflow Timeline:${colors.reset}`);
-    console.log(`   0:00 - Start`);
-    console.log(`   1:00h - Wait complete → Add prompt`);
-    console.log(`   1:15h - Prompt added → First swipe (10)`);
-    console.log(`   2:15h - Wait → Second swipe (20)`);
-    console.log(`   3:15h - Wait → Third swipe (20)`);
-    console.log(`   3:20h - Activate continuous swipes`);
-    console.log(`   24:00h - Add bio → Workflow complete`);
-    console.log(`\n${colors.gray}Note: Continuous swipes will run indefinitely every 90-180 min${colors.reset}`);
-    console.log(`${colors.yellow}⚠️  This is a long-running workflow (24+ hours)${colors.reset}`);
-    
-    console.log(`\n${colors.bright}To continue monitoring:${colors.reset}`);
-    console.log(`   ${colors.cyan}node test/testCronWorkflow.js monitor ${TEST_ACCOUNT_ID}${colors.reset}`);
-    console.log(`\n${colors.bright}To check status later:${colors.reset}`);
-    console.log(`   ${colors.cyan}node test/testCronWorkflow.js status ${TEST_ACCOUNT_ID}${colors.reset}\n`);
-}
-
-// Quick status check
-async function quickStatus() {
-    const accountId = process.argv[3] || TEST_ACCOUNT_ID;
-    
-    console.log(`\n${colors.bright}🔍 Quick Status Check${colors.reset}`);
-    console.log(`   Account ID: ${colors.cyan}${accountId}${colors.reset}\n`);
-    
-    await getCronSystemStatus();
-    await getWorkflowStatus(accountId);
-    await getMonitoringDashboard();
-}
-
-// Run tests based on command line argument
-const testType = process.argv[2];
-
-if (testType === 'status') {
-    quickStatus();
-} else if (testType === 'monitor') {
-    const accountId = process.argv[3] || TEST_ACCOUNT_ID;
-    monitorWorkflow(accountId);
-} else {
-    testCronWorkflow();
-}
+// Ejecutar
+main().catch(error => {
+    log(`\n❌ Error fatal: ${error.message}`, 'red');
+    console.error(error);
+    process.exit(1);
+});

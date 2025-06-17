@@ -52,6 +52,88 @@ class WorkflowExecutor extends EventEmitter {
     }
 
     /**
+     * Load execution from database if not in memory
+     * @param {string} accountId - Account ID
+     * @returns {Promise<Object|null>} Execution state
+     */
+    async loadExecutionFromDatabase(accountId) {
+        try {
+            console.log(`📥 Loading execution from database for account: ${accountId}`);
+            
+            // Get workflow instance from database
+            const workflowInstance = await workflowDb.getWorkflowInstanceByAccountId(accountId);
+            
+            if (!workflowInstance || workflowInstance.status !== 'active') {
+                console.log(`⚠️ No active workflow found in database for account: ${accountId}`);
+                return null;
+            }
+            
+            // Get workflow definition
+            const workflowDef = this.workflowDefinitions.get(workflowInstance.workflow_type);
+            if (!workflowDef) {
+                // Try loading from database
+                const dbDef = await workflowDb.getWorkflowDefinition(workflowInstance.workflow_type);
+                if (dbDef) {
+                    this.workflowDefinitions.set(dbDef.type, {
+                        name: dbDef.name,
+                        description: dbDef.description,
+                        steps: dbDef.steps,
+                        config: dbDef.config || {},
+                        version: dbDef.version,
+                        source: 'database'
+                    });
+                    workflowDef = this.workflowDefinitions.get(workflowInstance.workflow_type);
+                } else {
+                    throw new Error(`Workflow definition not found: ${workflowInstance.workflow_type}`);
+                }
+            }
+            
+            // Recreate execution state
+            const execution = {
+                executionId: `recovered_${accountId}_${Date.now()}`,
+                accountId: accountId,
+                accountData: workflowInstance.account_data,
+                workflowType: workflowInstance.workflow_type,
+                workflowDef: workflowDef,
+                workflowInstanceId: workflowInstance.id,
+                status: 'active',
+                currentStep: workflowInstance.current_step,
+                totalSteps: workflowInstance.total_steps,
+                startedAt: new Date(workflowInstance.started_at),
+                lastActivity: new Date(workflowInstance.last_activity_at),
+                retryCount: workflowInstance.retry_count || 0,
+                maxRetries: workflowDef.config?.maxRetries || 3,
+                executionLog: [],
+                scheduledTasks: new Map(),
+                continuousSwipeTaskId: null
+            };
+            
+            // Get execution log from database
+            const logs = await workflowDb.getExecutionLog(workflowInstance.id, 10);
+            execution.executionLog = logs.map(log => ({
+                stepId: log.step_id,
+                stepIndex: log.step_index,
+                action: log.action,
+                success: log.success,
+                result: log.result,
+                error: log.error_message,
+                duration: log.duration_ms,
+                timestamp: new Date(log.executed_at)
+            }));
+            
+            // Add to active executions
+            this.activeExecutions.set(accountId, execution);
+            
+            console.log(`✅ Execution loaded from database: ${execution.executionId}`);
+            return execution;
+            
+        } catch (error) {
+            console.error(`❌ Failed to load execution from database:`, error);
+            return null;
+        }
+    }
+
+    /**
      * Load workflow definitions into memory
      */
     async loadWorkflowDefinitions() {
@@ -456,9 +538,16 @@ class WorkflowExecutor extends EventEmitter {
         console.log(`   Account: ${accountId}`);
         console.log(`   Action: ${stepConfig.action}`);
 
-        const execution = this.activeExecutions.get(accountId);
+        let execution = this.activeExecutions.get(accountId);
+        
+        // If not in memory, try to load from database
         if (!execution) {
-            throw new Error(`Execution not found for account: ${accountId}`);
+            console.log(`⚠️ Execution not in memory, attempting to load from database...`);
+            execution = await this.loadExecutionFromDatabase(accountId);
+            
+            if (!execution) {
+                throw new Error(`Execution not found for account: ${accountId}`);
+            }
         }
 
         const startTime = Date.now();
@@ -467,7 +556,7 @@ class WorkflowExecutor extends EventEmitter {
 
         try {
             // Set timeout for step execution
-            const timeout = stepConfig.timeout || execution.workflowDef.timeoutMs || 300000;
+            const timeout = stepConfig.timeout || execution.workflowDef.config?.timeoutMs || 300000;
             const timeoutPromise = new Promise((_, reject) => {
                 setTimeout(() => reject(new Error(`Step timeout after ${timeout}ms`)), timeout);
             });
@@ -760,8 +849,20 @@ class WorkflowExecutor extends EventEmitter {
 
         console.log(`\n🔄 Executing continuous swipe: ${swipeCount} swipes for ${accountId}`);
 
-        const execution = this.activeExecutions.get(accountId);
-        if (!execution || execution.status !== 'active') {
+        let execution = this.activeExecutions.get(accountId);
+        
+        // If not in memory, try to load from database
+        if (!execution) {
+            console.log(`⚠️ Execution not in memory, attempting to load from database...`);
+            execution = await this.loadExecutionFromDatabase(accountId);
+            
+            if (!execution) {
+                console.log(`⚠️ No active execution found for continuous swipe: ${accountId}`);
+                return { success: false, message: 'Execution not found' };
+            }
+        }
+        
+        if (execution.status !== 'active') {
             console.log(`⚠️ Execution not active, skipping continuous swipe: ${accountId}`);
             return { success: false, message: 'Execution not active' };
         }

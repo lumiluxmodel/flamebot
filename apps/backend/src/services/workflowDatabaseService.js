@@ -117,7 +117,13 @@ class WorkflowDatabaseService {
    */
   async getWorkflowInstanceByAccountId(accountId) {
     const query = `
-        SELECT wi.*, wd.name as workflow_name, wd.type as workflow_type, wd.steps
+        SELECT 
+            wi.*,
+            wd.name as workflow_name,
+            wd.type as workflow_type,
+            wd.steps,
+            wd.config as workflow_config,
+            wd.description as workflow_description
         FROM workflow_instances wi
         JOIN workflow_definitions wd ON wi.workflow_id = wd.id
         WHERE wi.account_id = $1 AND wi.status IN ('active', 'paused')
@@ -125,7 +131,41 @@ class WorkflowDatabaseService {
         LIMIT 1
     `;
     const result = await this.db.query(query, [accountId]);
-    return result.rows[0] || null;
+    
+    if (result.rows.length === 0) return null;
+    
+    // Parse JSON fields
+    const row = result.rows[0];
+    if (row.steps && typeof row.steps === 'string') {
+        try {
+            row.steps = JSON.parse(row.steps);
+        } catch (e) {
+            console.error('Error parsing steps JSON:', e);
+        }
+    }
+    if (row.workflow_config && typeof row.workflow_config === 'string') {
+        try {
+            row.workflow_config = JSON.parse(row.workflow_config);
+        } catch (e) {
+            console.error('Error parsing workflow_config JSON:', e);
+        }
+    }
+    if (row.account_data && typeof row.account_data === 'string') {
+        try {
+            row.account_data = JSON.parse(row.account_data);
+        } catch (e) {
+            console.error('Error parsing account_data JSON:', e);
+        }
+    }
+    if (row.execution_context && typeof row.execution_context === 'string') {
+        try {
+            row.execution_context = JSON.parse(row.execution_context);
+        } catch (e) {
+            console.error('Error parsing execution_context JSON:', e);
+        }
+    }
+    
+    return row;
   }
 
   /**
