@@ -23,7 +23,7 @@ class WorkflowExecutor extends EventEmitter {
             averageExecutionTime: 0
         };
         this.isInitialized = false;
-        
+
         console.log('🎯 Workflow Executor initialized');
     }
 
@@ -40,13 +40,13 @@ class WorkflowExecutor extends EventEmitter {
 
         // Load workflow definitions
         await this.loadWorkflowDefinitions();
-        
+
         // Setup event listeners
         this.setupEventListeners();
-        
+
         // Recovery: Resume interrupted executions
         await this.recoverInterruptedExecutions();
-        
+
         this.isInitialized = true;
         console.log('✅ Workflow Executor initialized successfully');
     }
@@ -56,7 +56,7 @@ class WorkflowExecutor extends EventEmitter {
      */
     async loadWorkflowDefinitions() {
         console.log('📚 Loading workflow definitions...');
-        
+
         // Default workflow definitions (can be overridden from database)
         const defaultDefinitions = {
             'default': {
@@ -250,7 +250,7 @@ class WorkflowExecutor extends EventEmitter {
         // Load from database first, then use defaults for missing ones
         try {
             const dbDefinitions = await workflowDb.getAllWorkflowDefinitions();
-            
+
             // Add database definitions
             for (const dbDef of dbDefinitions) {
                 this.workflowDefinitions.set(dbDef.type, {
@@ -262,7 +262,7 @@ class WorkflowExecutor extends EventEmitter {
                     source: 'database'
                 });
             }
-            
+
             console.log(`   Loaded ${dbDefinitions.length} workflow definitions from database`);
         } catch (error) {
             console.error('⚠️ Failed to load from database, using defaults:', error);
@@ -350,10 +350,10 @@ class WorkflowExecutor extends EventEmitter {
             // Start first step
             await this.scheduleNextStep(execution);
 
-            this.emit('execution:started', { 
-                accountId, 
+            this.emit('execution:started', {
+                accountId,
                 executionId: execution.executionId,
-                workflowType 
+                workflowType
             });
 
             console.log(`✅ Workflow execution started: ${execution.executionId}`);
@@ -442,7 +442,7 @@ class WorkflowExecutor extends EventEmitter {
      */
     async executeWorkflowStep(payload) {
         const { executionId, accountId, stepIndex, stepConfig } = payload;
-        
+
         console.log(`\n🎬 Executing workflow step: ${stepConfig.id}`);
         console.log(`   Account: ${accountId}`);
         console.log(`   Action: ${stepConfig.action}`);
@@ -466,7 +466,7 @@ class WorkflowExecutor extends EventEmitter {
             // Execute step with timeout
             const executionPromise = this.executeStepAction(execution, stepConfig);
             result = await Promise.race([executionPromise, timeoutPromise]);
-            
+
             success = true;
             execution.retryCount = 0; // Reset retry count on success
 
@@ -500,7 +500,7 @@ class WorkflowExecutor extends EventEmitter {
             if (stepConfig.action !== 'activate_continuous_swipe') {
                 execution.currentStep++;
             }
-            
+
             // Update last activity
             execution.lastActivity = new Date();
 
@@ -606,14 +606,14 @@ class WorkflowExecutor extends EventEmitter {
                     bioText: bioResult.generatedBio,
                     success: true
                 };
-
+            case 'swipe':
             case 'swipe_with_spectre':
                 console.log(`💕 Executing swipe with Spectre (${stepConfig.swipeCount} swipes)...`);
-                
+
                 // First configure Spectre with the swipe count
                 console.log(`👻 Configuring Spectre: ${stepConfig.swipeCount} max likes`);
                 await flamebotActionsService.configureSpectreMode(
-                    accountId, 
+                    accountId,
                     stepConfig.swipeCount
                 );
 
@@ -638,10 +638,10 @@ class WorkflowExecutor extends EventEmitter {
             case 'activate_continuous_swipe':
                 console.log(`🔄 Activating continuous swipe mode...`);
                 const continuousTaskId = await this.activateContinuousSwipe(execution, stepConfig);
-                
+
                 // Store continuous swipe task ID
                 execution.continuousSwipeTaskId = continuousTaskId;
-                
+
                 return {
                     action: 'activate_continuous_swipe',
                     continuousTaskId,
@@ -665,7 +665,7 @@ class WorkflowExecutor extends EventEmitter {
      */
     async activateContinuousSwipe(execution, stepConfig) {
         const { accountId } = execution;
-        
+
         // Schedule first continuous swipe
         return await this.scheduleNextContinuousSwipe(execution, stepConfig);
     }
@@ -681,7 +681,7 @@ class WorkflowExecutor extends EventEmitter {
         const swipeCount = Math.floor(
             Math.random() * (stepConfig.maxSwipes - stepConfig.minSwipes + 1)
         ) + stepConfig.minSwipes;
-        
+
         const interval = Math.floor(
             Math.random() * (stepConfig.maxIntervalMs - stepConfig.minIntervalMs)
         ) + stepConfig.minIntervalMs;
@@ -716,7 +716,7 @@ class WorkflowExecutor extends EventEmitter {
      */
     async executeContinuousSwipe(payload) {
         const { executionId, accountId, swipeCount, stepConfig } = payload;
-        
+
         console.log(`\n🔄 Executing continuous swipe: ${swipeCount} swipes for ${accountId}`);
 
         const execution = this.activeExecutions.get(accountId);
@@ -728,10 +728,10 @@ class WorkflowExecutor extends EventEmitter {
         try {
             // Configure Spectre with swipe count
             await flamebotActionsService.configureSpectreMode(accountId, swipeCount);
-            
+
             // Wait for configuration
             await new Promise(resolve => setTimeout(resolve, 2000));
-            
+
             // Start swipe task
             const swipeResult = await flamebotActionsService.startSwipeTask(
                 [accountId],
@@ -754,7 +754,7 @@ class WorkflowExecutor extends EventEmitter {
 
         } catch (error) {
             console.error(`❌ Continuous swipe failed for ${accountId}:`, error);
-            
+
             // Still schedule next attempt (with delay)
             try {
                 const retryDelay = 30 * 60 * 1000; // 30 minutes retry delay
@@ -766,9 +766,9 @@ class WorkflowExecutor extends EventEmitter {
                     payload: payload,
                     maxAttempts: 2
                 });
-                
+
                 execution.continuousSwipeTaskId = retryTaskId;
-                
+
             } catch (scheduleError) {
                 console.error(`❌ Failed to schedule continuous swipe retry:`, scheduleError);
             }
@@ -856,7 +856,7 @@ class WorkflowExecutor extends EventEmitter {
 
         execution.status = 'completed';
         execution.completedAt = new Date();
-        
+
         this.executionStats.successfulExecutions++;
         this.updateAverageExecutionTime(Date.now() - execution.startedAt.getTime());
 
@@ -1017,7 +1017,7 @@ class WorkflowExecutor extends EventEmitter {
     async recoverInterruptedExecutions() {
         try {
             console.log('🔄 Recovering interrupted executions...');
-            
+
             const activeWorkflows = await workflowDb.getActiveWorkflowInstances();
             console.log(`   Found ${activeWorkflows.length} active workflows to recover`);
 
@@ -1117,7 +1117,7 @@ class WorkflowExecutor extends EventEmitter {
         if (total === 1) {
             this.executionStats.averageExecutionTime = duration;
         } else {
-            this.executionStats.averageExecutionTime = 
+            this.executionStats.averageExecutionTime =
                 ((this.executionStats.averageExecutionTime * (total - 1)) + duration) / total;
         }
     }

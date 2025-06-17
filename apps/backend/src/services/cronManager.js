@@ -51,20 +51,20 @@ class CronManager extends EventEmitter {
      */
     async stop() {
         if (!this.isRunning) return;
-
+    
         console.log('🛑 Stopping Cron Manager...');
         this.isRunning = false;
-
+    
         // Stop all cron jobs
-        for (const [cronId, cronJob] of this.cronJobs) {
-            cronJob.stop();
+        for (const [cronId, cronInfo] of this.cronJobs) {
+            cronInfo.job.stop();  // <-- Cambiar cronJob por cronInfo.job
             console.log(`   Stopped cron job: ${cronId}`);
         }
         this.cronJobs.clear();
-
+    
         // Clear scheduled tasks
         this.scheduledTasks.clear();
-
+    
         this.emit('cron:stopped');
         console.log('✅ Cron Manager stopped gracefully');
     }

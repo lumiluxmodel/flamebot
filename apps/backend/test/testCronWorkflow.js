@@ -54,10 +54,10 @@ async function checkServerRunning() {
 }
 
 async function startTestWorkflow(accountId) {
-    console.log(`\n${colors.bright}🚀 Starting TEST Workflow${colors.reset}`);
+    console.log(`\n${colors.bright}🚀 Starting DEFAULT Workflow${colors.reset}`);
     console.log(`   Using Account ID: ${colors.cyan}${accountId}${colors.reset}`);
-    console.log(`   Workflow Type: ${colors.magenta}test${colors.reset}`);
-    console.log(`   Expected Duration: ~3-4 minutes`);
+    console.log(`   Workflow Type: ${colors.magenta}default${colors.reset}`);
+    console.log(`   Expected Duration: ~25+ hours (bio after 24h)`);
     
     try {
         // For testing, we'll use the direct workflow start endpoint
@@ -69,19 +69,25 @@ async function startTestWorkflow(accountId) {
                 authToken: `test-token-${Date.now()}`,
                 importedAt: new Date().toISOString()
             },
-            workflowType: 'test'
+            workflowType: 'default'  // Changed to default
         });
         
         if (response.data.success) {
-            console.log(`${colors.green}✅ Test workflow started successfully!${colors.reset}`);
+            console.log(`${colors.green}✅ Default workflow started successfully!${colors.reset}`);
             console.log(`   Execution ID: ${response.data.data.executionId}`);
             console.log(`   Total Steps: ${response.data.data.totalSteps}`);
             console.log(`   Estimated Duration: ${formatDuration(response.data.data.estimatedDuration)}`);
-            console.log(`\n   ${colors.bright}Test Workflow Steps:${colors.reset}`);
-            console.log(`   1️⃣  Wait 30 seconds`);
-            console.log(`   2️⃣  Add AI prompt`);
-            console.log(`   3️⃣  Swipe 5 times`);
-            console.log(`   4️⃣  Add bio (after 2 min)`);
+            console.log(`\n   ${colors.bright}Default Workflow Steps:${colors.reset}`);
+            console.log(`   1️⃣  Wait 1 hour after import`);
+            console.log(`   2️⃣  Add AI-generated prompt`);
+            console.log(`   3️⃣  Wait 15 minutes`);
+            console.log(`   4️⃣  First swipe - 10 swipes`);
+            console.log(`   5️⃣  Wait 1 hour`);
+            console.log(`   6️⃣  Second swipe - 20 swipes`);
+            console.log(`   7️⃣  Wait 1 hour`);
+            console.log(`   8️⃣  Third swipe - 20 swipes`);
+            console.log(`   9️⃣  Activate continuous swipes (20-30 every 90-180 min)`);
+            console.log(`   🔟  Add bio after 24 hours`);
             
             return {
                 success: true,
@@ -199,6 +205,7 @@ async function getMonitoringDashboard() {
 async function monitorWorkflow(accountId, intervalMs = 5000, maxChecks = 60) {
     console.log(`\n${colors.bright}👀 Monitoring Workflow Progress${colors.reset}`);
     console.log(`   Checking every ${intervalMs/1000} seconds...`);
+    console.log(`   Will monitor for ${(intervalMs * maxChecks) / 60000} minutes`);
     console.log(`   Press Ctrl+C to stop monitoring\n`);
     
     let checkCount = 0;
@@ -223,8 +230,8 @@ async function monitorWorkflow(accountId, intervalMs = 5000, maxChecks = 60) {
         }
         
         // Check if step changed
-        if (workflow.currentStep !== lastStep) {
-            console.log(`\n${colors.green}🎉 STEP COMPLETED!${colors.reset}`);
+        if (workflow.currentStep !== lastStep && workflow.currentStep > 0) {
+            console.log(`\n${colors.green}🎉 STEP ${lastStep + 1} COMPLETED!${colors.reset}`);
             lastStep = workflow.currentStep;
         }
         
@@ -263,7 +270,8 @@ async function testCronWorkflow() {
     console.log(`
 ${colors.bright}╔═══════════════════════════════════════╗
 ║      Cron & Workflow Test Suite       ║
-║         Testing Account Automation    ║
+║       Testing DEFAULT Workflow        ║
+║         (24+ Hour Automation)         ║
 ╚═══════════════════════════════════════╝${colors.reset}
     `);
 
@@ -305,15 +313,15 @@ ${colors.bright}╔════════════════════�
     
     if (existingWorkflow && existingWorkflow.status === 'active') {
         console.log(`${colors.yellow}⚠️  Account already has an active workflow!${colors.reset}`);
-        console.log(`   Would you like to monitor the existing workflow? (y/n)`);
+        console.log(`   Monitoring existing workflow instead...`);
         
-        // For automatic testing, we'll just monitor the existing one
-        await monitorWorkflow(TEST_ACCOUNT_ID, 5000, 60); // 5 seconds, max 5 minutes
+        // Monitor the existing workflow
+        await monitorWorkflow(TEST_ACCOUNT_ID, 10000, 90); // 10 seconds, max 15 minutes
         return;
     }
 
     // Step 4: Start test workflow
-    console.log(`\n${colors.bright}Step 4: Starting Test Workflow${colors.reset}`);
+    console.log(`\n${colors.bright}Step 4: Starting Default Workflow${colors.reset}`);
     const workflowResult = await startTestWorkflow(TEST_ACCOUNT_ID);
     
     if (!workflowResult.success) {
@@ -326,23 +334,34 @@ ${colors.bright}╔════════════════════�
 
     // Step 5: Monitor workflow progress
     console.log(`\n${colors.bright}Step 5: Monitoring Workflow Execution${colors.reset}`);
-    await monitorWorkflow(TEST_ACCOUNT_ID, 5000, 60); // Check every 5s, max 5 min
+    console.log(`${colors.yellow}⚠️  Note: First step is a 1-hour wait. You'll see progress after that.${colors.reset}`);
+    console.log(`${colors.yellow}⚠️  This is a 24+ hour workflow. Monitor will run for 15 minutes then exit.${colors.reset}`);
+    console.log(`${colors.cyan}💡 Tip: Use 'node test/testCronWorkflow.js monitor ${TEST_ACCOUNT_ID}' to continue monitoring later${colors.reset}`);
+    await monitorWorkflow(TEST_ACCOUNT_ID, 10000, 90); // Check every 10s, max 15 min
 
     // Final summary
     console.log(`\n${colors.green}✨ Test Completed!${colors.reset}`);
     console.log(`\n${colors.bright}Summary:${colors.reset}`);
     console.log(`   ${colors.cyan}•${colors.reset} Cron system is operational`);
     console.log(`   ${colors.cyan}•${colors.reset} Task scheduler is working`);
-    console.log(`   ${colors.cyan}•${colors.reset} Workflow execution monitored`);
+    console.log(`   ${colors.cyan}•${colors.reset} Default workflow started`);
     console.log(`   ${colors.cyan}•${colors.reset} All systems functioning correctly`);
     
-    console.log(`\n${colors.bright}Test Workflow Timeline:${colors.reset}`);
+    console.log(`\n${colors.bright}Default Workflow Timeline:${colors.reset}`);
     console.log(`   0:00 - Start`);
-    console.log(`   0:30 - Wait complete → Add prompt`);
-    console.log(`   0:35 - Prompt added → Start swipe`);
-    console.log(`   1:00 - Swipe complete → Schedule bio`);
-    console.log(`   3:00 - Add bio → Workflow complete`);
-    console.log(`\n${colors.gray}Total expected time: ~3-4 minutes${colors.reset}\n`);
+    console.log(`   1:00h - Wait complete → Add prompt`);
+    console.log(`   1:15h - Prompt added → First swipe (10)`);
+    console.log(`   2:15h - Wait → Second swipe (20)`);
+    console.log(`   3:15h - Wait → Third swipe (20)`);
+    console.log(`   3:20h - Activate continuous swipes`);
+    console.log(`   24:00h - Add bio → Workflow complete`);
+    console.log(`\n${colors.gray}Note: Continuous swipes will run indefinitely every 90-180 min${colors.reset}`);
+    console.log(`${colors.yellow}⚠️  This is a long-running workflow (24+ hours)${colors.reset}`);
+    
+    console.log(`\n${colors.bright}To continue monitoring:${colors.reset}`);
+    console.log(`   ${colors.cyan}node test/testCronWorkflow.js monitor ${TEST_ACCOUNT_ID}${colors.reset}`);
+    console.log(`\n${colors.bright}To check status later:${colors.reset}`);
+    console.log(`   ${colors.cyan}node test/testCronWorkflow.js status ${TEST_ACCOUNT_ID}${colors.reset}\n`);
 }
 
 // Quick status check
