@@ -40,6 +40,9 @@ class TaskScheduler extends EventEmitter {
         this.taskExecutors.set('swipe', this.executeSwipeTask.bind(this));
         this.taskExecutors.set('continuous_swipe', this.executeContinuousSwipeTask.bind(this));
         this.taskExecutors.set('spectre_config', this.executeSpectreConfigTask.bind(this));
+
+        this.taskExecutors.set('execute_workflow_step', this.executeWorkflowStep.bind(this));
+        this.taskExecutors.set('execute_continuous_swipe', this.executeContinuousSwipeTask.bind(this));
         
         console.log(`📋 Registered ${this.taskExecutors.size} task executors`);
     }
@@ -119,6 +122,38 @@ class TaskScheduler extends EventEmitter {
                 taskId
             };
         }
+    }
+
+    /**
+ * Execute workflow step - delegates to WorkflowExecutor
+ * @param {Object} task - Task from database
+ * @returns {Promise<Object>} Result
+ */
+async executeWorkflowStep(task) {
+    const payload = task.payload || {};
+    console.log(`🎯 Executing workflow step via TaskScheduler`);
+    
+    // Get WorkflowExecutor instance
+    const workflowExecutor = require('./workflowExecutor');
+    
+    // Call the workflow executor's method
+    return await workflowExecutor.executeWorkflowStep(payload);
+}
+
+    /**
+     * Execute continuous swipe - delegates to WorkflowExecutor
+     * @param {Object} task - Task from database
+     * @returns {Promise<Object>} Result
+     */
+    async executeContinuousSwipeTask(task) {
+        const payload = task.payload || {};
+        console.log(`🔄 Executing continuous swipe via TaskScheduler`);
+        
+        // Get WorkflowExecutor instance
+        const workflowExecutor = require('./workflowExecutor');
+        
+        // Call the workflow executor's method
+        return await workflowExecutor.executeContinuousSwipe(payload);
     }
 
     /**
