@@ -384,22 +384,31 @@ class WorkflowExecutor extends EventEmitter {
             console.log(`⚠️ Execution not active: ${execution.accountId}`);
             return;
         }
-
+    
         const currentStep = execution.workflowDef.steps[execution.currentStep];
         if (!currentStep) {
             // Workflow completed
             await this.completeExecution(execution);
             return;
         }
-
+    
         console.log(`⏰ Scheduling step ${execution.currentStep + 1}/${execution.totalSteps}`);
         console.log(`   Step: ${currentStep.id} (${currentStep.description})`);
-        console.log(`   Delay: ${this.formatDuration(currentStep.delay)}`);
-
+        console.log(`   Delay: ${this.formatDuration(currentStep.delay || 0)}`); // <- Asegurar que delay no sea undefined
+    
         try {
-            // Calculate execution time
-            const executeAt = new Date(Date.now() + currentStep.delay);
-
+            // FIX: Asegurar que el delay sea un número válido
+            const delay = parseInt(currentStep.delay) || 0;
+            const executeAt = new Date(Date.now() + delay);
+            
+            // Validar que la fecha sea válida
+            if (isNaN(executeAt.getTime())) {
+                console.error(`❌ Invalid execution time for step ${currentStep.id}. Delay: ${currentStep.delay}`);
+                throw new Error(`Invalid delay value: ${currentStep.delay}`);
+            }
+    
+            console.log(`   Execute at: ${executeAt.toISOString()}`);
+    
             // Schedule task using TaskScheduler
             const taskId = await taskScheduler.scheduleTask({
                 workflowInstanceId: execution.workflowInstanceId,
@@ -651,6 +660,38 @@ class WorkflowExecutor extends EventEmitter {
                     maxInterval: stepConfig.maxIntervalMs,
                     success: true
                 };
+
+                case 'continuous_swipe':
+                    console.log(`🔄 Executing continuous swipe (${stepConfig.swipeCount || 'calculated'} swipes)...`);
+                    
+                    // Calculate random swipe count if not provided
+                    const swipeCount = stepConfig.swipeCount || 
+                        Math.floor(Math.random() * ((stepConfig.maxSwipes || 30) - (stepConfig.minSwipes || 20) + 1)) + (stepConfig.minSwipes || 20);
+                    
+                    // Configure Spectre with the swipe count
+                    console.log(`👻 Configuring Spectre: ${swipeCount} max likes`);
+                    await flamebotActionsService.configureSpectreMode(
+                        accountId, 
+                        swipeCount
+                    );
+                
+                    // Wait for configuration to apply
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                    // Start swipe task
+                    console.log(`🚀 Starting continuous swipe task`);
+                    const continuousSwipeResult = await flamebotActionsService.startSwipeTask(
+                        [accountId],
+                        `Continuous-swipe ${swipeCount} - ${stepConfig.id}`
+                    );
+                
+                    return {
+                        action: 'continuous_swipe',
+                        swipeCount: swipeCount,
+                        taskId: continuousSwipeResult.taskId,
+                        spectreConfigured: true,
+                        success: true
+                    };
 
             default:
                 throw new Error(`Unknown step action: ${stepConfig.action}`);

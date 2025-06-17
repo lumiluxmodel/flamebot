@@ -171,6 +171,11 @@ async executeWorkflowStep(task) {
             maxAttempts = 3
         } = taskConfig;
 
+         // VALIDAR QUE scheduledFor SEA UNA FECHA VÁLIDA
+        if (!scheduledFor || !(scheduledFor instanceof Date) || isNaN(scheduledFor.getTime())) {
+            throw new Error(`Invalid scheduledFor date: ${scheduledFor}`);
+        }
+
         const taskId = `${stepId}_${workflowInstanceId}_${Date.now()}`;
 
         try {

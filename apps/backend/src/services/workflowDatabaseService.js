@@ -596,53 +596,44 @@ class WorkflowDatabaseService {
     const dateStr = date.toISOString().split("T")[0];
 
     const query = `
-            INSERT INTO workflow_stats (
-                date, total_workflows, active_workflows, completed_workflows,
-                failed_workflows, stopped_workflows, total_steps_executed,
-                successful_steps, failed_steps, avg_workflow_duration_hours,
-                total_accounts_automated
-            )
-            SELECT 
-                $1::date,
-                COUNT(*),
-                COUNT(*) FILTER (WHERE status = 'active'),
-                COUNT(*) FILTER (WHERE status = 'completed'),
-                COUNT(*) FILTER (WHERE status = 'failed'),
-                COUNT(*) FILTER (WHERE status = 'stopped'),
-                COALESCE(log_stats.total_steps, 0),
-                COALESCE(log_stats.successful_steps, 0),
-                COALESCE(log_stats.failed_steps, 0),
-                AVG(EXTRACT(EPOCH FROM (completed_at - started_at))/3600) 
-                    FILTER (WHERE status = 'completed'),
-                COUNT(DISTINCT account_id)
-            FROM workflow_instances wi
-            LEFT JOIN (
-                SELECT 
-                    COUNT(*) as total_steps,
-                    COUNT(*) FILTER (WHERE success = true) as successful_steps,
-                    COUNT(*) FILTER (WHERE success = false) as failed_steps
-                FROM workflow_execution_log
-                WHERE executed_at::date = $1::date
-            ) log_stats ON true
-            WHERE wi.created_at::date <= $1::date
-            ON CONFLICT (date) DO UPDATE SET
-                total_workflows = EXCLUDED.total_workflows,
-                active_workflows = EXCLUDED.active_workflows,
-                completed_workflows = EXCLUDED.completed_workflows,
-                failed_workflows = EXCLUDED.failed_workflows,
-                stopped_workflows = EXCLUDED.stopped_workflows,
-                total_steps_executed = EXCLUDED.total_steps_executed,
-                successful_steps = EXCLUDED.successful_steps,
-                failed_steps = EXCLUDED.failed_steps,
-                avg_workflow_duration_hours = EXCLUDED.avg_workflow_duration_hours,
-                total_accounts_automated = EXCLUDED.total_accounts_automated,
-                updated_at = CURRENT_TIMESTAMP
-        `;
+        INSERT INTO workflow_stats (
+            date, total_workflows, active_workflows, completed_workflows,
+            failed_workflows, stopped_workflows, total_steps_executed,
+            successful_steps, failed_steps, avg_workflow_duration_hours,
+            total_accounts_automated
+        )
+        SELECT 
+            $1::date,
+            COUNT(DISTINCT wi.id),
+            COUNT(DISTINCT wi.id) FILTER (WHERE wi.status = 'active'),
+            COUNT(DISTINCT wi.id) FILTER (WHERE wi.status = 'completed'),
+            COUNT(DISTINCT wi.id) FILTER (WHERE wi.status = 'failed'),
+            COUNT(DISTINCT wi.id) FILTER (WHERE wi.status = 'stopped'),
+            (SELECT COUNT(*) FROM workflow_execution_log WHERE executed_at::date = $1::date),
+            (SELECT COUNT(*) FROM workflow_execution_log WHERE executed_at::date = $1::date AND success = true),
+            (SELECT COUNT(*) FROM workflow_execution_log WHERE executed_at::date = $1::date AND success = false),
+            AVG(EXTRACT(EPOCH FROM (wi.completed_at - wi.started_at))/3600) 
+                FILTER (WHERE wi.status = 'completed'),
+            COUNT(DISTINCT wi.account_id)
+        FROM workflow_instances wi
+        WHERE wi.created_at::date <= $1::date
+        ON CONFLICT (date) DO UPDATE SET
+            total_workflows = EXCLUDED.total_workflows,
+            active_workflows = EXCLUDED.active_workflows,
+            completed_workflows = EXCLUDED.completed_workflows,
+            failed_workflows = EXCLUDED.failed_workflows,
+            stopped_workflows = EXCLUDED.stopped_workflows,
+            total_steps_executed = EXCLUDED.total_steps_executed,
+            successful_steps = EXCLUDED.successful_steps,
+            failed_steps = EXCLUDED.failed_steps,
+            avg_workflow_duration_hours = EXCLUDED.avg_workflow_duration_hours,
+            total_accounts_automated = EXCLUDED.total_accounts_automated,
+            updated_at = CURRENT_TIMESTAMP
+    `;
 
     const result = await this.db.query(query, [dateStr]);
     return { success: true, date: dateStr };
-  }
-
+}
   // ========== RECOVERY OPERATIONS ==========
 
   /**
