@@ -97,25 +97,10 @@ const AnimatedCounter = ({ value, duration = 2000 }: { value: number; duration?:
 
 // Custom ScrollArea Component
 const ScrollArea = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={`overflow-auto ${className || ''}`} style={{
+  <div className={`overflow-auto custom-scrollbar ${className || ''}`} style={{
     scrollbarWidth: 'thin',
     scrollbarColor: '#eab308 #18181b'
   }}>
-    <style jsx>{`
-      div::-webkit-scrollbar {
-        width: 4px;
-      }
-      div::-webkit-scrollbar-track {
-        background: #18181b;
-      }
-      div::-webkit-scrollbar-thumb {
-        background: #eab308;
-        border-radius: 2px;
-      }
-      div::-webkit-scrollbar-thumb:hover {
-        background: #f59e0b;
-      }
-    `}</style>
     {children}
   </div>
 );
@@ -636,80 +621,6 @@ export default function FlameBotDashboard() {
         <div className="absolute inset-0 opacity-[0.015] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.05)_2px,rgba(255,255,255,0.05)_4px)]" />
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-yellow-500/30 to-transparent animate-pulse" />
       </div>
-
-      {/* Enhanced CSS Animations */}
-      <style jsx>{`
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(30px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeInScale {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(50px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes pulseBorder {
-          0%, 100% { border-color: rgba(234, 179, 8, 0.2); }
-          50% { border-color: rgba(234, 179, 8, 0.5); }
-        }
-        @keyframes pulseDot {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        
-        .animate-slide-up { animation: slideUp 0.8s ease-out; }
-        .animate-fade-in-scale { animation: fadeInScale 0.6s ease-out; }
-        .animate-fade-in-up { animation: fadeInUp 0.8s ease-out; }
-        .animate-fade-in { animation: fadeIn 0.6s ease-out; }
-        .animate-pulse-border { animation: pulseBorder 2s ease-in-out infinite; }
-        .pulse-dot { animation: pulseDot 2s ease-in-out infinite; }
-        
-        .cyber-card {
-          @apply border border-zinc-900 bg-zinc-950/20 backdrop-blur-sm;
-          position: relative;
-        }
-        .cyber-card::before {
-          content: '';
-          position: absolute;
-          top: -1px;
-          left: -1px;
-          right: -1px;
-          bottom: -1px;
-          background: linear-gradient(45deg, transparent, rgba(234, 179, 8, 0.1), transparent);
-          border-radius: inherit;
-          z-index: -1;
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-        .cyber-card:hover::before {
-          opacity: 1;
-        }
-        
-        .cyber-button {
-          position: relative;
-          overflow: hidden;
-        }
-        .cyber-button::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: -100%;
-          width: 100%;
-          height: 100%;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-          transition: left 0.5s ease;
-        }
-        .cyber-button:hover::before {
-          left: 100%;
-        }
-      `}</style>
 
       <div className="flex h-screen relative">
         {/* Mobile Menu Button */}
