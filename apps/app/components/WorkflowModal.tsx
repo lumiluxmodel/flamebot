@@ -151,21 +151,21 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-950/95 backdrop-blur-xl border border-yellow-500/20 max-w-4xl w-full max-h-[90vh] overflow-auto animate-fade-in-scale">
+    <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-zinc-950/95 backdrop-blur-xl border border-zinc-300 dark:border-yellow-500/20 max-w-4xl w-full max-h-[90vh] overflow-auto animate-fade-in-scale shadow-2xl dark:shadow-none">
         <div className="p-6">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <h2 className="text-xl md:text-2xl font-bold mb-1 text-white">
+              <h2 className="text-xl md:text-2xl font-bold mb-1 text-zinc-900 dark:text-white">
                 {isEdit ? 'EDIT WORKFLOW' : 'CREATE WORKFLOW'}
               </h2>
-              <div className="text-[10px] text-zinc-500">
+              <div className="text-[10px] text-zinc-600 dark:text-zinc-500">
                 {isEdit ? 'ワークフローを編集' : '新しいワークフローを作成'}
               </div>
             </div>
             <button 
               onClick={onClose} 
-              className="text-zinc-600 hover:text-white transition-colors p-1"
+              className="text-zinc-600 hover:text-zinc-900 dark:hover:text-white transition-colors p-1"
             >
               <ClientOnlyIcon>
                 <X className="w-5 h-5" />
@@ -183,7 +183,7 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
                   placeholder="Custom Workflow"
                   value={workflowName}
                   onChange={(e) => setWorkflowName(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 px-4 py-3 text-sm focus:border-yellow-500/50 outline-none transition-colors"
+                  className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white focus:border-yellow-500/50 outline-none transition-colors"
                 />
               </div>
 
@@ -195,10 +195,10 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
                   value={workflowType}
                   onChange={(e) => setWorkflowType(e.target.value)}
                   disabled={isEdit}
-                  className="w-full bg-zinc-900 border border-zinc-800 px-4 py-3 text-sm font-mono focus:border-yellow-500/50 outline-none transition-colors disabled:opacity-50"
+                  className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 px-4 py-3 text-sm font-mono text-zinc-900 dark:text-white focus:border-yellow-500/50 outline-none transition-colors disabled:opacity-50"
                 />
                 {isEdit && (
-                  <div className="text-[9px] text-zinc-500 mt-1">Type cannot be changed when editing</div>
+                  <div className="text-[9px] text-zinc-600 dark:text-zinc-500 mt-1">Type cannot be changed when editing</div>
                 )}
               </div>
             </div>
@@ -209,7 +209,7 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
                 placeholder="Describe your workflow..."
                 value={workflowDescription}
                 onChange={(e) => setWorkflowDescription(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 px-4 py-3 text-sm h-20 focus:border-yellow-500/50 outline-none resize-none transition-colors"
+                className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white h-20 focus:border-yellow-500/50 outline-none resize-none transition-colors"
               />
             </div>
 
@@ -219,7 +219,7 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
                 <label className="text-[10px] text-zinc-600">WORKFLOW_STEPS ({workflowSteps.length})</label>
                 <button 
                   onClick={addStep}
-                  className="text-[10px] text-yellow-500 hover:text-yellow-400 flex items-center gap-1 transition-colors"
+                  className="text-[10px] text-yellow-600 dark:text-yellow-500 hover:text-yellow-700 dark:hover:text-yellow-400 flex items-center gap-1 transition-colors"
                 >
                   <ClientOnlyIcon>
                     <Plus className="w-3 h-3" />
@@ -232,15 +232,15 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
                   {workflowSteps.map((step, i) => {
                     const selectedAction = actionOptions.find(opt => opt.value === step.action);
                     return (
-                      <div key={i} className="bg-zinc-900 border border-zinc-800 p-4 rounded">
+                      <div key={i} className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded">
                         <div className="flex items-center gap-3 mb-3">
-                          <div className="w-6 h-6 rounded-full border border-yellow-500/20 flex items-center justify-center text-[9px] flex-shrink-0">
+                          <div className="w-6 h-6 rounded-full border border-yellow-500/50 flex items-center justify-center text-[9px] text-yellow-600 dark:text-yellow-500 flex-shrink-0">
                             {i + 1}
                           </div>
                           <select 
                             value={step.action}
                             onChange={(e) => updateStep(i, 'action', e.target.value)}
-                            className="bg-zinc-800 text-xs px-3 py-2 outline-none border border-zinc-700 focus:border-yellow-500/50 transition-colors"
+                            className="bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-white px-3 py-2 outline-none border border-zinc-300 dark:border-zinc-700 focus:border-yellow-500/50 transition-colors"
                           >
                             {actionOptions.map(option => (
                               <option key={option.value} value={option.value}>{option.label}</option>
@@ -251,11 +251,11 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
                             placeholder="Step description"
                             value={step.description}
                             onChange={(e) => updateStep(i, 'description', e.target.value)}
-                            className="flex-1 bg-zinc-800 px-3 py-2 text-xs outline-none border border-zinc-700 focus:border-yellow-500/50 transition-colors"
+                            className="flex-1 bg-white dark:bg-zinc-800 px-3 py-2 text-xs text-zinc-900 dark:text-white outline-none border border-zinc-300 dark:border-zinc-700 focus:border-yellow-500/50 transition-colors"
                           />
                           <button 
                             onClick={() => removeStep(i)}
-                            className="text-red-500 hover:text-red-400 p-1 transition-colors"
+                            className="text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1 transition-colors"
                           >
                             <ClientOnlyIcon>
                               <X className="w-4 h-4" />
@@ -267,26 +267,26 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 ml-9">
                           {selectedAction?.fields.includes('delay') && (
                             <div>
-                              <label className="text-[9px] text-zinc-500 block mb-1">DELAY</label>
+                              <label className="text-[9px] text-zinc-600 dark:text-zinc-500 block mb-1">DELAY</label>
                               <input 
                                 type="text" 
                                 placeholder="60s, 5m, 1h"
                                 value={formatDelay(step.delay)}
                                 onChange={(e) => updateStep(i, 'delay', parseDelay(e.target.value))}
-                                className="w-full bg-zinc-800 px-2 py-1 text-xs outline-none border border-zinc-700 focus:border-yellow-500/50 transition-colors"
+                                className="w-full bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-900 dark:text-white outline-none border border-zinc-300 dark:border-zinc-700 focus:border-yellow-500/50 transition-colors"
                               />
                             </div>
                           )}
 
                           {selectedAction?.fields.includes('swipeCount') && (
                             <div>
-                              <label className="text-[9px] text-zinc-500 block mb-1">SWIPE COUNT</label>
+                              <label className="text-[9px] text-zinc-600 dark:text-zinc-500 block mb-1">SWIPE COUNT</label>
                               <input 
                                 type="number" 
                                 placeholder="10"
                                 value={step.swipeCount || ''}
                                 onChange={(e) => updateStep(i, 'swipeCount', parseInt(e.target.value) || 0)}
-                                className="w-full bg-zinc-800 px-2 py-1 text-xs outline-none border border-zinc-700 focus:border-yellow-500/50 transition-colors"
+                                className="w-full bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-900 dark:text-white outline-none border border-zinc-300 dark:border-zinc-700 focus:border-yellow-500/50 transition-colors"
                               />
                             </div>
                           )}
@@ -294,23 +294,23 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
                           {selectedAction?.fields.includes('minSwipes') && (
                             <>
                               <div>
-                                <label className="text-[9px] text-zinc-500 block mb-1">MIN SWIPES</label>
+                                <label className="text-[9px] text-zinc-600 dark:text-zinc-500 block mb-1">MIN SWIPES</label>
                                 <input 
                                   type="number" 
                                   placeholder="25"
                                   value={step.minSwipes || ''}
                                   onChange={(e) => updateStep(i, 'minSwipes', parseInt(e.target.value) || 0)}
-                                  className="w-full bg-zinc-800 px-2 py-1 text-xs outline-none border border-zinc-700 focus:border-yellow-500/50 transition-colors"
+                                  className="w-full bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-900 dark:text-white outline-none border border-zinc-300 dark:border-zinc-700 focus:border-yellow-500/50 transition-colors"
                                 />
                               </div>
                               <div>
-                                <label className="text-[9px] text-zinc-500 block mb-1">MAX SWIPES</label>
+                                <label className="text-[9px] text-zinc-600 dark:text-zinc-500 block mb-1">MAX SWIPES</label>
                                 <input 
                                   type="number" 
                                   placeholder="40"
                                   value={step.maxSwipes || ''}
                                   onChange={(e) => updateStep(i, 'maxSwipes', parseInt(e.target.value) || 0)}
-                                  className="w-full bg-zinc-800 px-2 py-1 text-xs outline-none border border-zinc-700 focus:border-yellow-500/50 transition-colors"
+                                  className="w-full bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-900 dark:text-white outline-none border border-zinc-300 dark:border-zinc-700 focus:border-yellow-500/50 transition-colors"
                                 />
                               </div>
                             </>
@@ -319,23 +319,23 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
                           {selectedAction?.fields.includes('minIntervalMs') && (
                             <>
                               <div>
-                                <label className="text-[9px] text-zinc-500 block mb-1">MIN INTERVAL</label>
+                                <label className="text-[9px] text-zinc-600 dark:text-zinc-500 block mb-1">MIN INTERVAL</label>
                                 <input 
                                   type="text" 
                                   placeholder="2h"
                                   value={formatDelay(step.minIntervalMs || 0)}
                                   onChange={(e) => updateStep(i, 'minIntervalMs', parseDelay(e.target.value))}
-                                  className="w-full bg-zinc-800 px-2 py-1 text-xs outline-none border border-zinc-700 focus:border-yellow-500/50 transition-colors"
+                                  className="w-full bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-900 dark:text-white outline-none border border-zinc-300 dark:border-zinc-700 focus:border-yellow-500/50 transition-colors"
                                 />
                               </div>
                               <div>
-                                <label className="text-[9px] text-zinc-500 block mb-1">MAX INTERVAL</label>
+                                <label className="text-[9px] text-zinc-600 dark:text-zinc-500 block mb-1">MAX INTERVAL</label>
                                 <input 
                                   type="text" 
                                   placeholder="4h"
                                   value={formatDelay(step.maxIntervalMs || 0)}
                                   onChange={(e) => updateStep(i, 'maxIntervalMs', parseDelay(e.target.value))}
-                                  className="w-full bg-zinc-800 px-2 py-1 text-xs outline-none border border-zinc-700 focus:border-yellow-500/50 transition-colors"
+                                  className="w-full bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-900 dark:text-white outline-none border border-zinc-300 dark:border-zinc-700 focus:border-yellow-500/50 transition-colors"
                                 />
                               </div>
                             </>
@@ -349,19 +349,19 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
                                 onChange={(e) => updateStep(i, 'critical', e.target.checked)}
                                 className="w-3 h-3"
                               />
-                              <label className="text-[9px] text-zinc-500">CRITICAL</label>
+                              <label className="text-[9px] text-zinc-600 dark:text-zinc-500">CRITICAL</label>
                             </div>
                           )}
 
                           {selectedAction?.fields.includes('timeout') && (
                             <div>
-                              <label className="text-[9px] text-zinc-500 block mb-1">TIMEOUT</label>
+                              <label className="text-[9px] text-zinc-600 dark:text-zinc-500 block mb-1">TIMEOUT</label>
                               <input 
                                 type="text" 
                                 placeholder="2m"
                                 value={step.timeout ? formatDelay(step.timeout) : ''}
                                 onChange={(e) => updateStep(i, 'timeout', parseDelay(e.target.value))}
-                                className="w-full bg-zinc-800 px-2 py-1 text-xs outline-none border border-zinc-700 focus:border-yellow-500/50 transition-colors"
+                                className="w-full bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-900 dark:text-white outline-none border border-zinc-300 dark:border-zinc-700 focus:border-yellow-500/50 transition-colors"
                               />
                             </div>
                           )}
@@ -385,7 +385,7 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
               <button 
                 onClick={onClose}
                 disabled={saving}
-                className="flex-1 border border-zinc-800 py-3 text-[11px] uppercase tracking-wider hover:border-zinc-700 transition-colors disabled:opacity-50"
+                className="flex-1 border border-zinc-300 dark:border-zinc-800 py-3 text-[11px] uppercase tracking-wider hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-700 transition-colors disabled:opacity-50"
               >
                 CANCEL
               </button>

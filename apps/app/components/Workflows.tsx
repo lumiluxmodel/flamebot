@@ -58,12 +58,12 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
 
   const getWorkflowAccent = (type: string) => {
     const accentMapping: Record<string, string> = {
-      'default': 'text-yellow-500',
-      'aggressive': 'text-red-500',
-      'test': 'text-emerald-500',
-      'premium': 'text-blue-500'
+      'default': 'text-yellow-600 dark:text-yellow-500',
+      'aggressive': 'text-red-600 dark:text-red-500',
+      'test': 'text-emerald-600 dark:text-emerald-500',
+      'premium': 'text-blue-600 dark:text-blue-500'
     };
-    return accentMapping[type] || 'text-zinc-500';
+    return accentMapping[type] || 'text-zinc-600 dark:text-zinc-500';
   };
 
   // Transform backend data to frontend format
@@ -143,8 +143,8 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
     return (
       <div>
         <header className="mb-8 md:mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-white">WORKFLOWS</h1>
-          <div className="text-[11px] text-zinc-500">AUTOMATION PROCESSES</div>
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-zinc-900 dark:text-white">WORKFLOWS</h1>
+          <div className="text-[11px] text-zinc-600 dark:text-zinc-500">AUTOMATION PROCESSES</div>
         </header>
         <LoadingSpinner />
       </div>
@@ -155,8 +155,8 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
     <div>
       <header className="mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-white">WORKFLOWS</h1>
-          <div className="text-[11px] text-zinc-500">AUTOMATION PROCESSES</div>
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-zinc-900 dark:text-white">WORKFLOWS</h1>
+          <div className="text-[11px] text-zinc-600 dark:text-zinc-500">AUTOMATION PROCESSES</div>
         </div>
         <div className="flex gap-2">
           <button 
@@ -184,31 +184,31 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
                   <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
                     <div>
                       <div className="text-[10px] text-zinc-600 mb-2">EXECUTION_ID</div>
-                      <div className="font-mono text-sm break-all">{workflow.executionId}</div>
+                      <div className="font-mono text-sm text-zinc-800 dark:text-white break-all">{workflow.executionId}</div>
                     </div>
-                    <div className="text-[11px] text-yellow-500 pulse-dot">● {workflow.status.toUpperCase()}</div>
+                    <div className="text-[11px] text-yellow-600 dark:text-yellow-500 pulse-dot">● {workflow.status.toUpperCase()}</div>
                   </div>
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 text-sm mb-6">
                     <div>
                       <div className="text-[10px] text-zinc-600 mb-2">TYPE</div>
-                      <div>{workflow.workflowType.toUpperCase()}</div>
+                      <div className="text-zinc-800 dark:text-white">{workflow.workflowType.toUpperCase()}</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-zinc-600 mb-2">PROGRESS</div>
-                      <div className="text-yellow-500">{workflow.progress}%</div>
+                      <div className="text-yellow-600 dark:text-yellow-500">{workflow.progress}%</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-zinc-600 mb-2">CURRENT STEP</div>
-                      <div>{workflow.currentStep}</div>
+                      <div className="text-zinc-800 dark:text-white">{workflow.currentStep}</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-zinc-600 mb-2">STEPS</div>
-                      <div>{Math.floor((workflow.progress / 100) * workflow.totalSteps)}/{workflow.totalSteps}</div>
+                      <div className="text-zinc-800 dark:text-white">{Math.floor((workflow.progress / 100) * workflow.totalSteps)}/{workflow.totalSteps}</div>
                     </div>
                   </div>
 
-                  <div className="bg-zinc-950 h-2 w-full rounded-full overflow-hidden">
+                  <div className="bg-zinc-200 dark:bg-zinc-950 h-2 w-full rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full transition-all duration-1000"
                       style={{ width: `${workflow.progress}%` }}
@@ -231,15 +231,15 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
                   <div key={task.task_id} className="cyber-card border-blue-500/20 p-4">
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <div className="text-sm font-mono">{task.task_name}</div>
-                        <div className="text-[10px] text-zinc-500">
+                        <div className="text-sm font-mono text-zinc-800 dark:text-white">{task.task_name}</div>
+                        <div className="text-[10px] text-zinc-600 dark:text-zinc-500">
                           {task.account_ids.length} accounts • {task.status}
                         </div>
                       </div>
                       <button
                         onClick={() => handleStopSwipeTask(task.task_id)}
                         disabled={actionLoading === `stop_${task.task_id}`}
-                        className="text-red-500 hover:text-red-400 p-1 transition-colors disabled:opacity-50"
+                        className="text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1 transition-colors disabled:opacity-50"
                       >
                         <ClientOnlyIcon>
                           {actionLoading === `stop_${task.task_id}` ? (
@@ -266,7 +266,7 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
                 <span>AVAILABLE_DEFINITIONS ({transformedDefinitions.length})</span>
                 <div className="flex-1 h-[1px] bg-gradient-to-r from-yellow-500/20 to-transparent"></div>
               </div>
-              <div className="text-[10px] text-yellow-500">サイバー サイバー サイバー</div>
+              <div className="text-[10px] text-yellow-600 dark:text-yellow-500">サイバー サイバー サイバー</div>
             </div>
             
             <div className="space-y-6 md:space-y-8">
@@ -279,29 +279,32 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
                   <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
                     <div className="flex-1">
                       <div className="text-[10px] text-zinc-600 mb-2">TYPE_{String(i+1).padStart(2, '0')}</div>
-                      <div className="text-xl md:text-2xl font-bold mb-2 group-hover:text-yellow-500 transition-colors">
+                      <div className="text-xl md:text-2xl font-bold mb-2 text-zinc-900 dark:text-white group-hover:text-yellow-600 dark:group-hover:text-yellow-500 transition-colors">
                         {workflow.type.toUpperCase()}
                       </div>
-                      <div className="text-[11px] text-zinc-500">{workflow.description}</div>
+                      <div className="text-[11px] text-zinc-600 dark:text-zinc-500">{workflow.description}</div>
                     </div>
                     <div className="flex gap-2">
                       {[
                         { 
                           icon: Copy, 
-                          color: 'text-blue-500', 
+                          color: 'text-blue-600 dark:text-blue-500', 
+                          colorHover: 'hover:text-blue-700 dark:hover:text-blue-400',
                           onClick: () => handleCloneWorkflow(workflow),
                           loading: actionLoading === `clone_${workflow.type}`,
                           title: 'Clone Workflow'
                         },
                         { 
                           icon: Edit2, 
-                          color: 'text-yellow-500', 
+                          color: 'text-yellow-600 dark:text-yellow-500', 
+                          colorHover: 'hover:text-yellow-700 dark:hover:text-yellow-400',
                           onClick: () => { setEditingWorkflow(workflow); setShowEditModal(true); },
                           title: 'Edit Workflow'
                         },
                         { 
                           icon: Trash2, 
-                          color: 'text-red-500',
+                          color: 'text-red-600 dark:text-red-500',
+                          colorHover: 'hover:text-red-700 dark:hover:text-red-400',
                           onClick: () => handleDeleteWorkflow(workflow),
                           loading: actionLoading === `delete_${workflow.type}`,
                           title: 'Delete Workflow',
@@ -315,7 +318,7 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
                             onClick={action.onClick}
                             disabled={action.disabled || action.loading}
                             title={action.title}
-                            className={`p-2 text-zinc-600 hover:${action.color} transition-all duration-300 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed`}
+                            className={`p-2 text-zinc-500 dark:text-zinc-600 ${action.colorHover} transition-all duration-300 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed`}
                           >
                             <ClientOnlyIcon>
                               {action.loading ? (
@@ -337,30 +340,30 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
                     </div>
                     <div>
                       <div className="text-[10px] text-zinc-600 mb-1">EST. DURATION</div>
-                      <div>{workflow.duration}</div>
+                      <div className="text-zinc-800 dark:text-white">{workflow.duration}</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-zinc-600 mb-1">VERSION</div>
-                      <div>v1.0</div>
+                      <div className="text-zinc-800 dark:text-white">v1.0</div>
                     </div>
                   </div>
 
                   {/* Step Details */}
-                  <div className="border-t border-zinc-900 pt-6">
+                  <div className="border-t border-zinc-200 dark:border-zinc-900 pt-6">
                     <div className="text-[10px] text-zinc-600 mb-4">WORKFLOW_STEPS</div>
                     <div className="space-y-3">
                       {workflow.steps.map((step, j) => (
-                        <div key={j} className="flex items-center gap-4 text-[11px] hover:bg-zinc-950/50 p-2 rounded transition-colors">
+                        <div key={j} className="flex items-center gap-4 text-[11px] hover:bg-zinc-50 dark:hover:bg-zinc-950/50 p-2 rounded transition-colors">
                           <div className={`w-6 h-6 rounded-full border ${workflow.color} flex items-center justify-center flex-shrink-0`}>
-                            <span className="text-[9px]">{j+1}</span>
+                            <span className="text-[9px] text-zinc-700 dark:text-zinc-300">{j+1}</span>
                           </div>
                           <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4">
-                            <span className="text-zinc-400">{step.description}</span>
+                            <span className="text-zinc-600 dark:text-zinc-400">{step.description}</span>
                             <span className={`font-mono ${workflow.accent}`}>{step.action}</span>
                             <span className="text-zinc-600">{formatDelay(step.delay)}</span>
                           </div>
                           {step.critical && (
-                            <div className="text-red-500 text-[9px] font-bold">CRITICAL</div>
+                            <div className="text-red-600 dark:text-red-500 text-[9px] font-bold">CRITICAL</div>
                           )}
                         </div>
                       ))}

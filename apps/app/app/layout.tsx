@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Orbitron, Share_Tech_Mono } from "next/font/google";
 import "./globals.css";
+import ThemeToggle from "../components/ThemeToggle";
 
 const orbitron = Orbitron({
   variable: "--font-orbitron",
@@ -40,10 +41,34 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  const savedTheme = localStorage.getItem('theme');
+                  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  const theme = savedTheme || (prefersDark ? 'dark' : 'light');
+                  
+                  if (theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch {
+                  document.documentElement.classList.add('dark');
+                }
+              })();
+            `,
+          }}
+        />
+      </head>
       <body
-        className={`${orbitron.variable} ${shareTechMono.variable} font-mono antialiased bg-black text-white overflow-hidden`}
+        className={`${orbitron.variable} ${shareTechMono.variable} font-mono font-medium antialiased bg-white dark:bg-black text-zinc-900 dark:text-white overflow-hidden transition-colors duration-300`}
       >
+        <ThemeToggle />
         {children}
       </body>
     </html>
