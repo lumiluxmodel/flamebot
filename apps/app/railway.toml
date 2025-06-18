@@ -1,0 +1,30 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "pnpm start"
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[deploy.envs]
+NODE_ENV = "production"
+NEXT_TELEMETRY_DISABLED = "1"
+PORT = "3000"
+
+# Variables de entorno para la aplicación
+# Ajusta estas según tus necesidades
+DATABASE_URL = ""
+REDIS_URL = ""
+JWT_SECRET = ""
+API_KEY = ""
+
+[deploy.regions]
+primary = "us-east-1"
+
+[deploy.scaling]
+minInstances = 1
+maxInstances = 3
+targetCpuUtilizationPercent = 70
+targetMemoryUtilizationPercent = 80 
