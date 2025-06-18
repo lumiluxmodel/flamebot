@@ -13,7 +13,7 @@
     "test:swipe": "node test/testSwipe.js",
     "test:spectre": "node test/testSpectre.js",
     "test:bioprompt": "node test/testBioPrompt.js",
-    "test:all": "npm run test:ai && npm run test:import && npm run test:swipe && npm run test:spectre && npm run test:bioprompt"
+    "test:all": "pnpm run test:ai && pnpm run test:import && pnpm run test:swipe && pnpm run test:spectre && pnpm run test:bioprompt"
   },
   "dependencies": {
     "@flamebot/shared": "*",
