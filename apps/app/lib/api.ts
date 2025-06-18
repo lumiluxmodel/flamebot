@@ -1,6 +1,36 @@
 // lib/api.ts - API service para conectar con el backend
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3090/api';
 
+// New types for additional APIs
+export interface ModelData {
+  models: string[];
+  colors: Record<string, string>;
+}
+
+export interface ActiveSwipeTask {
+  task_id: string;
+  task_name: string;
+  account_ids: string[];
+  status: string;
+  source: string;
+  started_at: string;
+}
+
+export interface AccountWorkflowStatus {
+  executionId: string;
+  accountId: string;
+  workflowType: string;
+  progress: number;
+  status: string;
+  currentStep: string;
+  totalSteps: number;
+  startedAt: string;
+  nextStep?: {
+    description: string;
+    delay: number;
+  };
+}
+
 // Alert types
 export interface Alert {
   id: string;
@@ -372,6 +402,128 @@ class ApiClient {
       method: 'POST',
     });
   }
+
+  // New API endpoints
+  async getModels(): Promise<ModelData> {
+    return this.request<ModelData>('/accounts/models');
+  }
+
+  async getActiveSwipeTasks(): Promise<{
+    tasks: ActiveSwipeTask[];
+    total: number;
+  }> {
+    const data = await this.request<ActiveSwipeTask[]>('/actions/swipe/active');
+    return {
+      tasks: Array.isArray(data) ? data : [],
+      total: Array.isArray(data) ? data.length : 0
+    };
+  }
+
+
+  async getAllActiveWorkflows(): Promise<{
+    workflows: ActiveWorkflow[];
+    summary: {
+      totalActive: number;
+      byType: Record<string, number>;
+      byStatus: Record<string, number>;
+    };
+  }> {
+    return this.request('/accounts/workflows/active');
+  }
+
+  async getWorkflowStatsFromAccounts(): Promise<WorkflowStats> {
+    return this.request<WorkflowStats>('/accounts/workflows/stats');
+  }
+
+  async pauseAllWorkflows(): Promise<{ message: string; affectedWorkflows: number }> {
+    return this.request('/accounts/workflows/pause-all', {
+      method: 'POST',
+    });
+  }
+
+  async resumeAllWorkflows(): Promise<{ message: string; affectedWorkflows: number }> {
+    return this.request('/accounts/workflows/resume-all', {
+      method: 'POST',
+    });
+  }
+
+  // Workflow definition management
+  async cloneWorkflowDefinition(sourceType: string, cloneData: {
+    newType: string;
+    newName: string;
+    newDescription?: string;
+  }): Promise<{
+    sourceType: string;
+    newType: string;
+    name: string;
+    version: string;
+    totalSteps: number;
+  }> {
+    return this.request(`/workflows/definitions/${sourceType}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(cloneData),
+    });
+  }
+
+  async deleteWorkflowDefinition(type: string): Promise<{
+    type: string;
+    name: string;
+  }> {
+    return this.request(`/workflows/definitions/${type}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async toggleWorkflowDefinitionStatus(type: string, active: boolean): Promise<{
+    type: string;
+    name: string;
+    active: boolean;
+  }> {
+    return this.request(`/workflows/definitions/${type}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active }),
+    });
+  }
+
+  async getWorkflowExamples(): Promise<Record<string, {
+    name: string;
+    type: string;
+    description: string;
+    steps: Array<{
+      id: string;
+      action: string;
+      delay: number;
+      description: string;
+      [key: string]: unknown;
+    }>;
+    config?: Record<string, unknown>;
+  }>> {
+    return this.request('/workflows/examples');
+  }
+
+  // Actions endpoints
+  async stopSwipeTask(taskId: string): Promise<{ message: string }> {
+    return this.request(`/actions/swipe/stop/${taskId}`, {
+      method: 'POST',
+    });
+  }
+
+  async stopAllSwipeTasks(): Promise<{ message: string; stoppedTasks: number }> {
+    return this.request('/actions/swipe/stop-all', {
+      method: 'POST',
+    });
+  }
+
+  async startSwipeTask(accountIds: string[], taskName?: string): Promise<{
+    taskId: string;
+    message: string;
+    accountCount: number;
+  }> {
+    return this.request('/actions/swipe', {
+      method: 'POST',
+      body: JSON.stringify({ accountIds, taskName }),
+    });
+  }
 }
 
 // Export singleton instance
@@ -498,6 +650,84 @@ export function useSystemHealth(refreshInterval = 30000) {
       return () => clearInterval(interval);
     }
   }, [fetchData, refreshInterval]);
+
+  return { data, loading, error, refetch: fetchData };
+}
+
+// New hooks for additional APIs
+export function useModels() {
+  const [data, setData] = useState<ModelData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+      const models = await apiClient.getModels();
+      setData(models);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch models');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, error, refetch: fetchData };
+}
+
+export function useActiveSwipeTasks(refreshInterval = 5000) {
+  const [data, setData] = useState<ActiveSwipeTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+      const result = await apiClient.getActiveSwipeTasks();
+      setData(result.tasks);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch active swipe tasks');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    
+    if (refreshInterval > 0) {
+      const interval = setInterval(fetchData, refreshInterval);
+      return () => clearInterval(interval);
+    }
+  }, [fetchData, refreshInterval]);
+
+  return { data, loading, error, refetch: fetchData };
+}
+
+export function useWorkflowDefinitions() {
+  const [data, setData] = useState<WorkflowDefinition[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+      const result = await apiClient.getWorkflowDefinitions();
+      setData(result.definitions);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch workflow definitions');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   return { data, loading, error, refetch: fetchData };
 }

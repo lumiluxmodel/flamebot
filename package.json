@@ -13,9 +13,9 @@
     "start": "turbo run start",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
-    "dev:frontend": "turbo run dev --filter=@flamebot/frontend",
+    "dev:frontend": "turbo run dev --filter=@flamebot/app",
     "dev:backend": "turbo run dev --filter=@flamebot/backend",
-    "build:frontend": "turbo run build --filter=@flamebot/frontend",
+    "build:frontend": "turbo run build --filter=@flamebot/app",
     "build:backend": "turbo run build --filter=@flamebot/backend"
   },
   "devDependencies": {
