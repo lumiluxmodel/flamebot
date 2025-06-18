@@ -281,15 +281,18 @@ const Workflows = ({ workflowDefinitions, setEditingWorkflow, setShowEditModal, 
                       { icon: Copy, color: 'text-blue-500' },
                       { icon: Edit2, color: 'text-yellow-500', onClick: () => { setEditingWorkflow(workflow); setShowEditModal(true); } },
                       { icon: Trash2, color: 'text-red-500' }
-                    ].map((action, j) => (
-                      <button 
-                        key={j}
-                        onClick={action.onClick}
-                        className={`p-2 text-zinc-600 hover:${action.color} transition-all duration-300 hover:scale-110`}
-                      >
-                        <action.icon className="w-4 h-4" />
-                      </button>
-                    ))}
+                    ].map((action, j) => {
+                      const IconComponent = action.icon;
+                      return (
+                        <button 
+                          key={j}
+                          onClick={action.onClick}
+                          className={`p-2 text-zinc-600 hover:${action.color} transition-all duration-300 hover:scale-110`}
+                        >
+                          <IconComponent className="w-4 h-4" />
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 
