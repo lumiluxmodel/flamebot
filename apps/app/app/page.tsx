@@ -1,6 +1,16 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertCircle, X, Plus, Edit2, Copy, Trash2, Heart, Menu } from 'lucide-react';
+import { AlertCircle, X, Plus, Edit2, Copy, Trash2, Heart, Menu, Loader2, RefreshCw } from 'lucide-react';
+
+// Import API hooks
+import { 
+  useWorkflowStats, 
+  useActiveWorkflows, 
+  useDashboardData, 
+  useSystemHealth,
+  apiClient, 
+  WorkflowDefinition
+} from '../lib/api';
 
 // Types
 interface WorkflowStep {
@@ -32,14 +42,33 @@ interface Workflow {
   };
 }
 
-interface ExecutionStatus {
-  id: string;
-  type: string;
-  progress: number;
-  duration: string;
-  currentStep: string;
-  status: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'FAILED';
-}
+// Color mapping for Tailwind JIT fix
+const colorMap = {
+  yellow: {
+    border: 'border-yellow-500/20',
+    borderHover: 'hover:border-yellow-500/40',
+    text: 'text-yellow-500',
+    bg: 'bg-yellow-500'
+  },
+  red: {
+    border: 'border-red-500/20',
+    borderHover: 'hover:border-red-500/40',
+    text: 'text-red-500',
+    bg: 'bg-red-500'
+  },
+  emerald: {
+    border: 'border-emerald-500/20',
+    borderHover: 'hover:border-emerald-500/40',
+    text: 'text-emerald-500',
+    bg: 'bg-emerald-500'
+  },
+  blue: {
+    border: 'border-blue-500/20',
+    borderHover: 'hover:border-blue-500/40',
+    text: 'text-blue-500',
+    bg: 'bg-blue-500'
+  }
+};
 
 // Global format time function
 const formatTime = (date: Date) => {
@@ -67,13 +96,15 @@ const parseDelay = (str: string): number => {
   }
 };
 
-// Animated Counter Component
+// Fixed Animated Counter Component with cleanup
 const AnimatedCounter = ({ value, duration = 2000 }: { value: number; duration?: number }) => {
   const [count, setCount] = useState(0);
   const countRef = useRef<number>(0);
+  const frameRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const startTime = Date.now();
+    
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
@@ -85,332 +116,603 @@ const AnimatedCounter = ({ value, duration = 2000 }: { value: number; duration?:
       }
       
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        frameRef.current = requestAnimationFrame(animate);
       }
     };
     
-    animate();
+    frameRef.current = requestAnimationFrame(animate);
+
+    // Cleanup function
+    return () => {
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+      }
+    };
   }, [value, duration]);
 
   return <span>{count}</span>;
 };
 
-// Custom ScrollArea Component
+// Custom ScrollArea Component (styles already in globals.css)
 const ScrollArea = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={`overflow-auto custom-scrollbar ${className || ''}`} style={{
-    scrollbarWidth: 'thin',
-    scrollbarColor: '#eab308 #18181b'
-  }}>
+  <div className={`overflow-auto custom-scrollbar ${className || ''}`}>
     {children}
   </div>
 );
 
-// Overview Component
-const Overview = ({ systemHealth, activeWorkflows, successRate, cronJobs }: { 
-  systemHealth: string; 
-  activeWorkflows: number; 
-  successRate: number; 
-  cronJobs: string;
-}) => (
-  <div className="space-y-8 md:space-y-16">
-    <header className="animate-slide-up">
-      <h1 className="text-4xl md:text-6xl font-bold tracking-tighter mb-4 text-white">
-        DASHBOARD
-      </h1>
-      <div className="text-[10px] md:text-[11px] text-zinc-500 flex flex-wrap gap-2 md:gap-6">
-        <span>STATUS: <span className={systemHealth === 'HEALTHY' ? 'text-emerald-500' : 'text-red-500'}>{systemHealth}</span></span>
-        <span className="text-yellow-500 hidden md:inline">|</span>
-        <span>UPTIME: 18H 53M</span>
-        <span className="text-yellow-500 hidden md:inline">|</span>
-        <span>v2.0.1</span>
-      </div>
-    </header>
+// Loading component
+const LoadingSpinner = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
+  const sizeClasses = {
+    sm: 'w-4 h-4',
+    md: 'w-6 h-6',
+    lg: 'w-8 h-8'
+  };
 
-    <div className="space-y-8 md:space-y-16">
-      {/* Main Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16">
-        <div className="relative animate-fade-in-scale cyber-card p-6 md:p-8">
-          <div className="text-[10px] text-zinc-600 mb-4">ACTIVE_WORKFLOWS</div>
-          <div className="text-5xl md:text-8xl font-bold">
-            <AnimatedCounter value={activeWorkflows} />
-          </div>
-          <div className="text-[11px] text-zinc-500 mt-2">CURRENTLY RUNNING</div>
-          <div className="absolute top-0 right-0 w-8 h-8 border-t border-r border-yellow-500/30"></div>
-        </div>
-        
-        <div className="animate-fade-in-scale cyber-card p-6 md:p-8" style={{ animationDelay: '0.2s' }}>
-          <div className="text-[10px] text-zinc-600 mb-4">SUCCESS_RATE</div>
-          <div className="text-5xl md:text-8xl font-bold text-yellow-500">
-            <AnimatedCounter value={successRate} />%
-          </div>
-          <div className="text-[11px] text-zinc-500 mt-2">全て成功</div>
-          <div className="absolute top-0 right-0 w-8 h-8 border-t border-r border-yellow-500/30"></div>
-        </div>
-      </div>
-
-      {/* System Components */}
-      <div>
-        <div className="text-[10px] text-zinc-600 mb-6 flex items-center gap-4">
-          <span>SYSTEM_COMPONENTS</span>
-          <div className="flex-1 h-[1px] bg-gradient-to-r from-zinc-900 via-yellow-500/20 to-zinc-900"></div>
-          <span className="text-yellow-500">サイバー</span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8">
-          {[
-            { value: '1/1', label: 'EXECUTOR', status: 'ACTIVE', color: 'emerald' },
-            { value: cronJobs, label: 'CRON', status: 'RUNNING', color: 'yellow' },
-            { value: '0', label: 'MONITOR', status: 'DEGRADED', color: 'red' }
-          ].map((component, i) => (
-            <div 
-              key={i} 
-              className={`cyber-card p-4 md:p-6 hover:border-${component.color}-500/40 transition-all duration-300 animate-fade-in-scale group`}
-              style={{ animationDelay: `${i * 0.1}s` }}
-            >
-              <div className={`text-2xl md:text-3xl font-bold mb-2 ${
-                component.color === 'yellow' ? 'text-yellow-500' : 
-                component.color === 'emerald' ? 'text-emerald-500' : 'text-red-500'
-              } group-hover:scale-110 transition-transform duration-300`}>
-                {component.value}
-              </div>
-              <div className="text-[10px] text-zinc-600">{component.label}</div>
-              <div className={`text-[10px] mt-2 ${
-                component.color === 'emerald' ? 'text-emerald-500' : 
-                component.color === 'yellow' ? 'text-yellow-500' : 'text-red-500'
-              }`}>
-                ● {component.status}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Barcode */}
-      <div className="flex justify-center pt-8">
-        <div className="text-center animate-fade-in">
-          <div className="font-mono text-[10px] tracking-[0.3em] mb-2 opacity-60">
-            |||| || ||| |||| | || ||| |||| ||| | ||||
-          </div>
-          <div className="text-[10px] text-zinc-600">FLM-BOT-2025-001</div>
-        </div>
-      </div>
+  return (
+    <div className="flex items-center justify-center">
+      <ClientOnlyIcon>
+        <Loader2 className={`${sizeClasses[size]} animate-spin text-yellow-500`} />
+      </ClientOnlyIcon>
     </div>
+  );
+};
+
+// Error component
+const ErrorDisplay = ({ error, onRetry }: { error: string; onRetry?: () => void }) => (
+  <div className="text-center p-8">
+    <ClientOnlyIcon>
+      <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-500" />
+    </ClientOnlyIcon>
+    <div className="text-red-500 mb-2">Error</div>
+    <div className="text-zinc-400 text-sm mb-4">{error}</div>
+    {onRetry && (
+      <button 
+        onClick={onRetry}
+        className="text-yellow-500 hover:text-yellow-400 text-sm flex items-center gap-2 mx-auto transition-colors"
+      >
+        <ClientOnlyIcon>
+          <RefreshCw className="w-4 h-4" />
+        </ClientOnlyIcon> Retry
+      </button>
+    )}
   </div>
 );
 
-// Workflows Component
-const Workflows = ({ workflowDefinitions, setEditingWorkflow, setShowEditModal, setShowCreateModal }: { 
-  workflowDefinitions: Workflow[]; 
-  setEditingWorkflow: (workflow: Workflow) => void; 
-  setShowEditModal: (show: boolean) => void; 
-  setShowCreateModal: (show: boolean) => void; 
-}) => (
-  <div>
-    <header className="mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-      <div>
-        <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-white">WORKFLOWS</h1>
-        <div className="text-[11px] text-zinc-500">AUTOMATION PROCESSES</div>
-      </div>
-      <button 
-        onClick={() => setShowCreateModal(true)}
-        className="w-full md:w-auto px-6 py-3 bg-yellow-500 text-black text-[11px] font-bold uppercase tracking-wider hover:bg-yellow-400 transition-all duration-300 flex items-center justify-center gap-2 cyber-button"
-      >
-        <Plus className="w-4 h-4" /> CREATE NEW
-      </button>
-    </header>
+// Overview Component with real data
+const Overview = () => {
+  const { data: stats, loading: statsLoading, error: statsError, refetch: refetchStats } = useWorkflowStats();
+  const { data: dashboardData, loading: dashboardLoading, error: dashboardError, refetch: refetchDashboard } = useDashboardData();
+  const { data: healthData, loading: healthLoading } = useSystemHealth();
 
-    <ScrollArea className="h-[400px] md:h-[600px]">
-      <div className="space-y-6 md:space-y-8 pr-2">
-        {/* Active Workflow */}
-        <div className="cyber-card border-yellow-500/30 p-6 md:p-8 relative animate-pulse-border">
-          <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
-            <div>
-              <div className="text-[10px] text-zinc-600 mb-2">EXECUTION_ID</div>
-              <div className="font-mono text-sm break-all">68511f93ec6acd2798f3811d</div>
+  if (statsLoading || dashboardLoading || healthLoading) {
+    return (
+      <div className="space-y-8 md:space-y-16">
+        <header className="animate-slide-up">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tighter mb-4 text-white">
+            DASHBOARD
+          </h1>
+          <div className="text-[10px] md:text-[11px] text-zinc-500">
+            <LoadingSpinner size="sm" />
+          </div>
+        </header>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16">
+          <div className="cyber-card p-6 md:p-8">
+            <LoadingSpinner />
+          </div>
+          <div className="cyber-card p-6 md:p-8">
+            <LoadingSpinner />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (statsError) {
+    return <ErrorDisplay error={statsError} onRetry={refetchStats} />;
+  }
+
+  if (dashboardError) {
+    return <ErrorDisplay error={dashboardError} onRetry={refetchDashboard} />;
+  }
+
+  if (!stats || !dashboardData) return null;
+
+  const systemHealth = dashboardData.overview.systemHealth.toUpperCase();
+  const activeWorkflows = stats.executor.activeExecutions;
+  const successRate = Math.round(stats.health.successRate * 100);
+  const cronJobs = `${stats.database.completedWorkflows}/${stats.cronSystem.totalCronJobs}`;
+
+  // Calculate uptime
+  const uptimeMs = Date.now() - new Date(dashboardData.overview.lastHealthCheck).getTime();
+  const uptimeHours = Math.floor(uptimeMs / (1000 * 60 * 60));
+  const uptimeMinutes = Math.floor((uptimeMs % (1000 * 60 * 60)) / (1000 * 60));
+
+  // Get additional system info from health data
+  const systemComponentsHealthy = healthData?.healthy ?? true;
+
+  return (
+    <div className="space-y-8 md:space-y-16">
+      <header className="animate-slide-up">
+        <h1 className="text-4xl md:text-6xl font-bold tracking-tighter mb-4 text-white">
+          DASHBOARD
+        </h1>
+        <div className="text-[10px] md:text-[11px] text-zinc-500 flex flex-wrap gap-2 md:gap-6">
+          <span>STATUS: <span className={systemHealth === 'HEALTHY' && systemComponentsHealthy ? 'text-emerald-500' : 'text-red-500'}>{systemHealth}</span></span>
+          <span className="text-yellow-500 hidden md:inline">|</span>
+          <span>UPTIME: {uptimeHours}H {uptimeMinutes}M</span>
+          <span className="text-yellow-500 hidden md:inline">|</span>
+          <span>v2.0.1</span>
+        </div>
+      </header>
+
+      <div className="space-y-8 md:space-y-16">
+        {/* Main Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16">
+          <div className="relative animate-fade-in-scale cyber-card p-6 md:p-8">
+            <div className="text-[10px] text-zinc-600 mb-4">ACTIVE_WORKFLOWS</div>
+            <div className="text-5xl md:text-8xl font-bold">
+              <AnimatedCounter value={activeWorkflows} />
             </div>
-            <div className="text-[11px] text-yellow-500 pulse-dot">● ACTIVE</div>
+            <div className="text-[11px] text-zinc-500 mt-2">CURRENTLY RUNNING</div>
+            <div className="absolute top-0 right-0 w-8 h-8 border-t border-r border-yellow-500/30"></div>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 text-sm mb-6">
-            <div>
-              <div className="text-[10px] text-zinc-600 mb-2">TYPE</div>
-              <div>DEFAULT</div>
+          <div className="animate-fade-in-scale cyber-card p-6 md:p-8" style={{ animationDelay: '0.2s' }}>
+            <div className="text-[10px] text-zinc-600 mb-4">SUCCESS_RATE</div>
+            <div className="text-5xl md:text-8xl font-bold text-yellow-500">
+              <AnimatedCounter value={successRate} />%
             </div>
-            <div>
-              <div className="text-[10px] text-zinc-600 mb-2">PROGRESS</div>
-              <div className="text-yellow-500">0%</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-zinc-600 mb-2">DURATION</div>
-              <div>45:20</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-zinc-600 mb-2">STEPS</div>
-              <div>0/10</div>
-            </div>
-          </div>
-
-          <div className="bg-zinc-950 h-2 w-full rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 w-0 rounded-full animate-pulse"></div>
+            <div className="text-[11px] text-zinc-500 mt-2">全て成功</div>
+            <div className="absolute top-0 right-0 w-8 h-8 border-t border-r border-yellow-500/30"></div>
           </div>
         </div>
 
-        {/* Workflow Definitions */}
+        {/* System Components */}
         <div>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-2">
-            <div className="text-[10px] text-zinc-600">AVAILABLE_DEFINITIONS</div>
-            <div className="text-[10px] text-yellow-500">サイバー サイバー サイバー</div>
+          <div className="text-[10px] text-zinc-600 mb-6 flex items-center gap-4">
+            <span>SYSTEM_COMPONENTS</span>
+            <div className="flex-1 h-[1px] bg-gradient-to-r from-zinc-900 via-yellow-500/20 to-zinc-900"></div>
+            <span className="text-yellow-500">サイバー</span>
           </div>
-          
-          <div className="space-y-6 md:space-y-8">
-            {workflowDefinitions.map((workflow, i) => (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8">
+            {[
+              { 
+                value: dashboardData.systemStatus.workflowExecutor ? '1/1' : '0/1', 
+                label: 'EXECUTOR', 
+                status: dashboardData.systemStatus.workflowExecutor ? 'ACTIVE' : 'OFFLINE', 
+                color: dashboardData.systemStatus.workflowExecutor ? 'emerald' : 'red' 
+              },
+              { 
+                value: cronJobs, 
+                label: 'CRON', 
+                status: dashboardData.systemStatus.cronManager ? 'RUNNING' : 'STOPPED', 
+                color: dashboardData.systemStatus.cronManager ? 'yellow' : 'red' 
+              },
+              { 
+                value: stats.health.unacknowledgedAlerts.toString(), 
+                label: 'ALERTS', 
+                status: stats.health.unacknowledgedAlerts > 0 ? 'ACTIVE' : 'CLEAR', 
+                color: stats.health.unacknowledgedAlerts > 0 ? 'red' : 'emerald' 
+              }
+            ].map((component, i) => (
               <div 
                 key={i} 
-                className={`cyber-card ${workflow.color} p-6 md:p-8 hover:border-opacity-60 transition-all duration-300 animate-fade-in-up group`}
+                className={`cyber-card p-4 md:p-6 ${colorMap[component.color as keyof typeof colorMap].borderHover} transition-all duration-300 animate-fade-in-scale group`}
                 style={{ animationDelay: `${i * 0.1}s` }}
               >
-                <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
-                  <div className="flex-1">
-                    <div className="text-[10px] text-zinc-600 mb-2">TYPE_{String(i+1).padStart(2, '0')}</div>
-                    <div className="text-xl md:text-2xl font-bold mb-2 group-hover:text-yellow-500 transition-colors">
-                      {workflow.type}
-                    </div>
-                    <div className="text-[11px] text-zinc-500">{workflow.description}</div>
-                  </div>
-                  <div className="flex gap-2">
-                    {[
-                      { icon: Copy, color: 'text-blue-500' },
-                      { icon: Edit2, color: 'text-yellow-500', onClick: () => { setEditingWorkflow(workflow); setShowEditModal(true); } },
-                      { icon: Trash2, color: 'text-red-500' }
-                    ].map((action, j) => {
-                      const IconComponent = action.icon;
-                      return (
-                        <button 
-                          key={j}
-                          onClick={action.onClick}
-                          className={`p-2 text-zinc-600 hover:${action.color} transition-all duration-300 hover:scale-110`}
-                        >
-                          <IconComponent className="w-4 h-4" />
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div className={`text-2xl md:text-3xl font-bold mb-2 ${colorMap[component.color as keyof typeof colorMap].text} group-hover:scale-110 transition-transform duration-300`}>
+                  {component.value}
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 mb-6 text-sm">
-                  <div>
-                    <div className="text-[10px] text-zinc-600 mb-1">TOTAL STEPS</div>
-                    <div className={workflow.accent}>{workflow.steps.length}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-zinc-600 mb-1">EST. DURATION</div>
-                    <div>{workflow.duration}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-zinc-600 mb-1">VERSION</div>
-                    <div>v1.0</div>
-                  </div>
-                </div>
-
-                {/* Step Details */}
-                <div className="border-t border-zinc-900 pt-6">
-                  <div className="text-[10px] text-zinc-600 mb-4">WORKFLOW_STEPS</div>
-                  <div className="space-y-3">
-                    {workflow.steps.map((step, j) => (
-                      <div key={j} className="flex items-center gap-4 text-[11px] hover:bg-zinc-950/50 p-2 rounded transition-colors">
-                        <div className={`w-6 h-6 rounded-full border ${workflow.color} flex items-center justify-center flex-shrink-0`}>
-                          <span className="text-[9px]">{j+1}</span>
-                        </div>
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4">
-                          <span className="text-zinc-400">{step.description}</span>
-                          <span className={`font-mono ${workflow.accent}`}>{step.action}</span>
-                          <span className="text-zinc-600">{formatDelay(step.delay)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="text-[10px] text-zinc-600">{component.label}</div>
+                <div className={`text-[10px] mt-2 ${colorMap[component.color as keyof typeof colorMap].text}`}>
+                  ● {component.status}
                 </div>
               </div>
             ))}
           </div>
         </div>
-      </div>
-    </ScrollArea>
-  </div>
-);
 
-// System Component
-const System = ({ executedTasks }: { executedTasks: number }) => (
-  <div>
-    <header className="mb-8 md:mb-12">
-      <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-white">SYSTEM HEALTH</h1>
-      <div className="text-[11px] text-zinc-500">診断レポート</div>
-    </header>
-
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16">
-      <div>
-        <div className="text-[10px] text-zinc-600 mb-6 flex items-center gap-4">
-          <span>COMPONENTS</span>
-          <div className="flex-1 h-[1px] bg-gradient-to-r from-yellow-500/20 to-transparent"></div>
-        </div>
-        <div className="space-y-4">
-          {[
-            { name: 'WORKFLOW EXECUTOR', status: 'OPERATIONAL', health: true },
-            { name: 'CRON MANAGER', status: 'OPERATIONAL', health: true },
-            { name: 'CRON MONITOR', status: 'DEGRADED', health: false },
-            { name: 'DATABASE', status: 'OPERATIONAL', health: true }
-          ].map((item, i) => (
-            <div 
-              key={i} 
-              className="flex justify-between items-center py-3 border-b border-zinc-950 hover:border-yellow-500/20 transition-all duration-300 hover:bg-zinc-950/30 px-2 rounded animate-fade-in"
-              style={{ animationDelay: `${i * 0.1}s` }}
-            >
-              <span className="text-sm">{item.name}</span>
-              <span className={`text-[11px] ${item.health ? 'text-emerald-500' : 'text-red-500'} pulse-dot`}>
-                ● {item.status}
-              </span>
+        {/* Recent Activity */}
+        {dashboardData.workflows.recentlyCompleted.length > 0 && (
+          <div>
+            <div className="text-[10px] text-zinc-600 mb-6 flex items-center gap-4">
+              <span>RECENT_COMPLETIONS</span>
+              <div className="flex-1 h-[1px] bg-gradient-to-r from-zinc-900 via-yellow-500/20 to-zinc-900"></div>
             </div>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <div className="text-[10px] text-zinc-600 mb-6 flex items-center gap-4">
-          <span>STATISTICS</span>
-          <div className="flex-1 h-[1px] bg-gradient-to-r from-yellow-500/20 to-transparent"></div>
-        </div>
-        <div className="space-y-4">
-          {[
-            { label: 'EXECUTED TASKS', value: executedTasks, color: 'text-yellow-500' },
-            { label: 'AVG EXECUTION', value: '368.77ms', color: 'text-white' },
-            { label: 'TOTAL WORKFLOWS', value: '2', color: 'text-white' },
-            { label: 'ACCOUNTS AUTOMATED', value: '2', color: 'text-white' }
-          ].map((stat, i) => (
-            <div 
-              key={i} 
-              className="flex justify-between text-sm hover:bg-zinc-950/30 p-2 rounded transition-colors animate-fade-in"
-              style={{ animationDelay: `${i * 0.1}s` }}
-            >
-              <span className="text-zinc-500">{stat.label}</span>
-              <span className={`font-mono ${stat.color}`}>
-                {typeof stat.value === 'number' ? <AnimatedCounter value={stat.value} /> : stat.value}
-              </span>
+            <div className="space-y-3">
+              {dashboardData.workflows.recentlyCompleted.slice(0, 3).map((workflow, i) => (
+                <div key={i} className="cyber-card p-4 flex justify-between items-center animate-fade-in" style={{ animationDelay: `${i * 0.1}s` }}>
+                  <div>
+                    <div className="text-sm font-mono">{workflow.account_id.slice(-8)}</div>
+                    <div className="text-[10px] text-zinc-500">{workflow.workflow_type.toUpperCase()}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-emerald-500 text-[10px]">● COMPLETED</div>
+                    <div className="text-[10px] text-zinc-500">
+                      {Math.round(parseFloat(workflow.duration_ms) / 1000)}s
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+        )}
+
+        {/* Barcode */}
+        <div className="flex justify-center pt-8">
+          <div className="text-center animate-fade-in">
+            <div className="font-mono text-[10px] tracking-[0.3em] mb-2 opacity-60">
+              |||| || ||| |||| | || ||| |||| ||| | ||||
+            </div>
+            <div className="text-[10px] text-zinc-600">FLM-BOT-2025-001</div>
+          </div>
         </div>
       </div>
     </div>
+  );
+};
 
-    <div className="mt-12 md:mt-16 cyber-card border-yellow-500/30 p-6 md:p-8 relative animate-fade-in-scale">
-      <div className="absolute -top-3 left-8 bg-black px-2 text-[10px] text-yellow-500">UPTIME</div>
-      <div className="text-[10px] text-zinc-600 mb-4">SYSTEM_UPTIME</div>
-      <div className="text-2xl md:text-3xl font-bold text-yellow-500">18:53:22</div>
-      <div className="text-[10px] text-zinc-600 mt-2">CONTINUOUS OPERATION</div>
+// Workflows Component with real data
+const Workflows = ({ setEditingWorkflow, setShowEditModal, setShowCreateModal }: { 
+  setEditingWorkflow: (workflow: Workflow) => void; 
+  setShowEditModal: (show: boolean) => void; 
+  setShowCreateModal: (show: boolean) => void; 
+}) => {
+  const { data: activeWorkflows, loading: activeLoading } = useActiveWorkflows();
+  const [workflowDefinitions, setWorkflowDefinitions] = useState<Workflow[]>([]);
+  const [definitionsLoading, setDefinitionsLoading] = useState(true);
+
+  // Load workflow definitions
+  useEffect(() => {
+    const loadDefinitions = async () => {
+      try {
+        const result = await apiClient.getWorkflowDefinitions();
+        // Transform backend data to frontend format
+        const transformed = result.definitions.map((def: WorkflowDefinition) => ({
+          type: def.type,
+          name: def.name,
+          description: def.description,
+          duration: formatDelay(def.estimatedDuration),
+          color: getWorkflowColor(def.type),
+          accent: getWorkflowAccent(def.type),
+          steps: def.steps
+        }));
+        setWorkflowDefinitions(transformed);
+      } catch (error) {
+        console.error('Failed to load workflow definitions:', error);
+      } finally {
+        setDefinitionsLoading(false);
+      }
+    };
+
+    loadDefinitions();
+  }, []);
+
+  // Helper functions for colors
+  const getWorkflowColor = (type: string) => {
+    const colorMapping: Record<string, string> = {
+      'default': 'border-yellow-500/20',
+      'aggressive': 'border-red-500/20',
+      'test': 'border-emerald-500/20',
+      'premium': 'border-blue-500/20'
+    };
+    return colorMapping[type] || 'border-zinc-500/20';
+  };
+
+  const getWorkflowAccent = (type: string) => {
+    const accentMapping: Record<string, string> = {
+      'default': 'text-yellow-500',
+      'aggressive': 'text-red-500',
+      'test': 'text-emerald-500',
+      'premium': 'text-blue-500'
+    };
+    return accentMapping[type] || 'text-zinc-500';
+  };
+
+  if (activeLoading || definitionsLoading) {
+    return (
+      <div>
+        <header className="mb-8 md:mb-12">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-white">WORKFLOWS</h1>
+          <div className="text-[11px] text-zinc-500">AUTOMATION PROCESSES</div>
+        </header>
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <header className="mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+        <div>
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-white">WORKFLOWS</h1>
+          <div className="text-[11px] text-zinc-500">AUTOMATION PROCESSES</div>
+        </div>
+        <button 
+          onClick={() => setShowCreateModal(true)}
+          className="w-full md:w-auto px-6 py-3 bg-yellow-500 text-black text-[11px] font-bold uppercase tracking-wider hover:bg-yellow-400 transition-all duration-300 flex items-center justify-center gap-2 cyber-button"
+        >
+          <ClientOnlyIcon>
+            <Plus className="w-4 h-4" />
+          </ClientOnlyIcon> CREATE NEW
+        </button>
+      </header>
+
+      <ScrollArea className="h-[400px] md:h-[600px]">
+        <div className="space-y-6 md:space-y-8 pr-2">
+          {/* Active Workflows */}
+          {activeWorkflows && activeWorkflows.length > 0 && (
+            <div>
+              <div className="text-[10px] text-zinc-600 mb-4">ACTIVE_EXECUTIONS</div>
+              {activeWorkflows.map((workflow) => (
+                <div key={workflow.executionId} className="cyber-card border-yellow-500/30 p-6 md:p-8 relative animate-pulse-border mb-6">
+                  <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-2">EXECUTION_ID</div>
+                      <div className="font-mono text-sm break-all">{workflow.executionId}</div>
+                    </div>
+                    <div className="text-[11px] text-yellow-500 pulse-dot">● {workflow.status.toUpperCase()}</div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 text-sm mb-6">
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-2">TYPE</div>
+                      <div>{workflow.workflowType.toUpperCase()}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-2">PROGRESS</div>
+                      <div className="text-yellow-500">{workflow.progress}%</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-2">CURRENT STEP</div>
+                      <div>{workflow.currentStep}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-2">STEPS</div>
+                      <div>{Math.floor((workflow.progress / 100) * workflow.totalSteps)}/{workflow.totalSteps}</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-950 h-2 w-full rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full transition-all duration-1000"
+                      style={{ width: `${workflow.progress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Workflow Definitions */}
+          <div>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-2">
+              <div className="text-[10px] text-zinc-600">AVAILABLE_DEFINITIONS ({workflowDefinitions.length})</div>
+              <div className="text-[10px] text-yellow-500">サイバー サイバー サイバー</div>
+            </div>
+            
+            <div className="space-y-6 md:space-y-8">
+              {workflowDefinitions.map((workflow, i) => (
+                <div 
+                  key={i} 
+                  className={`cyber-card ${workflow.color} p-6 md:p-8 hover:border-opacity-60 transition-all duration-300 animate-fade-in-up group`}
+                  style={{ animationDelay: `${i * 0.1}s` }}
+                >
+                  <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
+                    <div className="flex-1">
+                      <div className="text-[10px] text-zinc-600 mb-2">TYPE_{String(i+1).padStart(2, '0')}</div>
+                      <div className="text-xl md:text-2xl font-bold mb-2 group-hover:text-yellow-500 transition-colors">
+                        {workflow.type.toUpperCase()}
+                      </div>
+                      <div className="text-[11px] text-zinc-500">{workflow.description}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      {[
+                        { icon: Copy, color: 'text-blue-500' },
+                        { icon: Edit2, color: 'text-yellow-500', onClick: () => { setEditingWorkflow(workflow); setShowEditModal(true); } },
+                        { icon: Trash2, color: 'text-red-500' }
+                      ].map((action, j) => {
+                        const IconComponent = action.icon;
+                        return (
+                          <button 
+                            key={j}
+                            onClick={action.onClick}
+                            className={`p-2 text-zinc-600 hover:${action.color} transition-all duration-300 hover:scale-110`}
+                          >
+                            <ClientOnlyIcon>
+                              <IconComponent className="w-4 h-4" />
+                            </ClientOnlyIcon>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 mb-6 text-sm">
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-1">TOTAL STEPS</div>
+                      <div className={workflow.accent}>{workflow.steps.length}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-1">EST. DURATION</div>
+                      <div>{workflow.duration}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-1">VERSION</div>
+                      <div>v1.0</div>
+                    </div>
+                  </div>
+
+                  {/* Step Details */}
+                  <div className="border-t border-zinc-900 pt-6">
+                    <div className="text-[10px] text-zinc-600 mb-4">WORKFLOW_STEPS</div>
+                    <div className="space-y-3">
+                      {workflow.steps.map((step, j) => (
+                        <div key={j} className="flex items-center gap-4 text-[11px] hover:bg-zinc-950/50 p-2 rounded transition-colors">
+                          <div className={`w-6 h-6 rounded-full border ${workflow.color} flex items-center justify-center flex-shrink-0`}>
+                            <span className="text-[9px]">{j+1}</span>
+                          </div>
+                          <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4">
+                            <span className="text-zinc-400">{step.description}</span>
+                            <span className={`font-mono ${workflow.accent}`}>{step.action}</span>
+                            <span className="text-zinc-600">{formatDelay(step.delay)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </ScrollArea>
     </div>
-  </div>
-);
+  );
+};
 
-// Alerts Component
+// System Component with real data
+const System = () => {
+  const { data: stats, loading, error, refetch } = useWorkflowStats();
+
+  if (loading) {
+    return (
+      <div>
+        <header className="mb-8 md:mb-12">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-white">SYSTEM HEALTH</h1>
+          <div className="text-[11px] text-zinc-500">診断レポート</div>
+        </header>
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <ErrorDisplay error={error} onRetry={refetch} />;
+  }
+
+  if (!stats) return null;
+
+  const executedTasks = parseInt(stats.executions.totalExecutions);
+
+  return (
+    <div>
+      <header className="mb-8 md:mb-12">
+        <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-white">SYSTEM HEALTH</h1>
+        <div className="text-[11px] text-zinc-500">診断レポート</div>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16">
+        <div>
+          <div className="text-[10px] text-zinc-600 mb-6 flex items-center gap-4">
+            <span>COMPONENTS</span>
+            <div className="flex-1 h-[1px] bg-gradient-to-r from-yellow-500/20 to-transparent"></div>
+          </div>
+          <div className="space-y-4">
+            {[
+              { name: 'WORKFLOW EXECUTOR', status: stats.executor.activeExecutions >= 0 ? 'OPERATIONAL' : 'OFFLINE', health: true },
+              { name: 'CRON MANAGER', status: stats.cronSystem.isRunning ? 'OPERATIONAL' : 'OFFLINE', health: stats.cronSystem.isRunning },
+              { name: 'TASK SCHEDULER', status: 'OPERATIONAL', health: true },
+              { name: 'DATABASE', status: parseInt(stats.database.totalWorkflows) > 0 ? 'OPERATIONAL' : 'DEGRADED', health: parseInt(stats.database.totalWorkflows) > 0 }
+            ].map((item, i) => (
+              <div 
+                key={i} 
+                className="flex justify-between items-center py-3 border-b border-zinc-950 hover:border-yellow-500/20 transition-all duration-300 hover:bg-zinc-950/30 px-2 rounded animate-fade-in"
+                style={{ animationDelay: `${i * 0.1}s` }}
+              >
+                <span className="text-sm">{item.name}</span>
+                <span className={`text-[11px] ${item.health ? 'text-emerald-500' : 'text-red-500'} pulse-dot`}>
+                  ● {item.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[10px] text-zinc-600 mb-6 flex items-center gap-4">
+            <span>STATISTICS</span>
+            <div className="flex-1 h-[1px] bg-gradient-to-r from-yellow-500/20 to-transparent"></div>
+          </div>
+          <div className="space-y-4">
+            {[
+              { label: 'EXECUTED TASKS', value: executedTasks, color: 'text-yellow-500' },
+              { label: 'AVG EXECUTION', value: `${parseFloat(stats.executions.averageDurationMs).toFixed(2)}ms`, color: 'text-white' },
+              { label: 'TOTAL WORKFLOWS', value: stats.database.totalWorkflows, color: 'text-white' },
+              { label: 'ACCOUNTS AUTOMATED', value: stats.database.totalAccountsAutomated, color: 'text-white' },
+              { label: 'SUCCESS RATE', value: `${Math.round(stats.health.successRate * 100)}%`, color: 'text-emerald-500' }
+            ].map((stat, i) => (
+              <div 
+                key={i} 
+                className="flex justify-between text-sm hover:bg-zinc-950/30 p-2 rounded transition-colors animate-fade-in"
+                style={{ animationDelay: `${i * 0.1}s` }}
+              >
+                <span className="text-zinc-500">{stat.label}</span>
+                <span className={`font-mono ${stat.color}`}>
+                  {typeof stat.value === 'number' ? <AnimatedCounter value={stat.value} /> : stat.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-12 md:mt-16 cyber-card border-yellow-500/30 p-6 md:p-8 relative animate-fade-in-scale">
+        <div className="absolute -top-3 left-8 bg-black px-2 text-[10px] text-yellow-500">UPTIME</div>
+        <div className="text-[10px] text-zinc-600 mb-4">SYSTEM_UPTIME</div>
+        <div className="text-2xl md:text-3xl font-bold text-yellow-500">
+          {stats.cronSystem.lastExecution ? 
+            formatTime(new Date(stats.cronSystem.lastExecution)) : 
+            'Running...'
+          }
+        </div>
+        <div className="text-[10px] text-zinc-600 mt-2">CONTINUOUS OPERATION</div>
+      </div>
+    </div>
+  );
+};
+
+// Alerts Component with real data  
 const Alerts = ({ time }: { time: Date }) => {
+  const [alerts, setAlerts] = useState<Array<{
+    severity: string;
+    message: string;
+    timestamp: string;
+  }>>([]);
+  const [alertsLoading, setAlertsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadAlerts = async () => {
+      try {
+        const result = await apiClient.getAlerts(false, 10);
+        setAlerts(result.alerts || []);
+      } catch (error) {
+        console.error('Failed to load alerts:', error);
+      } finally {
+        setAlertsLoading(false);
+      }
+    };
+
+    loadAlerts();
+  }, []);
+
+  if (alertsLoading) {
+    return (
+      <div>
+        <header className="mb-8 md:mb-12">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-white">ALERTS</h1>
+          <div className="text-[11px] text-zinc-500">警報システム</div>
+        </header>
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  const alertCounts = alerts.reduce((acc, alert) => {
+    acc[alert.severity] = (acc[alert.severity] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
   return (
     <div>
       <header className="mb-8 md:mb-12">
@@ -420,19 +722,27 @@ const Alerts = ({ time }: { time: Date }) => {
 
       <div className="cyber-card p-8 md:p-16 mb-8 md:mb-12 relative animate-fade-in">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-6 text-zinc-800 animate-pulse" />
-          <div className="text-lg text-zinc-600 mb-2">NO ACTIVE ALERTS</div>
-          <div className="text-[11px] text-zinc-700">System operating within normal parameters</div>
-          <div className="mt-4 text-[10px] text-yellow-500">すべてクリア</div>
+          <ClientOnlyIcon>
+            <AlertCircle className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-6 text-zinc-800 animate-pulse" />
+          </ClientOnlyIcon>
+          <div className="text-lg text-zinc-600 mb-2">
+            {alerts.length === 0 ? 'NO ACTIVE ALERTS' : `${alerts.length} ACTIVE ALERTS`}
+          </div>
+          <div className="text-[11px] text-zinc-700">
+            {alerts.length === 0 ? 'System operating within normal parameters' : 'Check alert details below'}
+          </div>
+          <div className="mt-4 text-[10px] text-yellow-500">
+            {alerts.length === 0 ? 'すべてクリア' : '注意が必要'}
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
         {[
-          { level: 'CRITICAL', count: 0, color: 'border-red-500/20', textColor: 'text-red-500' },
-          { level: 'ERROR', count: 0, color: 'border-orange-500/20', textColor: 'text-orange-500' },
-          { level: 'WARNING', count: 0, color: 'border-yellow-500/20', textColor: 'text-yellow-500' },
-          { level: 'INFO', count: 0, color: 'border-zinc-900', textColor: 'text-zinc-500' }
+          { level: 'CRITICAL', count: alertCounts.critical || 0, color: 'border-red-500/20', textColor: 'text-red-500' },
+          { level: 'ERROR', count: alertCounts.error || 0, color: 'border-orange-500/20', textColor: 'text-orange-500' },
+          { level: 'WARNING', count: alertCounts.warning || 0, color: 'border-yellow-500/20', textColor: 'text-yellow-500' },
+          { level: 'INFO', count: alertCounts.info || 0, color: 'border-zinc-900', textColor: 'text-zinc-500' }
         ].map((alert, i) => (
           <div 
             key={i} 
@@ -447,18 +757,65 @@ const Alerts = ({ time }: { time: Date }) => {
         ))}
       </div>
 
+      {/* Recent Alerts */}
+      {alerts.length > 0 && (
+        <div className="mt-8 md:mt-12">
+          <div className="text-[10px] text-zinc-600 mb-4">RECENT_ALERTS</div>
+          <div className="space-y-3">
+            {alerts.slice(0, 5).map((alert, i) => (
+              <div key={i} className="cyber-card p-4 flex justify-between items-center">
+                <div>
+                  <div className={`text-sm font-mono ${
+                    alert.severity === 'critical' ? 'text-red-500' :
+                    alert.severity === 'error' ? 'text-orange-500' :
+                    alert.severity === 'warning' ? 'text-yellow-500' : 'text-zinc-500'
+                  }`}>
+                    {alert.message}
+                  </div>
+                  <div className="text-[10px] text-zinc-500 mt-1">
+                    {new Date(alert.timestamp).toLocaleString()}
+                  </div>
+                </div>
+                <div className={`text-[10px] uppercase ${
+                  alert.severity === 'critical' ? 'text-red-500' :
+                  alert.severity === 'error' ? 'text-orange-500' :
+                  alert.severity === 'warning' ? 'text-yellow-500' : 'text-zinc-500'
+                }`}>
+                  {alert.severity}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-8 md:mt-12 text-center animate-fade-in">
         <div className="text-[10px] text-zinc-600">LAST SCAN</div>
-        <div className="text-yellow-500 font-mono text-sm mt-1">{formatTime(time)}</div>
+        <div className="text-yellow-500 font-mono text-sm mt-1">{time ? formatTime(time) : '--:--'}</div>
       </div>
     </div>
   );
 };
 
+// Client-side only icon wrapper to prevent hydration issues
+const ClientOnlyIcon = ({ children }: { children: React.ReactNode }) => {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return <div className="w-5 h-5" />; // Placeholder with same dimensions
+  }
+
+  return <>{children}</>;
+};
+
 // Main Component
 export default function FlameBotDashboard() {
   const [activeSection, setActiveSection] = useState('001');
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState<Date | null>(null);
   const [glitchActive, setGlitchActive] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -470,7 +827,13 @@ export default function FlameBotDashboard() {
   const [workflowDescription, setWorkflowDescription] = useState('');
   const [workflowSteps, setWorkflowSteps] = useState<WorkflowStep[]>([]);
 
+  // Get real data with hooks
+  const { data: activeWorkflows } = useActiveWorkflows();
+
   useEffect(() => {
+    // Set initial time on client side only
+    setTime(new Date());
+    
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
@@ -483,89 +846,11 @@ export default function FlameBotDashboard() {
     return () => clearInterval(glitchTimer);
   }, []);
 
-  // Mock data
-  const systemHealth = "HEALTHY";
-  const activeWorkflows = 2;
-  const successRate = 100;
-  const executedTasks = 52;
-  const cronJobs = "52/5";
-
   const sections = [
     { id: '001', label: 'OVERVIEW', jp: 'オーバービュー' },
     { id: '002', label: 'WORKFLOWS', jp: 'ワークフロー' },
     { id: '003', label: 'SYSTEM', jp: 'システム' },
     { id: '004', label: 'ALERTS', jp: 'アラート' }
-  ];
-
-  const activeExecutions: ExecutionStatus[] = [
-    {
-      id: '68511f93ec6acd2798f3811d',
-      type: 'DEFAULT',
-      progress: 15,
-      duration: '45:20',
-      currentStep: 'add_prompt',
-      status: 'ACTIVE'
-    },
-    {
-      id: '7a422b84fd7bde3899g4922e',
-      type: 'PREMIUM',
-      progress: 67,
-      duration: '2:15:33',
-      currentStep: 'main_swipes',
-      status: 'ACTIVE'
-    }
-  ];
-
-  const workflowDefinitions: Workflow[] = [
-    {
-      type: 'AGGRESSIVE',
-      name: 'Aggressive Account Automation',
-      description: 'Faster workflow for testing with reduced delays',
-      duration: '1.1h',
-      color: 'border-red-500/20',
-      accent: 'text-red-500',
-      steps: [
-        { id: 'wait_5min', action: 'wait', delay: 300000, description: 'Wait after import' },
-        { id: 'add_prompt', action: 'add_prompt', delay: 0, description: 'Add AI prompt', critical: true },
-        { id: 'swipe_15', action: 'swipe_with_spectre', delay: 120000, swipeCount: 15, description: '15 swipes' },
-        { id: 'add_bio', action: 'add_bio', delay: 3600000, description: 'Add bio' },
-        { id: 'continuous', action: 'activate_continuous_swipe', delay: 0, minSwipes: 20, maxSwipes: 35, minIntervalMs: 3600000, maxIntervalMs: 7200000, description: 'Continuous swipes' }
-      ]
-    },
-    {
-      type: 'DEFAULT',
-      name: 'Default Account Automation',
-      description: 'Standard workflow for new accounts',
-      duration: '27.3h',
-      color: 'border-yellow-500/20',
-      accent: 'text-yellow-500',
-      steps: [
-        { id: 'initial_wait', action: 'wait', delay: 3600000, description: 'Initial wait' },
-        { id: 'add_prompt', action: 'add_prompt', delay: 0, description: 'Add AI prompt', critical: true },
-        { id: 'pre_swipe_wait', action: 'wait', delay: 900000, description: 'Pre-swipe wait' },
-        { id: 'first_swipe', action: 'swipe_with_spectre', delay: 60000, swipeCount: 10, description: '10 swipes' },
-        { id: 'wait_1h', action: 'wait', delay: 3600000, description: 'Wait period' },
-        { id: 'second_swipe', action: 'swipe_with_spectre', delay: 120000, swipeCount: 20, description: '20 swipes' },
-        { id: 'wait_2h', action: 'wait', delay: 3600000, description: 'Wait period' },
-        { id: 'third_swipe', action: 'swipe_with_spectre', delay: 120000, swipeCount: 20, description: '20 swipes' },
-        { id: 'continuous', action: 'activate_continuous_swipe', delay: 0, minSwipes: 25, maxSwipes: 40, minIntervalMs: 7200000, maxIntervalMs: 14400000, description: 'Random swipes' },
-        { id: 'add_bio', action: 'add_bio', delay: 86400000, description: 'Add bio' }
-      ]
-    },
-    {
-      type: 'TEST',
-      name: 'Test Workflow',
-      description: 'Very fast workflow for development testing',
-      duration: '0.04h',
-      color: 'border-emerald-500/20',
-      accent: 'text-emerald-500',
-      steps: [
-        { id: 'quick_wait', action: 'wait', delay: 30000, description: 'Quick wait' },
-        { id: 'add_prompt', action: 'add_prompt', delay: 0, description: 'Add prompt' },
-        { id: 'test_swipe', action: 'swipe_with_spectre', delay: 30000, swipeCount: 5, description: '5 swipes' },
-        { id: 'add_bio', action: 'add_bio', delay: 120000, description: 'Add bio' }
-      ]
-    }
   ];
 
   const resetModalState = () => {
@@ -631,7 +916,9 @@ export default function FlameBotDashboard() {
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="md:hidden fixed top-4 left-4 z-50 p-2 bg-zinc-900 border border-yellow-500/20 text-yellow-500 hover:bg-yellow-500/10 transition-colors"
         >
-          <Menu className="w-5 h-5" />
+          <ClientOnlyIcon>
+            <Menu className="w-5 h-5" />
+          </ClientOnlyIcon>
         </button>
 
         {/* Mobile Overlay */}
@@ -689,7 +976,7 @@ export default function FlameBotDashboard() {
           </div>
 
           <div className="text-[10px] text-zinc-600 space-y-1">
-            <div className="text-yellow-500 font-mono">{formatTime(time)}</div>
+            <div className="text-yellow-500 font-mono">{time ? formatTime(time) : '--:--'}</div>
             <div>TOKYO-3</div>
             <div>35.6762°N</div>
           </div>
@@ -698,35 +985,20 @@ export default function FlameBotDashboard() {
         {/* Main Content */}
         <div className="flex-1 overflow-auto">
           <div className="p-4 md:p-8 lg:p-16 w-full max-w-none">
-            {activeSection === '001' && (
-              <Overview
-                systemHealth={systemHealth}
-                activeWorkflows={activeWorkflows}
-                successRate={successRate}
-                cronJobs={cronJobs}
-              />
-            )}
-
+            {activeSection === '001' && <Overview />}
             {activeSection === '002' && (
               <Workflows
-                workflowDefinitions={workflowDefinitions}
                 setEditingWorkflow={openEditModal}
                 setShowEditModal={setShowEditModal}
                 setShowCreateModal={openCreateModal}
               />
             )}
-
-            {activeSection === '003' && (
-              <System executedTasks={executedTasks} />
-            )}
-
-            {activeSection === '004' && (
-              <Alerts time={time} />
-            )}
+            {activeSection === '003' && <System />}
+            {activeSection === '004' && time && <Alerts time={time} />}
           </div>
         </div>
 
-        {/* Right Panel - Enhanced with executions */}
+        {/* Right Panel - Enhanced with real executions */}
         <div className="hidden lg:flex w-64 xl:w-80 border-l border-zinc-900 p-6 xl:p-8 flex-col justify-between relative overflow-hidden">
           {/* Background with FLAME text */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -741,29 +1013,35 @@ export default function FlameBotDashboard() {
           {/* Active Executions */}
           <div className="relative z-10 space-y-4">
             <div className="text-[10px] text-zinc-600 mb-4 text-center">ACTIVE_EXECUTIONS</div>
-            {activeExecutions.map((execution, i) => (
-              <div key={execution.id} className="bg-zinc-950/40 border border-zinc-800/50 p-3 backdrop-blur-sm animate-fade-in" style={{ animationDelay: `${i * 0.2}s` }}>
-                <div className="text-[9px] text-zinc-500 mb-1">EXECUTION_ID</div>
-                <div className="font-mono text-[10px] text-yellow-500 mb-2 break-all">{execution.id}</div>
-                <div className="flex justify-between text-[9px] mb-2">
-                  <span className="text-zinc-400">{execution.type}</span>
-                  <span className={`${execution.status === 'ACTIVE' ? 'text-emerald-500' : 'text-zinc-500'} pulse-dot`}>
-                    ● {execution.status}
-                  </span>
+            {activeWorkflows && activeWorkflows.length > 0 ? (
+              activeWorkflows.slice(0, 3).map((execution, i) => (
+                <div key={execution.executionId} className="bg-zinc-950/40 border border-zinc-800/50 p-3 backdrop-blur-sm animate-fade-in" style={{ animationDelay: `${i * 0.2}s` }}>
+                  <div className="text-[9px] text-zinc-500 mb-1">EXECUTION_ID</div>
+                  <div className="font-mono text-[10px] text-yellow-500 mb-2 break-all">{execution.executionId.slice(-8)}</div>
+                  <div className="flex justify-between text-[9px] mb-2">
+                    <span className="text-zinc-400">{execution.workflowType.toUpperCase()}</span>
+                    <span className={`${execution.status === 'active' ? 'text-emerald-500' : 'text-zinc-500'} pulse-dot`}>
+                      ● {execution.status.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[9px] mb-2">
+                    <span className="text-zinc-500">PROGRESS</span>
+                    <span className="text-yellow-500">{execution.progress}%</span>
+                  </div>
+                  <div className="bg-zinc-900 h-1 w-full rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full transition-all duration-1000"
+                      style={{ width: `${execution.progress}%` }}
+                    />
+                  </div>
+                  <div className="text-[8px] text-zinc-600 mt-1">{execution.currentStep}</div>
                 </div>
-                <div className="flex justify-between text-[9px] mb-2">
-                  <span className="text-zinc-500">PROGRESS</span>
-                  <span className="text-yellow-500">{execution.progress}%</span>
-                </div>
-                <div className="bg-zinc-900 h-1 w-full rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full transition-all duration-1000"
-                    style={{ width: `${execution.progress}%` }}
-                  />
-                </div>
-                <div className="text-[8px] text-zinc-600 mt-1">{execution.currentStep}</div>
+              ))
+            ) : (
+              <div className="text-center text-zinc-600 text-[11px]">
+                No active workflows
               </div>
-            ))}
+            )}
           </div>
 
           <div className="text-center relative z-10">
@@ -775,7 +1053,9 @@ export default function FlameBotDashboard() {
             <div className="mb-2 text-yellow-500">c.FUTURE [B]</div>
             <div className="flex items-center justify-end gap-1 text-[11px]">
               <span>made with</span>
-              <Heart className="w-3 h-3 text-red-500 animate-pulse" />
+              <ClientOnlyIcon>
+                <Heart className="w-3 h-3 text-red-500 animate-pulse" />
+              </ClientOnlyIcon>
               <span>by pimbo</span>
             </div>
           </div>
@@ -811,7 +1091,9 @@ export default function FlameBotDashboard() {
                   }} 
                   className="text-zinc-600 hover:text-white transition-colors p-1"
                 >
-                  <X className="w-5 h-5" />
+                  <ClientOnlyIcon>
+                    <X className="w-5 h-5" />
+                  </ClientOnlyIcon>
                 </button>
               </div>
 
@@ -859,7 +1141,9 @@ export default function FlameBotDashboard() {
                       onClick={addStep}
                       className="text-[10px] text-yellow-500 hover:text-yellow-400 flex items-center gap-1 transition-colors"
                     >
-                      <Plus className="w-3 h-3" /> ADD STEP
+                      <ClientOnlyIcon>
+                        <Plus className="w-3 h-3" />
+                      </ClientOnlyIcon> ADD STEP
                     </button>
                   </div>
                   
@@ -893,7 +1177,9 @@ export default function FlameBotDashboard() {
                                 onClick={() => removeStep(i)}
                                 className="text-red-500 hover:text-red-400 p-1 transition-colors"
                               >
-                                <X className="w-4 h-4" />
+                                <ClientOnlyIcon>
+                                  <X className="w-4 h-4" />
+                                </ClientOnlyIcon>
                               </button>
                             </div>
 
@@ -938,7 +1224,7 @@ export default function FlameBotDashboard() {
                                     />
                                   </div>
                                   <div>
-                                    <label className="text-[9px] text-zinc-500 block mb-1">MAX SWIPES</label>
+                                    <label className="text-[10px] text-zinc-600 block mb-2">MAX SWIPES</label>
                                     <input 
                                       type="number" 
                                       placeholder="40"
@@ -1009,17 +1295,31 @@ export default function FlameBotDashboard() {
 
                 <div className="flex flex-col md:flex-row gap-3 pt-4">
                   <button 
-                    onClick={() => {
-                      // Here you would normally save the workflow
-                      console.log('Saving workflow:', {
-                        name: workflowName,
-                        type: workflowType,
-                        description: workflowDescription,
-                        steps: workflowSteps
-                      });
-                      setShowCreateModal(false);
-                      setShowEditModal(false);
-                      resetModalState();
+                    onClick={async () => {
+                      try {
+                        if (showCreateModal) {
+                          await apiClient.createWorkflowDefinition({
+                            name: workflowName,
+                            type: workflowType,
+                            description: workflowDescription,
+                            steps: workflowSteps
+                          });
+                        } else {
+                          await apiClient.updateWorkflowDefinition(workflowType, {
+                            name: workflowName,
+                            description: workflowDescription,
+                            steps: workflowSteps
+                          });
+                        }
+                        setShowCreateModal(false);
+                        setShowEditModal(false);
+                        resetModalState();
+                        // Refresh the page or refetch data
+                        window.location.reload();
+                      } catch (error) {
+                        console.error('Failed to save workflow:', error);
+                        alert('Failed to save workflow. Please check the console for details.');
+                      }
                     }}
                     className="flex-1 bg-yellow-500 text-black py-3 text-[11px] font-bold uppercase tracking-wider hover:bg-yellow-400 transition-all duration-300 cyber-button"
                   >

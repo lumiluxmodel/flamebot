@@ -1,0 +1,503 @@
+// lib/api.ts - API service para conectar con el backend
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3090/api';
+
+// Alert types
+export interface Alert {
+  id: string;
+  message: string;
+  severity: 'critical' | 'error' | 'warning' | 'info';
+  timestamp: string;
+  acknowledged: boolean;
+  source?: string;
+}
+
+export interface AlertSummary {
+  total: number;
+  unacknowledged: number;
+  critical: number;
+  warnings: number;
+  errors: number;
+}
+
+// Workflow definition types
+export interface WorkflowDefinition {
+  id: string;
+  type: string;
+  name: string;
+  description: string;
+  totalSteps: number;
+  estimatedDuration: number;
+  version: string;
+  isActive: boolean;
+  steps: WorkflowStep[];
+}
+
+export interface WorkflowStep {
+  stepNumber: number;
+  id: string;
+  action: string;
+  description: string;
+  delay: number;
+  critical?: boolean;
+  timeout?: number;
+  config?: Record<string, unknown>;
+}
+
+// Completed workflow types
+export interface CompletedWorkflow {
+  account_id: string;
+  workflow_type: string;
+  completed_at: string;
+  duration_ms: string;
+}
+
+export interface FailedWorkflow {
+  account_id: string;
+  workflow_type: string;
+  failed_at: string;
+  final_error: string;
+}
+
+// Component health types
+export interface ComponentHealth {
+  healthy: boolean;
+  activeExecutions?: number;
+  totalExecutions?: number;
+  totalJobs?: number;
+  executedTasks?: number;
+  systemHealth?: string;
+  alerts?: number;
+}
+
+export interface SystemHealth {
+  healthy: boolean;
+  components: {
+    workflowExecutor: ComponentHealth;
+    cronManager: ComponentHealth;
+    cronMonitor: ComponentHealth;
+  };
+  timestamp: string;
+  uptime: number;
+}
+
+// Types para las respuestas del backend
+export interface WorkflowStats {
+  executor: {
+    totalExecutions: number;
+    successfulExecutions: number;
+    failedExecutions: number;
+    activeExecutions: number;
+    averageExecutionTime: number;
+    successRate: number;
+  };
+  cronSystem: {
+    isRunning: boolean;
+    totalCronJobs: number;
+    activeCronJobs: number;
+    executedTasks: number;
+    failedTasks: number;
+    lastExecution: string | null;
+  };
+  taskScheduler: {
+    activeTasks: number;
+    completedTasks: number;
+    failedTasks: number;
+    queuedTasks: number;
+    averageExecutionTime: number;
+  };
+  database: {
+    totalWorkflows: string;
+    activeWorkflows: string;
+    completedWorkflows: string;
+    failedWorkflows: string;
+    averageCompletionHours: string;
+    totalAccountsAutomated: string;
+  };
+  executions: {
+    totalExecutions: string;
+    successfulExecutions: string;
+    failedExecutions: string;
+    averageDurationMs: string;
+    uniqueActions: string;
+  };
+  health: {
+    systemHealth: string;
+    successRate: number;
+    failureRate: number;
+    unacknowledgedAlerts: number;
+  };
+  generatedAt: string;
+  uptime: number;
+}
+
+export interface ActiveWorkflow {
+  executionId: string;
+  accountId: string;
+  workflowType: string;
+  progress: number;
+  status: 'active' | 'paused' | 'completed' | 'failed';
+  currentStep: string;
+  totalSteps: number;
+  startedAt: string;
+  estimatedCompletion?: string;
+}
+
+export interface DashboardData {
+  overview: {
+    systemHealth: string;
+    totalExecutions: number;
+    successRate: number;
+    avgExecutionTime: number;
+    lastHealthCheck: string;
+  };
+  cronJobs: {
+    total: number;
+    running: number;
+    failed: number;
+  };
+  tasks: {
+    active: number;
+    queued: number;
+    completed: number;
+    failed: number;
+  };
+  alerts: {
+    recent: Alert[];
+    summary: AlertSummary;
+  };
+  workflows: {
+    active: number;
+    byType: Record<string, number>;
+    byStatus: Record<string, number>;
+    recentlyCompleted: CompletedWorkflow[];
+    recentlyFailed: FailedWorkflow[];
+  };
+  systemStatus: {
+    workflowExecutor: boolean;
+    cronManager: boolean;
+    taskScheduler: boolean;
+    database: boolean;
+  };
+  performance: {
+    averageWorkflowDuration: number;
+    workflowSuccessRate: number;
+    systemLoad: {
+      activeWorkflows: number;
+      queuedTasks: number;
+      scheduledTasks: number;
+    };
+  };
+}
+
+// API client class
+class ApiClient {
+  private baseUrl: string;
+
+  constructor(baseUrl: string = API_BASE_URL) {
+    this.baseUrl = baseUrl;
+  }
+
+  private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options?.headers,
+        },
+        ...options,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'API request failed');
+      }
+
+      return data.data;
+    } catch (error) {
+      console.error(`API Error (${endpoint}):`, error);
+      throw error;
+    }
+  }
+
+  // Workflow endpoints
+  async getWorkflowStats(): Promise<WorkflowStats> {
+    return this.request<WorkflowStats>('/workflows/stats');
+  }
+
+  async getActiveWorkflows(page = 1, limit = 50): Promise<{
+    executions: ActiveWorkflow[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+      hasNext: boolean;
+      hasPrev: boolean;
+    };
+    summary: {
+      totalActive: number;
+      byWorkflowType: Record<string, number>;
+      byStatus: Record<string, number>;
+    };
+  }> {
+    return this.request(`/workflows/active?page=${page}&limit=${limit}`);
+  }
+
+  async getDashboardData(): Promise<DashboardData> {
+    return this.request<DashboardData>('/workflows/monitoring/dashboard');
+  }
+
+  async getSystemHealth(): Promise<SystemHealth> {
+    return this.request<SystemHealth>('/workflows/health');
+  }
+
+  async getAlerts(unacknowledged = false, limit = 50): Promise<{
+    alerts: Alert[];
+    summary: AlertSummary;
+  }> {
+    return this.request(`/workflows/monitoring/alerts?unacknowledged=${unacknowledged}&limit=${limit}`);
+  }
+
+  // Test workflow
+  async startTestWorkflow(accountId?: string, workflowType = 'test'): Promise<{
+    executionId: string;
+    accountId: string;
+    workflowType: string;
+    totalSteps: number;
+    estimatedDuration: number;
+    estimatedCompletionTime: string;
+    status: string;
+  }> {
+    return this.request('/workflows/test', {
+      method: 'POST',
+      body: JSON.stringify({ accountId, workflowType }),
+    });
+  }
+
+  // Workflow definitions
+  async getWorkflowDefinitions(): Promise<{
+    definitions: WorkflowDefinition[];
+    total: number;
+    availableTypes: string[];
+  }> {
+    return this.request('/workflows/definitions');
+  }
+
+  async createWorkflowDefinition(workflow: {
+    name: string;
+    type: string;
+    description: string;
+    steps: Omit<WorkflowStep, 'stepNumber'>[];
+    config?: Record<string, unknown>;
+  }): Promise<{
+    id: string;
+    type: string;
+    name: string;
+    version: string;
+    totalSteps: number;
+    estimatedDuration: number;
+  }> {
+    return this.request('/workflows/definitions', {
+      method: 'POST',
+      body: JSON.stringify(workflow),
+    });
+  }
+
+  async updateWorkflowDefinition(type: string, workflow: {
+    name?: string;
+    description?: string;
+    steps?: Omit<WorkflowStep, 'stepNumber'>[];
+    config?: Record<string, unknown>;
+  }): Promise<{
+    id: string;
+    type: string;
+    name: string;
+    version: string;
+    previousVersion: string;
+  }> {
+    return this.request(`/workflows/definitions/${type}`, {
+      method: 'PUT',
+      body: JSON.stringify(workflow),
+    });
+  }
+
+  // Account endpoints
+  async importAccount(accountData: {
+    model: string;
+    channel: string;
+    authToken: string;
+    workflowType?: string;
+  }): Promise<{
+    success: boolean;
+    accountId: string;
+    workflowStarted: boolean;
+    executionId?: string;
+  }> {
+    return this.request('/accounts/import', {
+      method: 'POST',
+      body: JSON.stringify(accountData),
+    });
+  }
+
+  async getAccountWorkflowStatus(accountId: string): Promise<{
+    executionId: string;
+    accountId: string;
+    workflowType: string;
+    progress: number;
+    status: string;
+    currentStep: string;
+    totalSteps: number;
+    startedAt: string;
+    nextStep?: {
+      description: string;
+      delay: number;
+    };
+  }> {
+    return this.request(`/accounts/workflow/${accountId}`);
+  }
+
+  async stopAccountWorkflow(accountId: string): Promise<{
+    accountId: string;
+    status: string;
+    stoppedAt: string;
+  }> {
+    return this.request(`/accounts/workflow/${accountId}/stop`, {
+      method: 'POST',
+    });
+  }
+}
+
+// Export singleton instance
+export const apiClient = new ApiClient();
+
+// React hooks para usar con los datos
+import { useState, useEffect, useCallback } from 'react';
+
+export function useWorkflowStats(refreshInterval = 5000) {
+  const [data, setData] = useState<WorkflowStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+      const stats = await apiClient.getWorkflowStats();
+      setData(stats);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch stats');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    
+    if (refreshInterval > 0) {
+      const interval = setInterval(fetchData, refreshInterval);
+      return () => clearInterval(interval);
+    }
+  }, [fetchData, refreshInterval]);
+
+  return { data, loading, error, refetch: fetchData };
+}
+
+export function useActiveWorkflows(refreshInterval = 3000) {
+  const [data, setData] = useState<ActiveWorkflow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<{
+    totalActive: number;
+    byWorkflowType: Record<string, number>;
+    byStatus: Record<string, number>;
+  } | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+      const result = await apiClient.getActiveWorkflows();
+      setData(result.executions);
+      setSummary(result.summary);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch workflows');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    
+    if (refreshInterval > 0) {
+      const interval = setInterval(fetchData, refreshInterval);
+      return () => clearInterval(interval);
+    }
+  }, [fetchData, refreshInterval]);
+
+  return { data, loading, error, summary, refetch: fetchData };
+}
+
+export function useDashboardData(refreshInterval = 10000) {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+      const dashboard = await apiClient.getDashboardData();
+      setData(dashboard);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    
+    if (refreshInterval > 0) {
+      const interval = setInterval(fetchData, refreshInterval);
+      return () => clearInterval(interval);
+    }
+  }, [fetchData, refreshInterval]);
+
+  return { data, loading, error, refetch: fetchData };
+}
+
+export function useSystemHealth(refreshInterval = 30000) {
+  const [data, setData] = useState<SystemHealth | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+      const health = await apiClient.getSystemHealth();
+      setData(health);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch health data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    
+    if (refreshInterval > 0) {
+      const interval = setInterval(fetchData, refreshInterval);
+      return () => clearInterval(interval);
+    }
+  }, [fetchData, refreshInterval]);
+
+  return { data, loading, error, refetch: fetchData };
+}
