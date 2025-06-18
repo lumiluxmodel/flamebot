@@ -96,7 +96,7 @@ export default function FlameBotDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white font-mono overflow-hidden relative">
+    <div className="h-screen bg-black text-white font-mono overflow-hidden relative">
       {/* Enhanced background effects */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(234,179,8,0.03),transparent_70%)]" />
@@ -176,9 +176,9 @@ export default function FlameBotDashboard() {
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1 overflow-auto">
-          <div className="p-4 md:p-8 lg:p-16 w-full max-w-none">
+        {/* Main Content - FIXED: Removed overflow-auto to prevent duplicate scrollbars */}
+        <div className="flex-1 h-full">
+          <div className="p-4 md:p-8 lg:p-16 h-full">
             {activeSection === '001' && <Overview />}
             {activeSection === '002' && (
               <Workflows
