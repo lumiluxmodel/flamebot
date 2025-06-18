@@ -1,8 +1,14 @@
 [phases.setup]
-nixPkgs = ["nodejs-18_x"]
+nixPkgs = ["nodejs_20", "pnpm"]
 
 [phases.install]
-cmds = ["npm install", "npm run build:backend"]
+cmds = ["pnpm install"]
+
+[phases.build]
+cmds = ["pnpm run build"]
 
 [start]
-cmd = "npm run dev:backend"
+cmd = "pnpm run start"
+
+[variables]
+NODE_ENV = "production"
