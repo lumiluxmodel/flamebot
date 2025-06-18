@@ -474,7 +474,6 @@ export default function FlameBotDashboard() {
   const [glitchActive, setGlitchActive] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Modal state for workflow creation/editing
@@ -598,7 +597,6 @@ export default function FlameBotDashboard() {
     setWorkflowType(workflow.type);
     setWorkflowDescription(workflow.description);
     setWorkflowSteps([...workflow.steps]);
-    setEditingWorkflow(workflow);
     setShowEditModal(true);
   };
 
@@ -612,7 +610,7 @@ export default function FlameBotDashboard() {
     setWorkflowSteps([...workflowSteps, newStep]);
   };
 
-  const updateStep = (index: number, field: keyof WorkflowStep, value: any) => {
+  const updateStep = (index: number, field: keyof WorkflowStep, value: string | number | boolean) => {
     const updatedSteps = [...workflowSteps];
     updatedSteps[index] = { ...updatedSteps[index], [field]: value };
     setWorkflowSteps(updatedSteps);
