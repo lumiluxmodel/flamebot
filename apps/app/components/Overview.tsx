@@ -1,12 +1,13 @@
 // components/Overview.tsx
 import React from 'react';
-import { useWorkflowStats, useDashboardData, useSystemHealth } from '../lib/api';
+import { useWorkflowStats, useDashboardData, useSystemHealth, useModels } from '../lib/api';
 import { LoadingSpinner, ErrorDisplay, AnimatedCounter, ScrollArea } from './common';
 
 const Overview = () => {
   const { data: stats, loading: statsLoading, error: statsError, refetch: refetchStats } = useWorkflowStats();
   const { data: dashboardData, loading: dashboardLoading, error: dashboardError, refetch: refetchDashboard } = useDashboardData();
   const { data: healthData, loading: healthLoading } = useSystemHealth();
+  const { data: modelsData, loading: modelsLoading } = useModels();
 
   // Color mapping for Tailwind JIT fix
   const colorMap = {
@@ -15,7 +16,7 @@ const Overview = () => {
     emerald: { borderHover: 'hover:border-emerald-500/40', text: 'text-emerald-600 dark:text-emerald-500' }
   };
 
-  if (statsLoading || dashboardLoading || healthLoading) {
+  if (statsLoading || dashboardLoading || healthLoading || modelsLoading) {
     return (
       <div className="space-y-8 md:space-y-16">
         <header className="animate-slide-up">
@@ -221,6 +222,48 @@ const Overview = () => {
               </div>
             </div>
           </div>
+
+          {/* Available Models */}
+          {modelsData && (
+            <div>
+              <div className="text-[10px] text-zinc-600 mb-6 flex items-center gap-4">
+                <span>AVAILABLE_MODELS</span>
+                <div className="flex-1 h-[1px] bg-gradient-to-r from-zinc-200 dark:from-zinc-900 via-yellow-500/20 to-zinc-200 dark:to-zinc-900"></div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                {modelsData.models.map((model, i) => {
+                  const color = modelsData.colors[model];
+                  return (
+                    <div 
+                      key={i} 
+                      className="cyber-card p-6 text-center hover:scale-105 transition-transform duration-300 animate-fade-in-scale group"
+                      style={{ 
+                        animationDelay: `${i * 0.1}s`,
+                        borderColor: `${color}30`
+                      }}
+                    >
+                      <div 
+                        className="w-16 h-16 mx-auto mb-3 rounded-full flex items-center justify-center text-2xl font-bold"
+                        style={{ 
+                          backgroundColor: `${color}20`,
+                          color: color
+                        }}
+                      >
+                        {model.charAt(0)}
+                      </div>
+                      <div className="text-sm font-bold text-zinc-800 dark:text-white mb-1">{model}</div>
+                      <div 
+                        className="text-[10px] font-mono"
+                        style={{ color: color }}
+                      >
+                        {color}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Barcode */}
           <div className="flex justify-center pt-8">

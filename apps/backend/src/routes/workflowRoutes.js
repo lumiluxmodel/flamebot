@@ -186,60 +186,79 @@ router.post('/stop/:accountId', asyncHandler(async (req, res) => {
  * GET /api/workflows/active
  */
 router.get('/active', asyncHandler(async (req, res) => {
-    try {
-        const { page = 1, limit = 50, workflowType = null } = req.query;
-        
-        console.log(`📊 API: Getting active workflows (page ${page}, limit ${limit})`);
+  try {
+      const { 
+          page = 1, 
+          limit = 50, 
+          workflowType = null,
+          status = 'active' // Por defecto solo trae activos
+      } = req.query;
+      
+      console.log(`📊 API: Getting workflows (page ${page}, limit ${limit}, status ${status}, type ${workflowType || 'all'})`);
 
-        let activeExecutions = workflowExecutor.getAllActiveExecutions();
-        
-        // Filter by workflow type if specified
-        if (workflowType) {
-            activeExecutions = activeExecutions.filter(exec => 
-                exec.workflowType === workflowType
-            );
-        }
+      let activeExecutions = workflowExecutor.getAllActiveExecutions();
+      
+      // Filter by status (active | paused | stopped | completed | failed)
+      if (status && status !== 'all') {
+          activeExecutions = activeExecutions.filter(exec => 
+              exec.status === status
+          );
+      }
+      
+      // Filter by workflow type if specified
+      if (workflowType) {
+          activeExecutions = activeExecutions.filter(exec => 
+              exec.workflowType === workflowType
+          );
+      }
 
-        // Pagination
-        const startIndex = (page - 1) * limit;
-        const endIndex = startIndex + parseInt(limit);
-        const paginatedExecutions = activeExecutions.slice(startIndex, endIndex);
+      // Pagination
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + parseInt(limit);
+      const paginatedExecutions = activeExecutions.slice(startIndex, endIndex);
 
-        // Enhance data for UI
-        const enhancedExecutions = paginatedExecutions.map(execution => ({
-            ...execution,
-            timeElapsed: Date.now() - execution.startedAt.getTime(),
-            progressPercentage: execution.progress,
-            isRunning: execution.status === 'active'
-        }));
+      // Enhance data for UI
+      const enhancedExecutions = paginatedExecutions.map(execution => ({
+          ...execution,
+          timeElapsed: Date.now() - execution.startedAt.getTime(),
+          progressPercentage: execution.progress,
+          isRunning: execution.status === 'active'
+      }));
 
-        res.json({
-            success: true,
-            data: {
-                executions: enhancedExecutions,
-                pagination: {
-                    page: parseInt(page),
-                    limit: parseInt(limit),
-                    total: activeExecutions.length,
-                    pages: Math.ceil(activeExecutions.length / limit),
-                    hasNext: endIndex < activeExecutions.length,
-                    hasPrev: page > 1
-                },
-                summary: {
-                    totalActive: activeExecutions.length,
-                    byWorkflowType: groupByWorkflowType(activeExecutions),
-                    byStatus: groupByStatus(activeExecutions)
-                }
-            }
-        });
+      // Recalculate summary based on filtered data
+      const summary = {
+          totalActive: activeExecutions.filter(e => e.status === 'active').length,
+          byWorkflowType: groupByWorkflowType(activeExecutions),
+          byStatus: groupByStatus(activeExecutions)
+      };
 
-    } catch (error) {
-        console.error('❌ API Error - Get Active Workflows:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
+      res.json({
+          success: true,
+          data: {
+              executions: enhancedExecutions,
+              pagination: {
+                  page: parseInt(page),
+                  limit: parseInt(limit),
+                  total: activeExecutions.length,
+                  pages: Math.ceil(activeExecutions.length / limit),
+                  hasNext: endIndex < activeExecutions.length,
+                  hasPrev: page > 1
+              },
+              summary: summary,
+              filters: {
+                  status: status,
+                  workflowType: workflowType || 'all'
+              }
+          }
+      });
+
+  } catch (error) {
+      console.error('❌ API Error - Get Active Workflows:', error);
+      res.status(500).json({
+          success: false,
+          error: error.message
+      });
+  }
 }));
 
 /**

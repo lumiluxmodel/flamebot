@@ -5,53 +5,18 @@ import { Heart, Menu } from 'lucide-react';
 // Import modular components
 import Overview from '../components/Overview';
 import Workflows from '../components/Workflows';
+import Definitions from '../components/Definitions';
 import System from '../components/System';
 import Alerts from '../components/Alerts';
-import WorkflowModal from '../components/WorkflowModal';
 import { useActiveWorkflows } from '../lib/api';
 import { ClientOnlyIcon, formatTime } from '../components/common';
-
-// Types
-interface WorkflowStep {
-  id: string;
-  action: string;
-  delay: number;
-  description: string;
-  swipeCount?: number;
-  minSwipes?: number;
-  maxSwipes?: number;
-  minIntervalMs?: number;
-  maxIntervalMs?: number;
-  critical?: boolean;
-  timeout?: number;
-}
-
-interface Workflow {
-  type: string;
-  name: string;
-  description: string;
-  steps: WorkflowStep[];
-  duration: string;
-  color: string;
-  accent: string;
-  config?: {
-    maxRetries?: number;
-    retryBackoffMs?: number;
-    timeoutMs?: number;
-  };
-}
 
 // Main Component
 export default function FlameBotDashboard() {
   const [activeSection, setActiveSection] = useState('001');
   const [time, setTime] = useState<Date | null>(null);
   const [glitchActive, setGlitchActive] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // Modal state for workflow creation/editing
-  const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
 
   // Get real data with hooks
   const { data: activeWorkflows } = useActiveWorkflows();
@@ -75,25 +40,10 @@ export default function FlameBotDashboard() {
   const sections = [
     { id: '001', label: 'OVERVIEW', jp: 'オーバービュー' },
     { id: '002', label: 'WORKFLOWS', jp: 'ワークフロー' },
-    { id: '003', label: 'SYSTEM', jp: 'システム' },
-    { id: '004', label: 'ALERTS', jp: 'アラート' }
+    { id: '003', label: 'DEFINITIONS', jp: '定義' },
+    { id: '004', label: 'SYSTEM', jp: 'システム' },
+    { id: '005', label: 'ALERTS', jp: 'アラート' }
   ];
-
-  const openCreateModal = () => {
-    setEditingWorkflow(null);
-    setShowCreateModal(true);
-  };
-
-  const openEditModal = (workflow: Workflow) => {
-    setEditingWorkflow(workflow);
-    setShowEditModal(true);
-  };
-
-  const closeModals = () => {
-    setShowCreateModal(false);
-    setShowEditModal(false);
-    setEditingWorkflow(null);
-  };
 
   return (
     <div className="h-screen bg-white dark:bg-black text-zinc-900 dark:text-white font-mono overflow-hidden relative transition-colors duration-300">
@@ -180,15 +130,10 @@ export default function FlameBotDashboard() {
         <div className="flex-1 h-full">
           <div className="p-4 md:p-8 lg:p-16 h-full">
             {activeSection === '001' && <Overview />}
-            {activeSection === '002' && (
-              <Workflows
-                setEditingWorkflow={openEditModal}
-                setShowEditModal={setShowEditModal}
-                setShowCreateModal={openCreateModal}
-              />
-            )}
-            {activeSection === '003' && <System />}
-            {activeSection === '004' && time && <Alerts time={time} />}
+            {activeSection === '002' && <Workflows />}
+            {activeSection === '003' && <Definitions />}
+            {activeSection === '004' && <System />}
+            {activeSection === '005' && time && <Alerts time={time} />}
           </div>
         </div>
 
@@ -200,7 +145,7 @@ export default function FlameBotDashboard() {
           </div>
           
           <div className="text-left text-[10px] text-zinc-500 dark:text-zinc-600 relative z-10">
-            <div className="text-yellow-600 dark:text-yellow-500">001/004</div>
+            <div className="text-yellow-600 dark:text-yellow-500">001/005</div>
           </div>
 
           {/* Active Executions */}
@@ -258,16 +203,6 @@ export default function FlameBotDashboard() {
           </div>
         </div>
       </div>
-
-      {/* Enhanced Create/Edit Workflow Modal */}
-      {(showCreateModal || showEditModal) && (
-        <WorkflowModal
-          isOpen={showCreateModal || showEditModal}
-          isEdit={showEditModal}
-          editingWorkflow={editingWorkflow}
-          onClose={closeModals}
-        />
-      )}
     </div>
   );
 }

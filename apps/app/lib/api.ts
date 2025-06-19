@@ -16,19 +16,34 @@ export interface ActiveSwipeTask {
   started_at: string;
 }
 
-export interface AccountWorkflowStatus {
-  executionId: string;
+// Enhanced workflow status with detailed info
+export interface WorkflowDetailedStatus {
   accountId: string;
+  executionId: string;
+  status: 'active' | 'paused' | 'stopped' | 'completed' | 'failed';
   workflowType: string;
-  progress: number;
-  status: string;
-  currentStep: string;
+  currentStep: number;
   totalSteps: number;
+  progress: number;
   startedAt: string;
+  lastActivity: string;
+  retryCount: number;
+  maxRetries: number;
+  lastError: string | null;
   nextStep?: {
-    description: string;
+    id: string;
+    action: string;
     delay: number;
+    description: string;
   };
+  continuousSwipeActive: boolean;
+  executionLog: Array<{
+    stepId: string;
+    stepIndex: number;
+    action: string;
+    success: boolean;
+    timestamp: string;
+  }>;
 }
 
 // Alert types
@@ -166,10 +181,14 @@ export interface ActiveWorkflow {
   workflowType: string;
   progress: number;
   status: 'active' | 'paused' | 'completed' | 'failed';
-  currentStep: string;
-  totalSteps: number;
+  currentStep?: string;
+  totalSteps?: number;
   startedAt: string;
   estimatedCompletion?: string;
+  lastActivity?: string;
+  timeElapsed?: number;
+  progressPercentage?: number;
+  isRunning?: boolean;
 }
 
 export interface DashboardData {
@@ -261,7 +280,12 @@ class ApiClient {
     return this.request<WorkflowStats>('/workflows/stats');
   }
 
-  async getActiveWorkflows(page = 1, limit = 50): Promise<{
+  async getActiveWorkflows(
+    page = 1, 
+    limit = 50, 
+    status: 'active' | 'paused' | 'completed' | 'failed' | 'stopped' | 'all' = 'active',
+    workflowType?: string
+  ): Promise<{
     executions: ActiveWorkflow[];
     pagination: {
       page: number;
@@ -277,7 +301,17 @@ class ApiClient {
       byStatus: Record<string, number>;
     };
   }> {
-    return this.request(`/workflows/active?page=${page}&limit=${limit}`);
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      status: status
+    });
+    
+    if (workflowType) {
+      params.append('workflowType', workflowType);
+    }
+    
+    return this.request(`/workflows/active?${params.toString()}`);
   }
 
   async getDashboardData(): Promise<DashboardData> {
@@ -376,20 +410,8 @@ class ApiClient {
     });
   }
 
-  async getAccountWorkflowStatus(accountId: string): Promise<{
-    executionId: string;
-    accountId: string;
-    workflowType: string;
-    progress: number;
-    status: string;
-    currentStep: string;
-    totalSteps: number;
-    startedAt: string;
-    nextStep?: {
-      description: string;
-      delay: number;
-    };
-  }> {
+  // Enhanced workflow status endpoint
+  async getWorkflowDetailedStatus(accountId: string): Promise<WorkflowDetailedStatus> {
     return this.request(`/accounts/workflow/${accountId}`);
   }
 
@@ -418,7 +440,6 @@ class ApiClient {
       total: Array.isArray(data) ? data.length : 0
     };
   }
-
 
   async getAllActiveWorkflows(): Promise<{
     workflows: ActiveWorkflow[];
@@ -561,7 +582,13 @@ export function useWorkflowStats(refreshInterval = 5000) {
   return { data, loading, error, refetch: fetchData };
 }
 
-export function useActiveWorkflows(refreshInterval = 3000) {
+export function useActiveWorkflows(
+  refreshInterval = 10000,
+  status: 'active' | 'paused' | 'completed' | 'failed' | 'stopped' | 'all' = 'active',
+  workflowType?: string,
+  page = 1,
+  limit = 50
+) {
   const [data, setData] = useState<ActiveWorkflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -570,19 +597,28 @@ export function useActiveWorkflows(refreshInterval = 3000) {
     byWorkflowType: Record<string, number>;
     byStatus: Record<string, number>;
   } | null>(null);
+  const [pagination, setPagination] = useState<{
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  } | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const result = await apiClient.getActiveWorkflows();
+      const result = await apiClient.getActiveWorkflows(page, limit, status, workflowType);
       setData(result.executions);
       setSummary(result.summary);
+      setPagination(result.pagination);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch workflows');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, limit, status, workflowType]);
 
   useEffect(() => {
     fetchData();
@@ -593,7 +629,7 @@ export function useActiveWorkflows(refreshInterval = 3000) {
     }
   }, [fetchData, refreshInterval]);
 
-  return { data, loading, error, summary, refetch: fetchData };
+  return { data, loading, error, summary, pagination, refetch: fetchData };
 }
 
 export function useDashboardData(refreshInterval = 10000) {
@@ -728,6 +764,37 @@ export function useWorkflowDefinitions() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  return { data, loading, error, refetch: fetchData };
+}
+
+export function useWorkflowDetailedStatus(accountId: string, refreshInterval = 3000) {
+  const [data, setData] = useState<WorkflowDetailedStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!accountId) return;
+    
+    try {
+      setError(null);
+      const status = await apiClient.getWorkflowDetailedStatus(accountId);
+      setData(status);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch workflow status');
+    } finally {
+      setLoading(false);
+    }
+  }, [accountId]);
+
+  useEffect(() => {
+    fetchData();
+    
+    if (refreshInterval > 0 && accountId) {
+      const interval = setInterval(fetchData, refreshInterval);
+      return () => clearInterval(interval);
+    }
+  }, [fetchData, refreshInterval, accountId]);
 
   return { data, loading, error, refetch: fetchData };
 }

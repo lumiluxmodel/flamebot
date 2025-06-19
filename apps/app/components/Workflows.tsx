@@ -1,126 +1,336 @@
 // components/Workflows.tsx
 import React, { useState } from 'react';
-import { Plus, Edit2, Copy, Trash2, StopCircle } from 'lucide-react';
-import { useActiveWorkflows, useWorkflowDefinitions, useActiveSwipeTasks, apiClient } from '../lib/api';
+import { ChevronDown, ChevronUp, StopCircle, Play, Pause,  ExternalLink } from 'lucide-react';
+import { useActiveWorkflows, useActiveSwipeTasks, useWorkflowDetailedStatus, apiClient } from '../lib/api';
 import { LoadingSpinner, ScrollArea, formatDelay, ClientOnlyIcon } from './common';
 
-interface WorkflowStep {
-  id: string;
-  action: string;
-  delay: number;
-  description: string;
-  swipeCount?: number;
-  minSwipes?: number;
-  maxSwipes?: number;
-  minIntervalMs?: number;
-  maxIntervalMs?: number;
-  critical?: boolean;
-  timeout?: number;
-}
+// Helper function to format elapsed time
+const formatTimeElapsed = (milliseconds: number): string => {
+  const seconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
 
-interface Workflow {
-  type: string;
-  name: string;
-  description: string;
-  steps: WorkflowStep[];
-  duration: string;
-  color: string;
-  accent: string;
-  config?: {
-    maxRetries?: number;
-    retryBackoffMs?: number;
-    timeoutMs?: number;
+  if (days > 0) return `${days}d ${hours % 24}h`;
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+  return `${seconds}s`;
+};
+
+interface WorkflowCardProps {
+  workflow: {
+    executionId: string;
+    accountId: string;
+    workflowType: string;
+    progress: number;
+    status: 'active' | 'paused' | 'completed' | 'failed';
+    currentStep?: string;
+    totalSteps?: number;
+    startedAt: string;
+    timeElapsed?: number;
+    progressPercentage?: number;
   };
 }
 
-interface WorkflowsProps {
-  setEditingWorkflow: (workflow: Workflow) => void; 
-  setShowEditModal: (show: boolean) => void; 
-  setShowCreateModal: (show: boolean) => void; 
-}
-
-const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditModal, setShowCreateModal }) => {
-  const { data: activeWorkflows, loading: activeLoading } = useActiveWorkflows();
-  const { data: workflowDefinitions, loading: definitionsLoading, refetch: refetchDefinitions } = useWorkflowDefinitions();
-  const { data: activeSwipes } = useActiveSwipeTasks();
+const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
+  const [expanded, setExpanded] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { data: detailedStatus, loading: detailsLoading } = useWorkflowDetailedStatus(
+    expanded ? workflow.accountId : '',
+    3000
+  );
 
-  // Helper functions for colors
-  const getWorkflowColor = (type: string) => {
-    const colorMapping: Record<string, string> = {
-      'default': 'border-yellow-500/20',
-      'aggressive': 'border-red-500/20',
-      'test': 'border-emerald-500/20',
-      'premium': 'border-blue-500/20'
-    };
-    return colorMapping[type] || 'border-zinc-500/20';
-  };
-
-  const getWorkflowAccent = (type: string) => {
-    const accentMapping: Record<string, string> = {
-      'default': 'text-yellow-600 dark:text-yellow-500',
-      'aggressive': 'text-red-600 dark:text-red-500',
-      'test': 'text-emerald-600 dark:text-emerald-500',
-      'premium': 'text-blue-600 dark:text-blue-500'
-    };
-    return accentMapping[type] || 'text-zinc-600 dark:text-zinc-500';
-  };
-
-  // Transform backend data to frontend format
-  const transformedDefinitions = workflowDefinitions.map(def => ({
-    type: def.type,
-    name: def.name,
-    description: def.description,
-    duration: formatDelay(def.estimatedDuration),
-    color: getWorkflowColor(def.type),
-    accent: getWorkflowAccent(def.type),
-    steps: def.steps.map(step => ({
-      id: step.id,
-      action: step.action,
-      delay: step.delay,
-      description: step.description,
-      swipeCount: step.config?.swipeCount as number | undefined,
-      minSwipes: step.config?.minSwipes as number | undefined,
-      maxSwipes: step.config?.maxSwipes as number | undefined,
-      minIntervalMs: step.config?.minIntervalMs as number | undefined,
-      maxIntervalMs: step.config?.maxIntervalMs as number | undefined,
-      critical: step.critical,
-      timeout: step.timeout
-    }))
-  }));
-
-  const handleCloneWorkflow = async (workflow: Workflow) => {
-    const newType = `${workflow.type}_clone_${Date.now()}`;
-    const newName = `${workflow.name} (Clone)`;
-    
+  const handleStop = async () => {
     try {
-      setActionLoading(`clone_${workflow.type}`);
-      await apiClient.cloneWorkflowDefinition(workflow.type, {
-        newType,
-        newName,
-        newDescription: `${workflow.description} (Cloned)`
-      });
-      await refetchDefinitions();
+      setActionLoading('stop');
+      await apiClient.stopAccountWorkflow(workflow.accountId);
+      // Refresh parent
+      window.location.reload();
     } catch (error) {
-      console.error('Failed to clone workflow:', error);
-      alert('Failed to clone workflow. Check console for details.');
+      console.error('Failed to stop workflow:', error);
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleDeleteWorkflow = async (workflow: Workflow) => {
-    if (!confirm(`Are you sure you want to delete "${workflow.name}"?`)) {
-      return;
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'text-emerald-600 dark:text-emerald-500';
+      case 'paused': return 'text-yellow-600 dark:text-yellow-500';
+      case 'failed': return 'text-red-600 dark:text-red-500';
+      case 'completed': return 'text-blue-600 dark:text-blue-500';
+      default: return 'text-zinc-600 dark:text-zinc-500';
     }
+  };
+
+  const getBorderColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'border-emerald-500/30';
+      case 'paused': return 'border-yellow-500/30';
+      case 'failed': return 'border-red-500/30';
+      case 'completed': return 'border-blue-500/30';
+      default: return 'border-zinc-500/30';
+    }
+  };
+
+  return (
+    <div className={`cyber-card ${getBorderColor(workflow.status)} p-6 md:p-8 relative ${workflow.status === 'active' ? 'animate-pulse-border' : ''} mb-6`}>
+      <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
+        <div className="flex-1">
+          <div className="text-[10px] text-zinc-600 mb-2">EXECUTION_ID</div>
+          <div className="font-mono text-sm text-zinc-800 dark:text-white break-all">{workflow.executionId}</div>
+          <div className="text-[10px] text-zinc-600 dark:text-zinc-500 mt-1">Account: {workflow.accountId.slice(-8)}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`text-[11px] ${getStatusColor(workflow.status)} pulse-dot`}>
+            ● {workflow.status.toUpperCase()}
+          </div>
+          <a
+            href={`https://flamebot-tin.com/accounts/${workflow.accountId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 text-blue-600 dark:text-blue-500 hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
+            title="View Account"
+          >
+            <ClientOnlyIcon>
+              <ExternalLink className="w-4 h-4" />
+            </ClientOnlyIcon>
+          </a>
+          <button
+            onClick={handleStop}
+            disabled={actionLoading === 'stop' || workflow.status !== 'active'}
+            className="p-2 text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Stop Workflow"
+          >
+            <ClientOnlyIcon>
+              {actionLoading === 'stop' ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <StopCircle className="w-4 h-4" />
+              )}
+            </ClientOnlyIcon>
+          </button>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="p-2 text-zinc-600 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+          >
+            <ClientOnlyIcon>
+              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </ClientOnlyIcon>
+          </button>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 text-sm mb-6">
+        <div>
+          <div className="text-[10px] text-zinc-600 mb-2">TYPE</div>
+          <div className="text-zinc-800 dark:text-white">{workflow.workflowType.toUpperCase()}</div>
+        </div>
+        <div>
+          <div className="text-[10px] text-zinc-600 mb-2">PROGRESS</div>
+          <div className="text-yellow-600 dark:text-yellow-500">{workflow.progress}%</div>
+        </div>
+        {!expanded ? (
+          <>
+            <div>
+              <div className="text-[10px] text-zinc-600 mb-2">STARTED AT</div>
+              <div className="text-zinc-800 dark:text-white">
+                {new Date(workflow.startedAt).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-zinc-600 mb-2">TIME ELAPSED</div>
+              <div className="text-zinc-800 dark:text-white">
+                {workflow.timeElapsed ? formatTimeElapsed(workflow.timeElapsed) : 'N/A'}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <div className="text-[10px] text-zinc-600 mb-2">CURRENT STEP</div>
+              <div className="text-zinc-800 dark:text-white">
+                {detailedStatus ? detailedStatus.currentStep : 'Loading...'}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-zinc-600 mb-2">STEPS</div>
+              <div className="text-zinc-800 dark:text-white">
+                {detailedStatus ? `${detailedStatus.currentStep}/${detailedStatus.totalSteps}` : 'Loading...'}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="bg-zinc-200 dark:bg-zinc-950 h-2 w-full rounded-full overflow-hidden">
+        <div 
+          className={`h-full rounded-full transition-all duration-1000 ${
+            workflow.status === 'failed' ? 'bg-red-500' :
+            workflow.status === 'completed' ? 'bg-blue-500' :
+            workflow.status === 'paused' ? 'bg-yellow-500' :
+            'bg-gradient-to-r from-emerald-500 to-emerald-400'
+          }`}
+          style={{ width: `${workflow.progress}%` }}
+        />
+      </div>
+
+      {/* Expanded Details */}
+      {expanded && (
+        <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-900 animate-fade-in">
+          {detailsLoading ? (
+            <div className="py-8">
+              <LoadingSpinner />
+            </div>
+          ) : detailedStatus ? (
+            <div className="space-y-6">
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <div className="text-[10px] text-zinc-600 mb-1">STARTED AT</div>
+                  <div className="text-zinc-800 dark:text-white">
+                    {new Date(detailedStatus.startedAt).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-zinc-600 mb-1">LAST ACTIVITY</div>
+                  <div className="text-zinc-800 dark:text-white">
+                    {new Date(detailedStatus.lastActivity).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-zinc-600 mb-1">RETRY COUNT</div>
+                  <div className="text-zinc-800 dark:text-white">
+                    {detailedStatus.retryCount}/{detailedStatus.maxRetries}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-zinc-600 mb-1">CONTINUOUS SWIPE</div>
+                  <div className={detailedStatus.continuousSwipeActive ? 'text-emerald-600 dark:text-emerald-500' : 'text-zinc-600 dark:text-zinc-500'}>
+                    {detailedStatus.continuousSwipeActive ? 'ACTIVE' : 'INACTIVE'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Next Step */}
+              {detailedStatus.nextStep && (
+                <div>
+                  <div className="text-[10px] text-zinc-600 mb-3">NEXT STEP</div>
+                  <div className="bg-zinc-100 dark:bg-zinc-900 p-4 rounded">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="text-sm font-mono text-yellow-600 dark:text-yellow-500 mb-1">
+                          {detailedStatus.nextStep.action}
+                        </div>
+                        <div className="text-[11px] text-zinc-600 dark:text-zinc-500">
+                          {detailedStatus.nextStep.description}
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-zinc-600">
+                        Delay: {formatDelay(detailedStatus.nextStep.delay)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Error Info */}
+              {detailedStatus.lastError && (
+                <div>
+                  <div className="text-[10px] text-red-600 dark:text-red-500 mb-3">LAST ERROR</div>
+                  <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 p-4 rounded">
+                    <div className="text-sm text-red-800 dark:text-red-400 font-mono">
+                      {detailedStatus.lastError}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Execution Log */}
+              <div>
+                <div className="text-[10px] text-zinc-600 mb-3">EXECUTION LOG ({detailedStatus.executionLog.length})</div>
+                <ScrollArea className="max-h-64">
+                  <div className="space-y-2">
+                    {detailedStatus.executionLog.map((log, i) => (
+                      <div key={i} className="flex items-start gap-3 text-[11px] p-2 hover:bg-zinc-50 dark:hover:bg-zinc-950/50 rounded">
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          log.success ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-500' : 
+                          'bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-500'
+                        }`}>
+                          {log.stepIndex + 1}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex justify-between">
+                            <span className="font-mono text-zinc-800 dark:text-white">{log.action}</span>
+                            <span className={log.success ? 'text-emerald-600 dark:text-emerald-500' : 'text-red-600 dark:text-red-500'}>
+                              {log.success ? 'SUCCESS' : 'FAILED'}
+                            </span>
+                          </div>
+                          <div className="text-zinc-600 dark:text-zinc-500">
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-zinc-600 dark:text-zinc-500">
+              No detailed information available
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Workflows: React.FC = () => {
+  const [statusFilter, setStatusFilter] = useState<'active' | 'paused' | 'completed' | 'failed' | 'stopped' | 'all'>('active');
+  const [typeFilter, setTypeFilter] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  const { data: activeWorkflows, loading: activeLoading, summary, pagination } = useActiveWorkflows(
+    10000, // 10 seconds refresh
+    statusFilter,
+    typeFilter || undefined,
+    currentPage
+  );
+  const { data: activeSwipes } = useActiveSwipeTasks();
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Get unique workflow types from summary
+  const workflowTypes = summary ? Object.keys(summary.byWorkflowType) : [];
+
+  const handlePauseAll = async () => {
+    if (!confirm('Are you sure you want to pause ALL workflows?')) return;
     
     try {
-      setActionLoading(`delete_${workflow.type}`);
-      await apiClient.deleteWorkflowDefinition(workflow.type);
-      await refetchDefinitions();
+      setActionLoading('pause');
+      const result = await apiClient.pauseAllWorkflows();
+      alert(result.message);
+      window.location.reload();
     } catch (error) {
-      console.error('Failed to delete workflow:', error);
-      alert('Failed to delete workflow. Check console for details.');
+      console.error('Failed to pause workflows:', error);
+      alert('Failed to pause workflows');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleResumeAll = async () => {
+    if (!confirm('Are you sure you want to resume ALL workflows?')) return;
+    
+    try {
+      setActionLoading('resume');
+      const result = await apiClient.resumeAllWorkflows();
+      alert(result.message);
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to resume workflows:', error);
+      alert('Failed to resume workflows');
     } finally {
       setActionLoading(null);
     }
@@ -130,7 +340,6 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
     try {
       setActionLoading(`stop_${taskId}`);
       await apiClient.stopSwipeTask(taskId);
-      // Refresh active swipes after a delay
       setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
       console.error('Failed to stop swipe task:', error);
@@ -139,12 +348,12 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
     }
   };
 
-  if (activeLoading || definitionsLoading) {
+  if (activeLoading) {
     return (
       <div>
         <header className="mb-8 md:mb-12">
           <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-zinc-900 dark:text-white">WORKFLOWS</h1>
-          <div className="text-[11px] text-zinc-600 dark:text-zinc-500">AUTOMATION PROCESSES</div>
+          <div className="text-[11px] text-zinc-600 dark:text-zinc-500">ACTIVE AUTOMATIONS</div>
         </header>
         <LoadingSpinner />
       </div>
@@ -156,66 +365,168 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
       <header className="mb-8 md:mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-zinc-900 dark:text-white">WORKFLOWS</h1>
-          <div className="text-[11px] text-zinc-600 dark:text-zinc-500">AUTOMATION PROCESSES</div>
+          <div className="text-[11px] text-zinc-600 dark:text-zinc-500">ACTIVE AUTOMATIONS</div>
         </div>
         <div className="flex gap-2">
           <button 
-            onClick={() => setShowCreateModal(true)}
-            className="px-6 py-3 bg-yellow-500 text-black text-[11px] font-bold uppercase tracking-wider hover:bg-yellow-400 transition-all duration-300 flex items-center justify-center gap-2 cyber-button"
+            onClick={handlePauseAll}
+            disabled={actionLoading === 'pause' || !activeWorkflows || activeWorkflows.length === 0 || statusFilter !== 'active'}
+            className="px-4 py-2 border border-yellow-500/30 text-yellow-600 dark:text-yellow-500 text-[11px] font-bold uppercase tracking-wider hover:bg-yellow-500/10 transition-all duration-300 flex items-center gap-2 disabled:opacity-50"
+            title={statusFilter !== 'active' ? 'Only available when viewing active workflows' : ''}
           >
             <ClientOnlyIcon>
-              <Plus className="w-4 h-4" />
-            </ClientOnlyIcon> CREATE NEW
+              {actionLoading === 'pause' ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <Pause className="w-4 h-4" />
+              )}
+            </ClientOnlyIcon> PAUSE ALL
+          </button>
+          <button 
+            onClick={handleResumeAll}
+            disabled={actionLoading === 'resume'}
+            className="px-4 py-2 border border-emerald-500/30 text-emerald-600 dark:text-emerald-500 text-[11px] font-bold uppercase tracking-wider hover:bg-emerald-500/10 transition-all duration-300 flex items-center gap-2 disabled:opacity-50"
+          >
+            <ClientOnlyIcon>
+              {actionLoading === 'resume' ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <Play className="w-4 h-4" />
+              )}
+            </ClientOnlyIcon> RESUME ALL
           </button>
         </div>
       </header>
 
+      {/* Filters */}
+      <div className="mb-6 p-4 cyber-card">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <label className="text-[10px] text-zinc-600 block mb-2">STATUS FILTER</label>
+            <select 
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as typeof statusFilter);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-white focus:border-yellow-500/50 outline-none transition-colors"
+            >
+              <option value="active">Active Only</option>
+              <option value="paused">Paused Only</option>
+              <option value="completed">Completed Only</option>
+              <option value="failed">Failed Only</option>
+              <option value="stopped">Stopped Only</option>
+              <option value="all">All Workflows</option>
+            </select>
+          </div>
+          
+          <div className="flex-1">
+            <label className="text-[10px] text-zinc-600 block mb-2">WORKFLOW TYPE</label>
+            <select 
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-white focus:border-yellow-500/50 outline-none transition-colors"
+            >
+              <option value="">All Types</option>
+              {workflowTypes.map(type => (
+                <option key={type} value={type}>{type.toUpperCase()}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="flex items-end gap-2">
+            <button
+              onClick={() => {
+                setStatusFilter('active');
+                setTypeFilter('');
+                setCurrentPage(1);
+              }}
+              className="px-4 py-2 text-[11px] text-zinc-600 hover:text-zinc-900 dark:hover:text-white transition-colors"
+            >
+              RESET FILTERS
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary Stats */}
+      {summary && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="cyber-card p-4 text-center">
+            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">{summary.totalActive}</div>
+            <div className="text-[10px] text-zinc-600">TOTAL ACTIVE</div>
+          </div>
+          <div className="cyber-card p-4 text-center">
+            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-500">
+              {summary.byStatus.active || 0}
+            </div>
+            <div className="text-[10px] text-zinc-600">RUNNING</div>
+          </div>
+          <div className="cyber-card p-4 text-center">
+            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">
+              {summary.byStatus.paused || 0}
+            </div>
+            <div className="text-[10px] text-zinc-600">PAUSED</div>
+          </div>
+          <div className="cyber-card p-4 text-center">
+            <div className="text-2xl font-bold text-red-600 dark:text-red-500">
+              {summary.byStatus.failed || 0}
+            </div>
+            <div className="text-[10px] text-zinc-600">FAILED</div>
+          </div>
+        </div>
+      )}
+
       <ScrollArea className="h-[400px] md:h-[600px]">
         <div className="space-y-6 md:space-y-8 pr-2">
           {/* Active Workflow Executions */}
-          {activeWorkflows && activeWorkflows.length > 0 && (
+          {activeWorkflows && activeWorkflows.length > 0 ? (
             <div>
               <div className="text-[10px] text-zinc-600 mb-4 flex items-center gap-4">
-                <span>ACTIVE_WORKFLOW_EXECUTIONS ({activeWorkflows.length})</span>
+                <span>
+                  {statusFilter === 'all' ? 'ALL' : statusFilter.toUpperCase()}_WORKFLOW_EXECUTIONS ({pagination?.total || activeWorkflows.length})
+                </span>
                 <div className="flex-1 h-[1px] bg-gradient-to-r from-yellow-500/20 to-transparent"></div>
               </div>
               {activeWorkflows.map((workflow) => (
-                <div key={workflow.executionId} className="cyber-card border-yellow-500/30 p-6 md:p-8 relative animate-pulse-border mb-6">
-                  <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
-                    <div>
-                      <div className="text-[10px] text-zinc-600 mb-2">EXECUTION_ID</div>
-                      <div className="font-mono text-sm text-zinc-800 dark:text-white break-all">{workflow.executionId}</div>
-                    </div>
-                    <div className="text-[11px] text-yellow-600 dark:text-yellow-500 pulse-dot">● {workflow.status.toUpperCase()}</div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 text-sm mb-6">
-                    <div>
-                      <div className="text-[10px] text-zinc-600 mb-2">TYPE</div>
-                      <div className="text-zinc-800 dark:text-white">{workflow.workflowType.toUpperCase()}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-zinc-600 mb-2">PROGRESS</div>
-                      <div className="text-yellow-600 dark:text-yellow-500">{workflow.progress}%</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-zinc-600 mb-2">CURRENT STEP</div>
-                      <div className="text-zinc-800 dark:text-white">{workflow.currentStep}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-zinc-600 mb-2">STEPS</div>
-                      <div className="text-zinc-800 dark:text-white">{Math.floor((workflow.progress / 100) * workflow.totalSteps)}/{workflow.totalSteps}</div>
-                    </div>
-                  </div>
-
-                  <div className="bg-zinc-200 dark:bg-zinc-950 h-2 w-full rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full transition-all duration-1000"
-                      style={{ width: `${workflow.progress}%` }}
-                    ></div>
-                  </div>
-                </div>
+                <WorkflowCard key={workflow.executionId} workflow={workflow} />
               ))}
+              
+              {/* Pagination */}
+              {pagination && pagination.pages > 1 && (
+                <div className="flex justify-center items-center gap-4 mt-8">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={!pagination.hasPrev}
+                    className="px-4 py-2 text-[11px] border border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    PREVIOUS
+                  </button>
+                  <span className="text-sm text-zinc-600 dark:text-zinc-500">
+                    Page {pagination.page} of {pagination.pages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(prev => prev + 1)}
+                    disabled={!pagination.hasNext}
+                    className="px-4 py-2 text-[11px] border border-zinc-300 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    NEXT
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="cyber-card p-16 text-center">
+              <div className="text-zinc-600 dark:text-zinc-500 mb-2">
+                NO {statusFilter === 'all' ? '' : statusFilter.toUpperCase()} WORKFLOWS
+                {typeFilter ? ` OF TYPE "${typeFilter.toUpperCase()}"` : ''}
+              </div>
+              <div className="text-[11px] text-zinc-600 dark:text-zinc-600">
+                {statusFilter === 'active' ? 'All workflows are currently inactive' : 'No workflows match the selected filters'}
+              </div>
             </div>
           )}
 
@@ -258,121 +569,6 @@ const Workflows: React.FC<WorkflowsProps> = ({ setEditingWorkflow, setShowEditMo
               </div>
             </div>
           )}
-
-          {/* Workflow Definitions */}
-          <div>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-2">
-              <div className="text-[10px] text-zinc-600 flex items-center gap-4">
-                <span>AVAILABLE_DEFINITIONS ({transformedDefinitions.length})</span>
-                <div className="flex-1 h-[1px] bg-gradient-to-r from-yellow-500/20 to-transparent"></div>
-              </div>
-              <div className="text-[10px] text-yellow-600 dark:text-yellow-500">サイバー サイバー サイバー</div>
-            </div>
-            
-            <div className="space-y-6 md:space-y-8">
-              {transformedDefinitions.map((workflow, i) => (
-                <div 
-                  key={i} 
-                  className={`cyber-card ${workflow.color} p-6 md:p-8 hover:border-opacity-60 transition-all duration-300 animate-fade-in-up group`}
-                  style={{ animationDelay: `${i * 0.1}s` }}
-                >
-                  <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
-                    <div className="flex-1">
-                      <div className="text-[10px] text-zinc-600 mb-2">TYPE_{String(i+1).padStart(2, '0')}</div>
-                      <div className="text-xl md:text-2xl font-bold mb-2 text-zinc-900 dark:text-white group-hover:text-yellow-600 dark:group-hover:text-yellow-500 transition-colors">
-                        {workflow.type.toUpperCase()}
-                      </div>
-                      <div className="text-[11px] text-zinc-600 dark:text-zinc-500">{workflow.description}</div>
-                    </div>
-                    <div className="flex gap-2">
-                      {[
-                        { 
-                          icon: Copy, 
-                          color: 'text-blue-600 dark:text-blue-500', 
-                          colorHover: 'hover:text-blue-700 dark:hover:text-blue-400',
-                          onClick: () => handleCloneWorkflow(workflow),
-                          loading: actionLoading === `clone_${workflow.type}`,
-                          title: 'Clone Workflow'
-                        },
-                        { 
-                          icon: Edit2, 
-                          color: 'text-yellow-600 dark:text-yellow-500', 
-                          colorHover: 'hover:text-yellow-700 dark:hover:text-yellow-400',
-                          onClick: () => { setEditingWorkflow(workflow); setShowEditModal(true); },
-                          title: 'Edit Workflow'
-                        },
-                        { 
-                          icon: Trash2, 
-                          color: 'text-red-600 dark:text-red-500',
-                          colorHover: 'hover:text-red-700 dark:hover:text-red-400',
-                          onClick: () => handleDeleteWorkflow(workflow),
-                          loading: actionLoading === `delete_${workflow.type}`,
-                          title: 'Delete Workflow',
-                          disabled: ['default', 'aggressive', 'test'].includes(workflow.type)
-                        }
-                      ].map((action, j) => {
-                        const IconComponent = action.icon;
-                        return (
-                          <button 
-                            key={j}
-                            onClick={action.onClick}
-                            disabled={action.disabled || action.loading}
-                            title={action.title}
-                            className={`p-2 text-zinc-500 dark:text-zinc-600 ${action.colorHover} transition-all duration-300 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed`}
-                          >
-                            <ClientOnlyIcon>
-                              {action.loading ? (
-                                <LoadingSpinner size="sm" />
-                              ) : (
-                                <IconComponent className="w-4 h-4" />
-                              )}
-                            </ClientOnlyIcon>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 mb-6 text-sm">
-                    <div>
-                      <div className="text-[10px] text-zinc-600 mb-1">TOTAL STEPS</div>
-                      <div className={workflow.accent}>{workflow.steps.length}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-zinc-600 mb-1">EST. DURATION</div>
-                      <div className="text-zinc-800 dark:text-white">{workflow.duration}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-zinc-600 mb-1">VERSION</div>
-                      <div className="text-zinc-800 dark:text-white">v1.0</div>
-                    </div>
-                  </div>
-
-                  {/* Step Details */}
-                  <div className="border-t border-zinc-200 dark:border-zinc-900 pt-6">
-                    <div className="text-[10px] text-zinc-600 mb-4">WORKFLOW_STEPS</div>
-                    <div className="space-y-3">
-                      {workflow.steps.map((step, j) => (
-                        <div key={j} className="flex items-center gap-4 text-[11px] hover:bg-zinc-50 dark:hover:bg-zinc-950/50 p-2 rounded transition-colors">
-                          <div className={`w-6 h-6 rounded-full border ${workflow.color} flex items-center justify-center flex-shrink-0`}>
-                            <span className="text-[9px] text-zinc-700 dark:text-zinc-300">{j+1}</span>
-                          </div>
-                          <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4">
-                            <span className="text-zinc-600 dark:text-zinc-400">{step.description}</span>
-                            <span className={`font-mono ${workflow.accent}`}>{step.action}</span>
-                            <span className="text-zinc-600">{formatDelay(step.delay)}</span>
-                          </div>
-                          {step.critical && (
-                            <div className="text-red-600 dark:text-red-500 text-[9px] font-bold">CRITICAL</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </ScrollArea>
     </div>
