@@ -563,11 +563,19 @@ class WorkflowDatabaseService {
    * @returns {Promise<Object>} Updated task
    */
   async failScheduledTask(taskId, error) {
-    return this.updateScheduledTask(taskId, "failed", {
-      last_error: error,
-      last_attempt_at: new Date(),
-      attempts: this.db.query.raw("attempts + 1"),
-    });
+    const query = `
+      UPDATE scheduled_tasks 
+      SET status = 'failed',
+          last_error = $2,
+          last_attempt_at = CURRENT_TIMESTAMP,
+          attempts = attempts + 1,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE task_id = $1
+      RETURNING *
+    `;
+    
+    const result = await this.db.query(query, [taskId, error]);
+    return result.rows[0];
   }
 
   /**
