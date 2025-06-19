@@ -168,40 +168,6 @@ class AccountController {
         message: error.message,
       });
     }
-
-    // Después de successful import, start workflow
-    if (result.success && startAutomation) {
-      console.log(`\n🤖 Starting automation workflow...`);
-      try {
-        // Use the new workflow system
-        const workflowExecutor = require("../services/workflowExecutor");
-
-        workflowResult = await workflowExecutor.startExecution(
-          result.accountId,
-          {
-            model,
-            channel,
-            authToken,
-            importedAt: accountData.importedAt,
-          },
-          workflowType
-        );
-
-        if (workflowResult.success) {
-          console.log(`✅ Automation workflow started successfully`);
-        } else {
-          console.log(
-            `⚠️ Automation workflow failed to start: ${workflowResult.error}`
-          );
-        }
-      } catch (workflowError) {
-        console.error(`❌ Error starting automation workflow:`, workflowError);
-        workflowResult = {
-          success: false,
-          error: workflowError.message,
-        };
-      }
-    }
   }
 
   /**

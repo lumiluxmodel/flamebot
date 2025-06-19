@@ -1,3 +1,4 @@
+// apps/backend/src/services/flamebotService.js
 const axios = require("axios");
 const config = require("../config");
 const { formatAccountPayload } = require("../utils/formatters");
