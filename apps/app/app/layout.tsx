@@ -3,17 +3,17 @@ import { Orbitron, Share_Tech_Mono } from "next/font/google";
 import "./globals.css";
 import ThemeToggle from "../components/ThemeToggle";
 
-const orbitron = Orbitron({
-  variable: "--font-orbitron",
-  subsets: ["latin"],
-  display: "swap",
-});
+  const orbitron = Orbitron({
+    variable: "--font-orbitron",
+    subsets: ["latin"],
+    display: "swap",
+  });
 
-const shareTechMono = Share_Tech_Mono({
-  variable: "--font-share-tech",
-  weight: "400",
-  subsets: ["latin"],
-});
+  const shareTechMono = Share_Tech_Mono({
+    variable: "--font-share-tech",
+    weight: "400",
+    subsets: ["latin"],
+  });
 
 export const metadata: Metadata = {
   title: "FlameBot - Admin Dashboard",

@@ -329,6 +329,15 @@ class ApiClient {
     return this.request(`/workflows/monitoring/alerts?unacknowledged=${unacknowledged}&limit=${limit}`);
   }
 
+  async acknowledgeAlert(alertId: string): Promise<{
+    alertId: string;
+    acknowledgedAt: Date;
+  }> {
+    return this.request(`/workflows/monitoring/alerts/${alertId}/acknowledge`, {
+      method: 'POST',
+    });
+  }
+
   // Test workflow
   async startTestWorkflow(accountId?: string, workflowType = 'test'): Promise<{
     executionId: string;
