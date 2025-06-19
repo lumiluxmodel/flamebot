@@ -70,8 +70,30 @@ class AccountController {
 
       if (result.success) {
         console.log(`✅ Account imported successfully`);
-        console.log(`   Account ID: ${result.accountId}`);
         console.log(`   Task ID: ${result.taskId}`);
+
+        // Obtener el account_id real usando persistent_id
+        let realAccountId = result.accountId;
+
+        if (!realAccountId && persistentId) {
+          console.log(
+            `🔍 Fetching real account ID using persistent_id: ${persistentId}`
+          );
+          try {
+            realAccountId = await flamebotService.getAccountIdByPersistentId(
+              persistentId
+            );
+            if (realAccountId) {
+              console.log(`✅ Found real account ID: ${realAccountId}`);
+            } else {
+              console.log(
+                `⚠️ Could not find account ID, workflow automation will not start`
+              );
+            }
+          } catch (error) {
+            console.error(`❌ Error fetching account ID:`, error);
+          }
+        }
 
         let workflowResult = null;
 
@@ -80,11 +102,11 @@ class AccountController {
           console.log(`\n🤖 Starting automation workflow...`);
           try {
             workflowResult = await workflowManager.startAccountAutomation(
-              result.accountId,
+              realAccountId,  // <-- Ahora usando el ID real
               {
                 model,
                 channel,
-                authToken, // For logging/tracking
+                authToken,
                 importedAt: accountData.importedAt,
               },
               workflowType
@@ -115,7 +137,7 @@ class AccountController {
           message: "Account imported successfully",
           data: {
             // Import data
-            accountId: result.accountId,
+            accountId: realAccountId || null,  // <-- Incluir el ID real si lo encontramos
             taskId: result.taskId,
             model: model,
             channel: channel,

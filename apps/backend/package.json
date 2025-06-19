@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "build": "echo 'Backend built'",
+    "build": "echo 'Backend build'",
     "lint": "eslint . --ext js --report-unused-disable-directives --max-warnings 0",
     "test:ai": "node test/testAI.js",
     "test:import": "node test/testImport.js",
