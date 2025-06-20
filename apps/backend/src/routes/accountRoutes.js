@@ -46,6 +46,18 @@ router.get('/workflows/stats', asyncHandler((req, res) => accountController.getW
 router.post('/workflows/pause-all', asyncHandler((req, res) => accountController.pauseAllWorkflows(req, res)));
 router.post('/workflows/resume-all', asyncHandler((req, res) => accountController.resumeAllWorkflows(req, res)));
 
+// Operaciones individuales de workflow
+router.post('/workflow/:accountId/pause', asyncHandler((req, res) => accountController.pauseAccountWorkflow(req, res)));
+router.post('/workflow/:accountId/resume', asyncHandler((req, res) => accountController.resumeAccountWorkflow(req, res)));
+router.post('/workflow/:accountId/stop', asyncHandler((req, res) => accountController.stopAccountAutomation(req, res)));
+router.get('/workflow/:accountId/details', asyncHandler((req, res) => accountController.getDetailedWorkflowStatus(req, res)));
+
+// Operaciones bulk
+router.post('/workflows/bulk', asyncHandler((req, res) => accountController.bulkWorkflowOperation(req, res)));
+
+// Filtrar workflows por estado
+router.get('/workflows/by-status', asyncHandler((req, res) => accountController.getWorkflowsByStatus(req, res)));
+
 // ============================
 // UTILITY ROUTES (Unchanged)
 // ============================

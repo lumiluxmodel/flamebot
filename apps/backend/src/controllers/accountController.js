@@ -102,7 +102,7 @@ class AccountController {
           console.log(`\n🤖 Starting automation workflow...`);
           try {
             workflowResult = await workflowManager.startAccountAutomation(
-              realAccountId,  // <-- Ahora usando el ID real
+              realAccountId, // <-- Ahora usando el ID real
               {
                 model,
                 channel,
@@ -137,7 +137,7 @@ class AccountController {
           message: "Account imported successfully",
           data: {
             // Import data
-            accountId: realAccountId || null,  // <-- Incluir el ID real si lo encontramos
+            accountId: realAccountId || null, // <-- Incluir el ID real si lo encontramos
             taskId: result.taskId,
             model: model,
             channel: channel,
@@ -344,11 +344,12 @@ class AccountController {
   }
 
   /**
-   * Stop automation for an account
+   * Detener permanentemente workflow (con opción de eliminar)
    */
   async stopAccountAutomation(req, res) {
     try {
       const { accountId } = req.params;
+      const { deleteData = false } = req.body;
 
       if (!accountId) {
         return res.status(400).json({
@@ -357,9 +358,29 @@ class AccountController {
         });
       }
 
-      const result = await workflowManager.stopAccountAutomation(accountId);
+      const result = await workflowManager.stopAccountAutomation(
+        accountId,
+        deleteData
+      );
 
-      res.json(result);
+      if (result.success) {
+        res.json({
+          success: true,
+          message: result.message || "Workflow stopped permanently",
+          data: {
+            accountId,
+            status: "stopped",
+            permanent: true,
+            deleted: deleteData,
+            ...result,
+          },
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: result.error,
+        });
+      }
     } catch (error) {
       console.error("Stop automation error:", error);
       res.status(500).json({
@@ -482,6 +503,180 @@ class AccountController {
         },
       });
     } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Pausar workflow de una cuenta específica
+   */
+  async pauseAccountWorkflow(req, res) {
+    try {
+      const { accountId } = req.params;
+
+      if (!accountId) {
+        return res.status(400).json({
+          success: false,
+          error: "Account ID is required",
+        });
+      }
+
+      const result = await workflowManager.pauseAccountWorkflow(accountId);
+
+      if (result.success) {
+        res.json({
+          success: true,
+          message: "Workflow paused successfully",
+          data: {
+            accountId,
+            status: "paused",
+            canResume: true,
+            ...result,
+          },
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: result.error,
+        });
+      }
+    } catch (error) {
+      console.error("Pause workflow error:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Resumir workflow de una cuenta específica
+   */
+  async resumeAccountWorkflow(req, res) {
+    try {
+      const { accountId } = req.params;
+
+      if (!accountId) {
+        return res.status(400).json({
+          success: false,
+          error: "Account ID is required",
+        });
+      }
+
+      const result = await workflowManager.resumeAccountWorkflow(accountId);
+
+      if (result.success) {
+        res.json({
+          success: true,
+          message: "Workflow resumed successfully",
+          data: {
+            accountId,
+            status: "active",
+            ...result,
+          },
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: result.error,
+        });
+      }
+    } catch (error) {
+      console.error("Resume workflow error:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Operaciones bulk en workflows
+   */
+  async bulkWorkflowOperation(req, res) {
+    try {
+      const { operation, accountIds } = req.body;
+
+      if (!operation || !Array.isArray(accountIds) || accountIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "operation and accountIds array are required",
+        });
+      }
+
+      let result;
+
+      switch (operation) {
+        case "pause":
+          result = await workflowManager.pauseMultipleWorkflows(accountIds);
+          break;
+
+        case "resume":
+          result = await workflowManager.resumeMultipleWorkflows(accountIds);
+          break;
+
+        case "stop":
+          // Para stop, hacerlo uno por uno
+          result = {
+            successful: [],
+            failed: [],
+            total: accountIds.length,
+          };
+
+          for (const accountId of accountIds) {
+            const stopResult = await workflowManager.stopAccountAutomation(
+              accountId
+            );
+            if (stopResult.success) {
+              result.successful.push(accountId);
+            } else {
+              result.failed.push({ accountId, error: stopResult.error });
+            }
+          }
+
+          result.success = result.failed.length === 0;
+          result.message = `Stopped ${result.successful.length} of ${result.total} workflows`;
+          break;
+
+        default:
+          return res.status(400).json({
+            success: false,
+            error: `Invalid operation: ${operation}. Valid operations: pause, resume, stop`,
+          });
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error("Bulk operation error:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Obtener workflows filtrados por estado
+   */
+  async getWorkflowsByStatus(req, res) {
+    try {
+      const { status } = req.query;
+
+      const workflows = await workflowManager.getWorkflowsByStatus(status);
+
+      res.json({
+        success: true,
+        data: {
+          workflows,
+          count: workflows.length,
+          filter: status || "all",
+        },
+      });
+    } catch (error) {
+      console.error("Get workflows by status error:", error);
       res.status(500).json({
         success: false,
         error: error.message,

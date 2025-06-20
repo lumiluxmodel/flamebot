@@ -1,0 +1,86 @@
+-- ================================================
+-- SCRIPT PARA LIMPIAR LA BASE DE DATOS Y EMPEZAR FRESCO
+-- ================================================
+-- ADVERTENCIA: Este script borrará TODOS los datos de workflows
+-- Ejecutar con cuidado!
+
+-- 1. Detener todas las tareas programadas pendientes
+UPDATE scheduled_tasks 
+SET status = 'cancelled', 
+    cancelled_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
+WHERE status IN ('scheduled', 'running');
+
+-- 2. Marcar todos los workflows activos como detenidos
+UPDATE workflow_instances 
+SET status = 'stopped',
+    stopped_at = CURRENT_TIMESTAMP,
+    next_action_at = NULL,
+    next_task_id = NULL,
+    updated_at = CURRENT_TIMESTAMP
+WHERE status IN ('active', 'paused');
+
+-- Opcional: Si quieres empezar completamente fresco, ejecuta estas líneas:
+-- ================================================
+
+-- 3. Borrar todos los logs de ejecución
+TRUNCATE TABLE workflow_execution_log CASCADE;
+
+-- 4. Borrar todas las tareas programadas
+TRUNCATE TABLE scheduled_tasks CASCADE;
+
+-- 5. Borrar todas las instancias de workflows
+TRUNCATE TABLE workflow_instances CASCADE;
+
+-- 6. Borrar estadísticas de workflows
+TRUNCATE TABLE workflow_stats CASCADE;
+
+-- 7. Resetear los IDs autoincrementales
+ALTER SEQUENCE workflow_instances_id_seq RESTART WITH 1;
+ALTER SEQUENCE workflow_execution_log_id_seq RESTART WITH 1;
+ALTER SEQUENCE scheduled_tasks_id_seq RESTART WITH 1;
+ALTER SEQUENCE workflow_stats_id_seq RESTART WITH 1;
+
+-- 8. Verificar que todo está limpio
+SELECT 'workflow_instances' as table_name, COUNT(*) as count FROM workflow_instances
+UNION ALL
+SELECT 'scheduled_tasks', COUNT(*) FROM scheduled_tasks
+UNION ALL
+SELECT 'workflow_execution_log', COUNT(*) FROM workflow_execution_log
+UNION ALL
+SELECT 'workflow_stats', COUNT(*) FROM workflow_stats;
+
+-- ================================================
+-- QUERIES ÚTILES PARA INSPECCIÓN
+-- ================================================
+
+-- Ver workflows activos que podrían reactivarse
+SELECT 
+    wi.account_id,
+    wi.status,
+    wi.created_at,
+    wi.last_activity_at,
+    wd.type as workflow_type
+FROM workflow_instances wi
+JOIN workflow_definitions wd ON wi.workflow_id = wd.id
+WHERE wi.status = 'active'
+ORDER BY wi.created_at DESC;
+
+-- Ver tareas programadas pendientes
+SELECT 
+    st.task_id,
+    st.action,
+    st.status,
+    st.scheduled_for,
+    wi.account_id
+FROM scheduled_tasks st
+JOIN workflow_instances wi ON st.workflow_instance_id = wi.id
+WHERE st.status = 'scheduled'
+ORDER BY st.scheduled_for ASC;
+
+-- Ver resumen del estado actual
+SELECT 
+    status, 
+    COUNT(*) as count 
+FROM workflow_instances 
+GROUP BY status;
