@@ -1,6 +1,6 @@
 // components/Workflows.tsx
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, StopCircle, Play, Pause,  ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronUp, StopCircle, Play, Pause, ExternalLink, Trash2 } from 'lucide-react';
 import { useActiveWorkflows, useActiveSwipeTasks, useWorkflowDetailedStatus, apiClient } from '../lib/api';
 import { LoadingSpinner, ScrollArea, formatDelay, ClientOnlyIcon } from './common';
 
@@ -23,16 +23,20 @@ interface WorkflowCardProps {
     accountId: string;
     workflowType: string;
     progress: number;
-    status: 'active' | 'paused' | 'completed' | 'failed';
+    status: 'active' | 'paused' | 'completed' | 'failed' | 'stopped';
     currentStep?: string;
     totalSteps?: number;
     startedAt: string;
     timeElapsed?: number;
     progressPercentage?: number;
+    canResume?: boolean;
+    canPause?: boolean;
+    isPermanent?: boolean;
   };
+  onRefresh?: () => void;
 }
 
-const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
+const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onRefresh }) => {
   const [expanded, setExpanded] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { data: detailedStatus, loading: detailsLoading } = useWorkflowDetailedStatus(
@@ -40,14 +44,46 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
     3000
   );
 
-  const handleStop = async () => {
+  const handlePause = async () => {
+    try {
+      setActionLoading('pause');
+      await apiClient.pauseWorkflow(workflow.accountId);
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      console.error('Failed to pause workflow:', error);
+      alert(`Failed to pause workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleResume = async () => {
+    try {
+      setActionLoading('resume');
+      await apiClient.resumeWorkflow(workflow.accountId);
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      console.error('Failed to resume workflow:', error);
+      alert(`Failed to resume workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleStop = async (deleteData = false) => {
+    const confirmMessage = deleteData 
+      ? 'Are you sure you want to permanently stop and DELETE all data for this workflow? This cannot be undone!'
+      : 'Are you sure you want to permanently stop this workflow? It will be archived and cannot be resumed.';
+    
+    if (!confirm(confirmMessage)) return;
+    
     try {
       setActionLoading('stop');
-      await apiClient.stopAccountWorkflow(workflow.accountId);
-      // Refresh parent
-      window.location.reload();
+      await apiClient.stopAccountWorkflow(workflow.accountId, deleteData);
+      if (onRefresh) onRefresh();
     } catch (error) {
       console.error('Failed to stop workflow:', error);
+      alert(`Failed to stop workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setActionLoading(null);
     }
@@ -59,6 +95,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
       case 'paused': return 'text-yellow-600 dark:text-yellow-500';
       case 'failed': return 'text-red-600 dark:text-red-500';
       case 'completed': return 'text-blue-600 dark:text-blue-500';
+      case 'stopped': return 'text-zinc-600 dark:text-zinc-500';
       default: return 'text-zinc-600 dark:text-zinc-500';
     }
   };
@@ -69,9 +106,15 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
       case 'paused': return 'border-yellow-500/30';
       case 'failed': return 'border-red-500/30';
       case 'completed': return 'border-blue-500/30';
+      case 'stopped': return 'border-zinc-500/30';
       default: return 'border-zinc-500/30';
     }
   };
+
+  // Determine which actions are available
+  const canPause = workflow.status === 'active';
+  const canResume = workflow.status === 'paused';
+  const canStop = workflow.status === 'active' || workflow.status === 'paused';
 
   return (
     <div className={`cyber-card ${getBorderColor(workflow.status)} p-6 md:p-8 relative ${workflow.status === 'active' ? 'animate-pulse-border' : ''} mb-6`}>
@@ -96,20 +139,75 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
               <ExternalLink className="w-4 h-4" />
             </ClientOnlyIcon>
           </a>
-          <button
-            onClick={handleStop}
-            disabled={actionLoading === 'stop' || workflow.status !== 'active'}
-            className="p-2 text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Stop Workflow"
-          >
-            <ClientOnlyIcon>
-              {actionLoading === 'stop' ? (
-                <LoadingSpinner size="sm" />
-              ) : (
-                <StopCircle className="w-4 h-4" />
-              )}
-            </ClientOnlyIcon>
-          </button>
+          
+          {/* Action buttons based on status */}
+          {canPause && (
+            <button
+              onClick={handlePause}
+              disabled={actionLoading === 'pause'}
+              className="p-2 text-yellow-600 dark:text-yellow-500 hover:text-yellow-700 dark:hover:text-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Pause Workflow"
+            >
+              <ClientOnlyIcon>
+                {actionLoading === 'pause' ? (
+                  <LoadingSpinner size="sm" />
+                ) : (
+                  <Pause className="w-4 h-4" />
+                )}
+              </ClientOnlyIcon>
+            </button>
+          )}
+          
+          {canResume && (
+            <button
+              onClick={handleResume}
+              disabled={actionLoading === 'resume'}
+              className="p-2 text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Resume Workflow"
+            >
+              <ClientOnlyIcon>
+                {actionLoading === 'resume' ? (
+                  <LoadingSpinner size="sm" />
+                ) : (
+                  <Play className="w-4 h-4" />
+                )}
+              </ClientOnlyIcon>
+            </button>
+          )}
+          
+          {canStop && (
+            <div className="flex items-center">
+              <button
+                onClick={() => handleStop(false)}
+                disabled={actionLoading === 'stop'}
+                className="p-2 text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Stop Workflow (Archive)"
+              >
+                <ClientOnlyIcon>
+                  {actionLoading === 'stop' ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    <StopCircle className="w-4 h-4" />
+                  )}
+                </ClientOnlyIcon>
+              </button>
+              <button
+                onClick={() => handleStop(true)}
+                disabled={actionLoading === 'stop'}
+                className="p-2 text-red-700 dark:text-red-600 hover:text-red-800 dark:hover:text-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Stop & Delete Data"
+              >
+                <ClientOnlyIcon>
+                  {actionLoading === 'stop' ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </ClientOnlyIcon>
+              </button>
+            </div>
+          )}
+          
           <button
             onClick={() => setExpanded(!expanded)}
             className="p-2 text-zinc-600 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
@@ -169,6 +267,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
             workflow.status === 'failed' ? 'bg-red-500' :
             workflow.status === 'completed' ? 'bg-blue-500' :
             workflow.status === 'paused' ? 'bg-yellow-500' :
+            workflow.status === 'stopped' ? 'bg-zinc-500' :
             'bg-gradient-to-r from-emerald-500 to-emerald-400'
           }`}
           style={{ width: `${workflow.progress}%` }}
@@ -211,6 +310,36 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow }) => {
                   </div>
                 </div>
               </div>
+
+              {/* Additional Status Info */}
+              {(detailedStatus.pausedAt || detailedStatus.resumedAt || detailedStatus.stoppedAt) && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  {detailedStatus.pausedAt && (
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-1">PAUSED AT</div>
+                      <div className="text-zinc-800 dark:text-white">
+                        {new Date(detailedStatus.pausedAt).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                  {detailedStatus.resumedAt && (
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-1">RESUMED AT</div>
+                      <div className="text-zinc-800 dark:text-white">
+                        {new Date(detailedStatus.resumedAt).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                  {detailedStatus.stoppedAt && (
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-1">STOPPED AT</div>
+                      <div className="text-zinc-800 dark:text-white">
+                        {new Date(detailedStatus.stoppedAt).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Next Step */}
               {detailedStatus.nextStep && (
@@ -291,8 +420,9 @@ const Workflows: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'active' | 'paused' | 'completed' | 'failed' | 'stopped' | 'all'>('active');
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>([]);
   
-  const { data: activeWorkflows, loading: activeLoading, summary, pagination } = useActiveWorkflows(
+  const { data: activeWorkflows, loading: activeLoading, summary, pagination, refetch } = useActiveWorkflows(
     10000, // 10 seconds refresh
     statusFilter,
     typeFilter || undefined,
@@ -304,33 +434,28 @@ const Workflows: React.FC = () => {
   // Get unique workflow types from summary
   const workflowTypes = summary ? Object.keys(summary.byWorkflowType) : [];
 
-  const handlePauseAll = async () => {
-    if (!confirm('Are you sure you want to pause ALL workflows?')) return;
+  const handleBulkOperation = async (operation: 'pause' | 'resume' | 'stop') => {
+    const accountIds = selectedWorkflows.length > 0 
+      ? selectedWorkflows 
+      : activeWorkflows?.map(w => w.accountId) || [];
     
-    try {
-      setActionLoading('pause');
-      const result = await apiClient.pauseAllWorkflows();
-      alert(result.message);
-      window.location.reload();
-    } catch (error) {
-      console.error('Failed to pause workflows:', error);
-      alert('Failed to pause workflows');
-    } finally {
-      setActionLoading(null);
+    if (accountIds.length === 0) {
+      alert('No workflows selected or available');
+      return;
     }
-  };
 
-  const handleResumeAll = async () => {
-    if (!confirm('Are you sure you want to resume ALL workflows?')) return;
+    const confirmMessage = `Are you sure you want to ${operation} ${accountIds.length} workflow(s)?`;
+    if (!confirm(confirmMessage)) return;
     
     try {
-      setActionLoading('resume');
-      const result = await apiClient.resumeAllWorkflows();
+      setActionLoading(operation);
+      const result = await apiClient.bulkWorkflowOperation(operation, accountIds);
       alert(result.message);
-      window.location.reload();
+      setSelectedWorkflows([]);
+      refetch();
     } catch (error) {
-      console.error('Failed to resume workflows:', error);
-      alert('Failed to resume workflows');
+      console.error(`Failed to ${operation} workflows:`, error);
+      alert(`Failed to ${operation} workflows`);
     } finally {
       setActionLoading(null);
     }
@@ -346,6 +471,24 @@ const Workflows: React.FC = () => {
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const toggleWorkflowSelection = (accountId: string) => {
+    setSelectedWorkflows(prev => 
+      prev.includes(accountId) 
+        ? prev.filter(id => id !== accountId)
+        : [...prev, accountId]
+    );
+  };
+
+  const selectAll = () => {
+    if (activeWorkflows) {
+      setSelectedWorkflows(activeWorkflows.map(w => w.accountId));
+    }
+  };
+
+  const deselectAll = () => {
+    setSelectedWorkflows([]);
   };
 
   if (activeLoading) {
@@ -367,12 +510,16 @@ const Workflows: React.FC = () => {
           <h1 className="text-4xl md:text-5xl font-bold tracking-tighter mb-2 text-zinc-900 dark:text-white">WORKFLOWS</h1>
           <div className="text-[11px] text-zinc-600 dark:text-zinc-500">ACTIVE AUTOMATIONS</div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {selectedWorkflows.length > 0 && (
+            <div className="text-[11px] text-zinc-600 dark:text-zinc-500 flex items-center mr-4">
+              {selectedWorkflows.length} selected
+            </div>
+          )}
           <button 
-            onClick={handlePauseAll}
-            disabled={actionLoading === 'pause' || !activeWorkflows || activeWorkflows.length === 0 || statusFilter !== 'active'}
+            onClick={() => handleBulkOperation('pause')}
+            disabled={actionLoading === 'pause' || (!selectedWorkflows.length && (!activeWorkflows || activeWorkflows.length === 0))}
             className="px-4 py-2 border border-yellow-500/30 text-yellow-600 dark:text-yellow-500 text-[11px] font-bold uppercase tracking-wider hover:bg-yellow-500/10 transition-all duration-300 flex items-center gap-2 disabled:opacity-50"
-            title={statusFilter !== 'active' ? 'Only available when viewing active workflows' : ''}
           >
             <ClientOnlyIcon>
               {actionLoading === 'pause' ? (
@@ -380,11 +527,11 @@ const Workflows: React.FC = () => {
               ) : (
                 <Pause className="w-4 h-4" />
               )}
-            </ClientOnlyIcon> PAUSE ALL
+            </ClientOnlyIcon> PAUSE {selectedWorkflows.length > 0 ? 'SELECTED' : 'ALL'}
           </button>
           <button 
-            onClick={handleResumeAll}
-            disabled={actionLoading === 'resume'}
+            onClick={() => handleBulkOperation('resume')}
+            disabled={actionLoading === 'resume' || (!selectedWorkflows.length && (!activeWorkflows || activeWorkflows.length === 0))}
             className="px-4 py-2 border border-emerald-500/30 text-emerald-600 dark:text-emerald-500 text-[11px] font-bold uppercase tracking-wider hover:bg-emerald-500/10 transition-all duration-300 flex items-center gap-2 disabled:opacity-50"
           >
             <ClientOnlyIcon>
@@ -393,7 +540,20 @@ const Workflows: React.FC = () => {
               ) : (
                 <Play className="w-4 h-4" />
               )}
-            </ClientOnlyIcon> RESUME ALL
+            </ClientOnlyIcon> RESUME {selectedWorkflows.length > 0 ? 'SELECTED' : 'ALL'}
+          </button>
+          <button 
+            onClick={() => handleBulkOperation('stop')}
+            disabled={actionLoading === 'stop' || (!selectedWorkflows.length && (!activeWorkflows || activeWorkflows.length === 0))}
+            className="px-4 py-2 border border-red-500/30 text-red-600 dark:text-red-500 text-[11px] font-bold uppercase tracking-wider hover:bg-red-500/10 transition-all duration-300 flex items-center gap-2 disabled:opacity-50"
+          >
+            <ClientOnlyIcon>
+              {actionLoading === 'stop' ? (
+                <LoadingSpinner size="sm" />
+              ) : (
+                <StopCircle className="w-4 h-4" />
+              )}
+            </ClientOnlyIcon> STOP {selectedWorkflows.length > 0 ? 'SELECTED' : 'ALL'}
           </button>
         </div>
       </header>
@@ -408,6 +568,7 @@ const Workflows: React.FC = () => {
               onChange={(e) => {
                 setStatusFilter(e.target.value as typeof statusFilter);
                 setCurrentPage(1);
+                setSelectedWorkflows([]);
               }}
               className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-white focus:border-yellow-500/50 outline-none transition-colors"
             >
@@ -427,6 +588,7 @@ const Workflows: React.FC = () => {
               onChange={(e) => {
                 setTypeFilter(e.target.value);
                 setCurrentPage(1);
+                setSelectedWorkflows([]);
               }}
               className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-white focus:border-yellow-500/50 outline-none transition-colors"
             >
@@ -443,6 +605,7 @@ const Workflows: React.FC = () => {
                 setStatusFilter('active');
                 setTypeFilter('');
                 setCurrentPage(1);
+                setSelectedWorkflows([]);
               }}
               className="px-4 py-2 text-[11px] text-zinc-600 hover:text-zinc-900 dark:hover:text-white transition-colors"
             >
@@ -452,9 +615,28 @@ const Workflows: React.FC = () => {
         </div>
       </div>
 
+      {/* Selection Controls */}
+      {activeWorkflows && activeWorkflows.length > 0 && (
+        <div className="mb-4 flex gap-2">
+          <button
+            onClick={selectAll}
+            className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-500 dark:hover:text-blue-400 transition-colors"
+          >
+            SELECT ALL
+          </button>
+          <span className="text-zinc-400">|</span>
+          <button
+            onClick={deselectAll}
+            className="text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-500 dark:hover:text-blue-400 transition-colors"
+          >
+            DESELECT ALL
+          </button>
+        </div>
+      )}
+
       {/* Summary Stats */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           <div className="cyber-card p-4 text-center">
             <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">{summary.totalActive}</div>
             <div className="text-[10px] text-zinc-600">TOTAL ACTIVE</div>
@@ -470,6 +652,12 @@ const Workflows: React.FC = () => {
               {summary.byStatus.paused || 0}
             </div>
             <div className="text-[10px] text-zinc-600">PAUSED</div>
+          </div>
+          <div className="cyber-card p-4 text-center">
+            <div className="text-2xl font-bold text-zinc-600 dark:text-zinc-500">
+              {summary.byStatus.stopped || 0}
+            </div>
+            <div className="text-[10px] text-zinc-600">STOPPED</div>
           </div>
           <div className="cyber-card p-4 text-center">
             <div className="text-2xl font-bold text-red-600 dark:text-red-500">
@@ -492,7 +680,18 @@ const Workflows: React.FC = () => {
                 <div className="flex-1 h-[1px] bg-gradient-to-r from-yellow-500/20 to-transparent"></div>
               </div>
               {activeWorkflows.map((workflow) => (
-                <WorkflowCard key={workflow.executionId} workflow={workflow} />
+                <div key={workflow.executionId} className="relative">
+                  {/* Selection checkbox */}
+                  <div className="absolute -left-8 top-8 flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedWorkflows.includes(workflow.accountId)}
+                      onChange={() => toggleWorkflowSelection(workflow.accountId)}
+                      className="w-4 h-4 text-yellow-600 bg-zinc-100 border-zinc-300 rounded focus:ring-yellow-500 dark:focus:ring-yellow-600 dark:ring-offset-zinc-800 focus:ring-2 dark:bg-zinc-700 dark:border-zinc-600"
+                    />
+                  </div>
+                  <WorkflowCard workflow={workflow} onRefresh={refetch} />
+                </div>
               ))}
               
               {/* Pagination */}

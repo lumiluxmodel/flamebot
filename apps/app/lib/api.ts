@@ -44,6 +44,20 @@ export interface WorkflowDetailedStatus {
     success: boolean;
     timestamp: string;
   }>;
+  canResume?: boolean;
+  canPause?: boolean;
+  isPermanentlyStopped?: boolean;
+  isArchived?: boolean;
+  stoppedAt?: string | null;
+  pausedAt?: string | null;
+  resumedAt?: string | null;
+  completedAt?: string | null;
+  failedAt?: string | null;
+  finalError?: string | null;
+  pendingTasks?: number;
+  totalExecutions?: number;
+  successfulExecutions?: number;
+  workflowName?: string;
 }
 
 // Alert types
@@ -180,7 +194,7 @@ export interface ActiveWorkflow {
   accountId: string;
   workflowType: string;
   progress: number;
-  status: 'active' | 'paused' | 'completed' | 'failed';
+  status: 'active' | 'paused' | 'completed' | 'failed' | 'stopped';
   currentStep?: string;
   totalSteps?: number;
   startedAt: string;
@@ -189,6 +203,9 @@ export interface ActiveWorkflow {
   timeElapsed?: number;
   progressPercentage?: number;
   isRunning?: boolean;
+  canResume?: boolean;
+  canPause?: boolean;
+  isPermanent?: boolean;
 }
 
 export interface DashboardData {
@@ -236,6 +253,35 @@ export interface DashboardData {
       scheduledTasks: number;
     };
   };
+}
+
+// New types for the enhanced endpoints
+export interface BulkOperationResult {
+  successful: string[];
+  failed: Array<{
+    accountId: string;
+    error: string;
+  }>;
+  total: number;
+}
+
+export interface WorkflowsByStatusResult {
+  workflows: Array<{
+    accountId: string;
+    status: string;
+    workflowType: string;
+    workflowName: string;
+    currentStep: number;
+    totalSteps: number;
+    progress: number;
+    startedAt: string;
+    lastActivity: string;
+    canPause: boolean;
+    canResume: boolean;
+    isPermanent: boolean;
+  }>;
+  count: number;
+  filter: string;
 }
 
 // API client class
@@ -419,22 +465,74 @@ class ApiClient {
     });
   }
 
-  // Enhanced workflow status endpoint
+  // Enhanced workflow status endpoint - NEW VERSION
   async getWorkflowDetailedStatus(accountId: string): Promise<WorkflowDetailedStatus> {
-    return this.request(`/accounts/workflow/${accountId}`);
+    return this.request(`/accounts/workflow/${accountId}/details`);
   }
 
-  async stopAccountWorkflow(accountId: string): Promise<{
+  // NEW: Pause workflow
+  async pauseWorkflow(accountId: string): Promise<{
     accountId: string;
     status: string;
-    stoppedAt: string;
+    canResume: boolean;
+    success: boolean;
+    message: string;
   }> {
-    return this.request(`/accounts/workflow/${accountId}/stop`, {
+    return this.request(`/accounts/workflow/${accountId}/pause`, {
       method: 'POST',
     });
   }
 
-  // New API endpoints
+  // NEW: Resume workflow
+  async resumeWorkflow(accountId: string): Promise<{
+    accountId: string;
+    status: string;
+    success: boolean;
+    message: string;
+    currentStep?: number;
+    totalSteps?: number;
+  }> {
+    return this.request(`/accounts/workflow/${accountId}/resume`, {
+      method: 'POST',
+    });
+  }
+
+  // UPDATED: Stop workflow with delete option
+  async stopAccountWorkflow(accountId: string, deleteData = false): Promise<{
+    accountId: string;
+    status: string;
+    permanent: boolean;
+    deleted: boolean;
+    success: boolean;
+    message: string;
+    cannotResume: boolean;
+  }> {
+    return this.request(`/accounts/workflow/${accountId}/stop`, {
+      method: 'POST',
+      body: JSON.stringify({ deleteData }),
+    });
+  }
+
+  // NEW: Bulk operations
+  async bulkWorkflowOperation(operation: 'pause' | 'resume' | 'stop', accountIds: string[]): Promise<{
+    message: string;
+    results: BulkOperationResult;
+  }> {
+    return this.request('/accounts/workflows/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ operation, accountIds }),
+    });
+  }
+
+  // NEW: Get workflows by status
+  async getWorkflowsByStatus(status?: 'active' | 'paused' | 'stopped'): Promise<WorkflowsByStatusResult> {
+    const endpoint = status 
+      ? `/accounts/workflows/by-status?status=${status}`
+      : '/accounts/workflows/by-status';
+    return this.request(endpoint);
+  }
+
+  // Existing endpoints remain the same...
   async getModels(): Promise<ModelData> {
     return this.request<ModelData>('/accounts/models');
   }
@@ -465,12 +563,14 @@ class ApiClient {
     return this.request<WorkflowStats>('/accounts/workflows/stats');
   }
 
+  // DEPRECATED: Use bulkWorkflowOperation instead
   async pauseAllWorkflows(): Promise<{ message: string; affectedWorkflows: number }> {
     return this.request('/accounts/workflows/pause-all', {
       method: 'POST',
     });
   }
 
+  // DEPRECATED: Use bulkWorkflowOperation instead
   async resumeAllWorkflows(): Promise<{ message: string; affectedWorkflows: number }> {
     return this.request('/accounts/workflows/resume-all', {
       method: 'POST',
@@ -804,6 +904,36 @@ export function useWorkflowDetailedStatus(accountId: string, refreshInterval = 3
       return () => clearInterval(interval);
     }
   }, [fetchData, refreshInterval, accountId]);
+
+  return { data, loading, error, refetch: fetchData };
+}
+
+// NEW: Hook for workflows by status
+export function useWorkflowsByStatus(status?: 'active' | 'paused' | 'stopped', refreshInterval = 10000) {
+  const [data, setData] = useState<WorkflowsByStatusResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setError(null);
+      const result = await apiClient.getWorkflowsByStatus(status);
+      setData(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch workflows by status');
+    } finally {
+      setLoading(false);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    fetchData();
+    
+    if (refreshInterval > 0) {
+      const interval = setInterval(fetchData, refreshInterval);
+      return () => clearInterval(interval);
+    }
+  }, [fetchData, refreshInterval]);
 
   return { data, loading, error, refetch: fetchData };
 }
