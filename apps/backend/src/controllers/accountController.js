@@ -469,6 +469,42 @@ class AccountController {
   }
 
   /**
+ * Obtener estado detallado del workflow
+ */
+async getDetailedWorkflowStatus(req, res) {
+  try {
+    const { accountId } = req.params;
+
+    if (!accountId) {
+      return res.status(400).json({
+        success: false,
+        error: "Account ID is required",
+      });
+    }
+
+    const status = await workflowManager.getDetailedWorkflowStatus(accountId);
+    
+    if (status) {
+      res.json({
+        success: true,
+        data: status
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: "Workflow not found for this account"
+      });
+    }
+  } catch (error) {
+    console.error("Get detailed status error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+  /**
    * Get available models (unchanged)
    */
   async getModels(req, res) {
