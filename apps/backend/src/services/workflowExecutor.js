@@ -1156,6 +1156,190 @@ class WorkflowExecutor extends EventEmitter {
   }
 
   /**
+   * NUEVA: Pausar workflow (se puede resumir después)
+   * @param {string} accountId - Account ID
+   * @returns {Promise<Object>} Pause result
+   */
+  async pauseExecution(accountId) {
+    const execution = this.activeExecutions.get(accountId);
+
+    if (!execution) {
+      const dbExecution = await this.loadExecutionFromDatabase(accountId);
+      if (!dbExecution || dbExecution.status !== "active") {
+        return {
+          success: false,
+          error: "No active execution found to pause",
+        };
+      }
+    }
+
+    console.log(`⏸️ Pausing workflow execution: ${accountId}`);
+
+    // Actualizar en memoria si existe
+    if (execution) {
+      execution.status = "paused";
+      execution.pausedAt = new Date();
+    }
+
+    try {
+      // Actualizar en base de datos
+      const updateQuery = `
+      UPDATE workflow_instances 
+      SET status = 'paused',
+          paused_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP,
+          execution_context = jsonb_set(
+            COALESCE(execution_context, '{}'),
+            '{pause_reason}',
+            '"Manual pause by user"'
+          )
+      WHERE account_id = $1 AND status = 'active'
+      RETURNING *
+    `;
+
+      const result = await workflowDb.db.query(updateQuery, [accountId]);
+
+      if (result.rowCount === 0) {
+        return {
+          success: false,
+          error: "Workflow not found or not active",
+        };
+      }
+
+      // NO cancelamos las tareas, solo las marcamos como pausadas
+      const pauseTasksQuery = `
+      UPDATE scheduled_tasks st
+      SET execution_context = jsonb_set(
+        COALESCE(execution_context, '{}'),
+        '{paused}',
+        'true'
+      )
+      FROM workflow_instances wi
+      WHERE st.workflow_instance_id = wi.id
+      AND wi.account_id = $1
+      AND st.status = 'scheduled'
+    `;
+
+      await workflowDb.db.query(pauseTasksQuery, [accountId]);
+
+      this.emit("execution:paused", {
+        accountId,
+        executionId: execution?.executionId || "unknown",
+        pausedBy: "user",
+      });
+
+      console.log(`✅ Workflow paused successfully for account: ${accountId}`);
+
+      return {
+        success: true,
+        message: "Workflow paused successfully",
+        canResume: true,
+      };
+    } catch (error) {
+      console.error(`❌ Failed to pause workflow:`, error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * NUEVA: Resumir workflow pausado
+   * @param {string} accountId - Account ID
+   * @returns {Promise<Object>} Resume result
+   */
+  async resumeExecution(accountId) {
+    console.log(`▶️ Resuming workflow execution: ${accountId}`);
+
+    try {
+      // Verificar que el workflow esté pausado
+      const checkQuery = `
+      SELECT * FROM workflow_instances 
+      WHERE account_id = $1 AND status = 'paused'
+    `;
+
+      const checkResult = await workflowDb.db.query(checkQuery, [accountId]);
+
+      if (checkResult.rowCount === 0) {
+        return {
+          success: false,
+          error: "No paused workflow found for this account",
+        };
+      }
+
+      const workflowInstance = checkResult.rows[0];
+
+      // Actualizar estado a activo
+      const updateQuery = `
+      UPDATE workflow_instances 
+      SET status = 'active',
+          resumed_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP,
+          execution_context = jsonb_set(
+            COALESCE(execution_context, '{}'),
+            '{resumed_at}',
+            to_jsonb(CURRENT_TIMESTAMP::text)
+          )
+      WHERE account_id = $1 AND status = 'paused'
+      RETURNING *
+    `;
+
+      await workflowDb.db.query(updateQuery, [accountId]);
+
+      // Reactivar tareas pausadas
+      const resumeTasksQuery = `
+      UPDATE scheduled_tasks st
+      SET execution_context = jsonb_set(
+        COALESCE(execution_context, '{}'),
+        '{paused}',
+        'false'
+      )
+      FROM workflow_instances wi
+      WHERE st.workflow_instance_id = wi.id
+      AND wi.account_id = $1
+      AND st.status = 'scheduled'
+    `;
+
+      await workflowDb.db.query(resumeTasksQuery, [accountId]);
+
+      // Cargar el workflow en memoria si no está
+      let execution = this.activeExecutions.get(accountId);
+      if (!execution) {
+        execution = await this.loadExecutionFromDatabase(accountId);
+        if (execution) {
+          this.activeExecutions.set(accountId, execution);
+        }
+      }
+
+      // Si hay un siguiente paso pendiente, programarlo
+      if (execution && execution.currentStep < execution.totalSteps) {
+        await this.scheduleNextStep(execution);
+      }
+
+      this.emit("execution:resumed", {
+        accountId,
+        executionId: execution?.executionId || "unknown",
+      });
+
+      console.log(`✅ Workflow resumed successfully for account: ${accountId}`);
+
+      return {
+        success: true,
+        message: "Workflow resumed successfully",
+        currentStep: execution?.currentStep,
+        totalSteps: execution?.totalSteps,
+      };
+    } catch (error) {
+      console.error(`❌ Failed to resume workflow:`, error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
    * Complete workflow execution
    * @param {Object} execution - Execution state
    */
@@ -1404,6 +1588,17 @@ class WorkflowExecutor extends EventEmitter {
     }
   }
 
+  async checkWorkflowStatus(accountId) {
+    const query = `
+      SELECT status, execution_context
+      FROM workflow_instances
+      WHERE account_id = $1
+    `;
+    
+    const result = await workflowDb.db.query(query, [accountId]);
+    return result.rows[0];
+  }
+
   /**
    * Setup event listeners
    */
@@ -1454,6 +1649,8 @@ class WorkflowExecutor extends EventEmitter {
         total;
     }
   }
+
+  
 }
 
 // Export singleton instance
