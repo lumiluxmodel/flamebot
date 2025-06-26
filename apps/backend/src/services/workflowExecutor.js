@@ -412,17 +412,23 @@ class WorkflowExecutor extends EventEmitter {
         };
       }
 
+      // Filtrar solo steps no paralelos para el flujo principal
+      const mainFlowSteps = workflowDef.steps.filter((step) => !step.parallel);
+      const parallelSteps = workflowDef.steps.filter((step) => step.parallel);
+
       // Create workflow instance in database
       const workflowInstance = await workflowDb.createWorkflowInstance({
         workflowType,
         accountId,
         accountData,
-        totalSteps: workflowDef.steps.length,
+        totalSteps: mainFlowSteps.length, // Solo contar steps del flujo principal
         executionContext: {
           startedAt: new Date(),
           currentStep: 0,
           retryCount: 0,
           maxRetries: workflowDef.maxRetries || 3,
+          hasParallelSteps: parallelSteps.length > 0,
+          parallelStepIds: parallelSteps.map((s) => s.id),
         },
       });
 
@@ -432,17 +438,21 @@ class WorkflowExecutor extends EventEmitter {
         accountId,
         accountData,
         workflowType,
-        workflowDef,
+        workflowDef: {
+          ...workflowDef,
+          steps: mainFlowSteps, // Solo steps del flujo principal
+        },
+        originalWorkflowDef: workflowDef, // Guardar definición completa
         workflowInstanceId: workflowInstance.id,
         status: "active",
         currentStep: 0,
-        totalSteps: workflowDef.steps.length,
+        totalSteps: mainFlowSteps.length,
         startedAt: new Date(),
         lastActivity: new Date(),
         retryCount: 0,
         maxRetries: workflowDef.maxRetries || 3,
         executionLog: [],
-        scheduledTasks: new Map(), // stepId -> taskId
+        scheduledTasks: new Map(),
         continuousSwipeTaskId: null,
       };
 
@@ -450,22 +460,33 @@ class WorkflowExecutor extends EventEmitter {
       this.activeExecutions.set(accountId, execution);
       this.executionStats.totalExecutions++;
 
-      // Start first step
+      // Programar steps paralelos
+      if (parallelSteps.length > 0) {
+        await this.scheduleParallelSteps(execution);
+      }
+
+      // Start first step del flujo principal
       await this.scheduleNextStep(execution);
 
       this.emit("execution:started", {
         accountId,
         executionId: execution.executionId,
         workflowType,
+        hasParallelSteps: parallelSteps.length > 0,
       });
 
       console.log(`✅ Workflow execution started: ${execution.executionId}`);
+      if (parallelSteps.length > 0) {
+        console.log(`   ⚡ ${parallelSteps.length} parallel steps scheduled`);
+      }
 
       return {
         success: true,
         executionId: execution.executionId,
         workflowType,
-        totalSteps: execution.totalSteps,
+        totalSteps: workflowDef.steps.length,
+        mainFlowSteps: mainFlowSteps.length,
+        parallelSteps: parallelSteps.length,
         estimatedDuration: this.calculateEstimatedDuration(workflowDef.steps),
       };
     } catch (error) {
@@ -487,30 +508,63 @@ class WorkflowExecutor extends EventEmitter {
       return;
     }
 
-    const currentStep = execution.workflowDef.steps[execution.currentStep];
-    if (!currentStep) {
+    // Obtener el step actual que acaba de ejecutarse
+    const currentStepConfig =
+      execution.currentStep > 0
+        ? execution.workflowDef.steps[execution.currentStep - 1]
+        : null;
+
+    let nextStep;
+    let nextStepIndex;
+
+    // Verificar si el step actual tiene un nextStep personalizado (para loops)
+    if (currentStepConfig && currentStepConfig.nextStep) {
+      // Buscar el step por ID
+      nextStepIndex = execution.workflowDef.steps.findIndex(
+        (s) => s.id === currentStepConfig.nextStep
+      );
+      if (nextStepIndex !== -1) {
+        nextStep = execution.workflowDef.steps[nextStepIndex];
+        console.log(
+          `🔄 Custom next step: jumping to ${currentStepConfig.nextStep} (index ${nextStepIndex})`
+        );
+      } else {
+        console.error(`❌ NextStep not found: ${currentStepConfig.nextStep}`);
+        // Continuar con flujo normal
+        nextStep = execution.workflowDef.steps[execution.currentStep];
+        nextStepIndex = execution.currentStep;
+      }
+    } else {
+      // Flujo normal secuencial
+      nextStep = execution.workflowDef.steps[execution.currentStep];
+      nextStepIndex = execution.currentStep;
+    }
+
+    if (!nextStep) {
       // Workflow completed
       await this.completeExecution(execution);
       return;
     }
 
+    // Actualizar el índice para el próximo step
+    execution.currentStep = nextStepIndex;
+
     console.log(
-      `⏰ Scheduling step ${execution.currentStep + 1}/${execution.totalSteps}`
+      `⏰ Scheduling step ${nextStepIndex + 1}/${execution.totalSteps}`
     );
-    console.log(`   Step: ${currentStep.id} (${currentStep.description})`);
-    console.log(`   Delay: ${this.formatDuration(currentStep.delay || 0)}`); // <- Asegurar que delay no sea undefined
+    console.log(`   Step: ${nextStep.id} (${nextStep.description})`);
+    console.log(`   Delay: ${this.formatDuration(nextStep.delay || 0)}`);
 
     try {
-      // FIX: Asegurar que el delay sea un número válido
-      const delay = parseInt(currentStep.delay) || 0;
+      const delay = parseInt(nextStep.delay) || 0;
       const executeAt = new Date(Date.now() + delay);
 
       // Validar que la fecha sea válida
       if (isNaN(executeAt.getTime())) {
         console.error(
-          `❌ Invalid execution time for step ${currentStep.id}. Delay: ${currentStep.delay}`
+          `❌ Invalid execution time for step ${nextStep.id}. Delay: ${nextStep.delay}`
         );
-        throw new Error(`Invalid delay value: ${currentStep.delay}`);
+        throw new Error(`Invalid delay value: ${nextStep.delay}`);
       }
 
       console.log(`   Execute at: ${executeAt.toISOString()}`);
@@ -518,29 +572,29 @@ class WorkflowExecutor extends EventEmitter {
       // Schedule task using TaskScheduler
       const taskId = await taskScheduler.scheduleTask({
         workflowInstanceId: execution.workflowInstanceId,
-        stepId: currentStep.id,
+        stepId: nextStep.id,
         action: "execute_workflow_step",
         scheduledFor: executeAt,
         payload: {
           executionId: execution.executionId,
           accountId: execution.accountId,
-          stepIndex: execution.currentStep,
-          stepConfig: currentStep,
+          stepIndex: nextStepIndex,
+          stepConfig: nextStep,
           workflowType: execution.workflowType,
         },
         maxAttempts: execution.maxRetries,
       });
 
       // Store task reference
-      execution.scheduledTasks.set(currentStep.id, taskId);
+      execution.scheduledTasks.set(nextStep.id, taskId);
 
       // Update database
       await workflowDb.updateWorkflowInstance(execution.accountId, {
-        current_step: execution.currentStep,
+        current_step: nextStepIndex,
         next_action_at: executeAt,
         next_task_id: taskId,
         progress_percentage: Math.round(
-          (execution.currentStep / execution.totalSteps) * 100
+          (nextStepIndex / execution.totalSteps) * 100
         ),
       });
 
@@ -549,7 +603,68 @@ class WorkflowExecutor extends EventEmitter {
       );
     } catch (error) {
       console.error(`❌ Failed to schedule step:`, error);
-      await this.handleExecutionError(execution, currentStep, error);
+      await this.handleExecutionError(execution, nextStep, error);
+    }
+  }
+
+  async scheduleParallelSteps(execution) {
+    // Buscar todos los steps marcados como parallel
+    const parallelSteps = execution.workflowDef.steps.filter(
+      (step) => step.parallel === true
+    );
+
+    if (parallelSteps.length === 0) return;
+
+    console.log(`⚡ Scheduling ${parallelSteps.length} parallel steps`);
+
+    for (const step of parallelSteps) {
+      try {
+        // Los steps paralelos se programan desde el inicio del workflow
+        const delay = parseInt(step.delay) || 0;
+        const executeAt = new Date(execution.startedAt.getTime() + delay);
+
+        // Solo programar si está en el futuro
+        if (executeAt > new Date()) {
+          console.log(
+            `   ⚡ Scheduling parallel step: ${
+              step.id
+            } for ${executeAt.toLocaleString()}`
+          );
+
+          const taskId = await taskScheduler.scheduleTask({
+            workflowInstanceId: execution.workflowInstanceId,
+            stepId: step.id,
+            action: "execute_workflow_step",
+            scheduledFor: executeAt,
+            payload: {
+              executionId: execution.executionId,
+              accountId: execution.accountId,
+              stepIndex: -1, // Indicador de step paralelo
+              stepConfig: step,
+              workflowType: execution.workflowType,
+              isParallel: true,
+            },
+            maxAttempts: step.critical ? execution.maxRetries : 1,
+          });
+
+          // Guardar referencia
+          execution.scheduledTasks.set(`parallel_${step.id}`, taskId);
+        } else {
+          console.log(
+            `   ⚡ Parallel step ${step.id} delay already passed, executing now`
+          );
+          // Ejecutar inmediatamente
+          setTimeout(async () => {
+            await this.executeStepAction(execution, step);
+          }, 0);
+        }
+      } catch (error) {
+        console.error(`❌ Failed to schedule parallel step ${step.id}:`, error);
+        // No fallar todo el workflow por un step paralelo no crítico
+        if (step.critical) {
+          throw error;
+        }
+      }
     }
   }
 
@@ -559,9 +674,14 @@ class WorkflowExecutor extends EventEmitter {
    * @returns {Promise<Object>} Execution result
    */
   async executeWorkflowStep(payload) {
-    const { executionId, accountId, stepIndex, stepConfig } = payload;
+    const { executionId, accountId, stepIndex, stepConfig, isParallel } =
+      payload;
 
-    console.log(`\n🎬 Executing workflow step: ${stepConfig.id}`);
+    console.log(
+      `\n🎬 Executing workflow step: ${stepConfig.id}${
+        isParallel ? " (PARALLEL)" : ""
+      }`
+    );
     console.log(`   Account: ${accountId}`);
     console.log(`   Action: ${stepConfig.action}`);
 
@@ -599,17 +719,22 @@ class WorkflowExecutor extends EventEmitter {
       result = await Promise.race([executionPromise, timeoutPromise]);
 
       success = true;
-      execution.retryCount = 0; // Reset retry count on success
+
+      // Solo resetear retry count si no es paralelo
+      if (!isParallel) {
+        execution.retryCount = 0;
+      }
 
       // Log success
       const logEntry = {
         stepId: stepConfig.id,
-        stepIndex,
+        stepIndex: isParallel ? -1 : stepIndex,
         action: stepConfig.action,
         success: true,
         result,
         duration: Date.now() - startTime,
         timestamp: new Date(),
+        isParallel: isParallel || false,
       };
       execution.executionLog.push(logEntry);
 
@@ -617,9 +742,9 @@ class WorkflowExecutor extends EventEmitter {
       await workflowDb.addExecutionLog({
         workflowInstanceId: execution.workflowInstanceId,
         stepId: stepConfig.id,
-        stepIndex,
+        stepIndex: isParallel ? -1 : stepIndex,
         action: stepConfig.action,
-        description: stepConfig.description,
+        description: stepConfig.description + (isParallel ? " (Parallel)" : ""),
         success: true,
         result,
         durationMs: Date.now() - startTime,
@@ -632,6 +757,22 @@ class WorkflowExecutor extends EventEmitter {
       // Update last activity
       execution.lastActivity = new Date();
 
+      // Si es un step paralelo, no afecta el flujo principal
+      if (isParallel) {
+        console.log(
+          `⚡ Parallel step completed, main flow continues independently`
+        );
+
+        this.emit("execution:parallel_step_completed", {
+          accountId,
+          executionId,
+          stepId: stepConfig.id,
+          result,
+        });
+
+        return { success, result, duration: Date.now() - startTime };
+      }
+
       // Handle next step based on action type
       if (stepConfig.action === "activate_continuous_swipe") {
         // Special handling for continuous swipe activation
@@ -639,7 +780,7 @@ class WorkflowExecutor extends EventEmitter {
           `🔄 Continuous swipe activated, handling next steps specially...`
         );
 
-        // Move to next step
+        // Incrementar para el siguiente step
         execution.currentStep++;
 
         // Update database with current progress
@@ -655,58 +796,14 @@ class WorkflowExecutor extends EventEmitter {
           },
         });
 
-        // Check if there's a next step (like bio_after_24h)
-        const nextStep = execution.workflowDef.steps[execution.currentStep];
-        if (nextStep) {
-          // For steps with long delays (like 24h bio), calculate from workflow start
-          const delayFromStart = this.calculateDelayFromStart(
-            execution,
-            nextStep
-          );
-          const executeAt = new Date(
-            execution.startedAt.getTime() + delayFromStart
-          );
+        // Continuar con el siguiente step
+        await this.scheduleNextStep(execution);
+      } else if (stepConfig.action === "goto") {
+        // Manejar acción goto (para loops)
+        console.log(`🔄 Goto action: jumping to ${stepConfig.nextStep}`);
 
-          // Only schedule if it's in the future
-          if (executeAt > new Date()) {
-            console.log(
-              `⏰ Scheduling ${nextStep.id} for ${executeAt.toLocaleString()}`
-            );
-
-            const taskId = await taskScheduler.scheduleTask({
-              workflowInstanceId: execution.workflowInstanceId,
-              stepId: nextStep.id,
-              action: "execute_workflow_step",
-              scheduledFor: executeAt,
-              payload: {
-                executionId: execution.executionId,
-                accountId: execution.accountId,
-                stepIndex: execution.currentStep,
-                stepConfig: nextStep,
-                workflowType: execution.workflowType,
-              },
-              maxAttempts: execution.maxRetries,
-            });
-
-            // Store task reference
-            execution.scheduledTasks.set(nextStep.id, taskId);
-
-            // Update database
-            await workflowDb.updateWorkflowInstance(execution.accountId, {
-              next_action_at: executeAt,
-              next_task_id: taskId,
-            });
-          } else {
-            // If the delay has already passed, execute immediately
-            console.log(
-              `⚡ Next step delay already passed, scheduling immediately`
-            );
-            await this.scheduleNextStep(execution);
-          }
-        } else {
-          // No more steps, workflow will complete when bio executes
-          console.log(`📋 No more steps after continuous swipe activation`);
-        }
+        // No incrementar currentStep, scheduleNextStep lo manejará
+        await this.scheduleNextStep(execution);
       } else {
         // Normal flow for all other actions
         execution.currentStep++;
@@ -728,12 +825,13 @@ class WorkflowExecutor extends EventEmitter {
       // Log failure
       const logEntry = {
         stepId: stepConfig.id,
-        stepIndex,
+        stepIndex: isParallel ? -1 : stepIndex,
         action: stepConfig.action,
         success: false,
         error: errorMessage,
         duration: Date.now() - startTime,
         timestamp: new Date(),
+        isParallel: isParallel || false,
       };
       execution.executionLog.push(logEntry);
 
@@ -741,13 +839,33 @@ class WorkflowExecutor extends EventEmitter {
       await workflowDb.addExecutionLog({
         workflowInstanceId: execution.workflowInstanceId,
         stepId: stepConfig.id,
-        stepIndex,
+        stepIndex: isParallel ? -1 : stepIndex,
         action: stepConfig.action,
-        description: stepConfig.description,
+        description: stepConfig.description + (isParallel ? " (Parallel)" : ""),
         success: false,
         errorMessage,
         durationMs: Date.now() - startTime,
       });
+
+      // Si es un step paralelo no crítico, no afecta el flujo principal
+      if (isParallel && !stepConfig.critical) {
+        console.log(
+          `⚡ Non-critical parallel step failed, main flow continues`
+        );
+
+        this.emit("execution:parallel_step_failed", {
+          accountId,
+          executionId,
+          stepId: stepConfig.id,
+          error: errorMessage,
+        });
+
+        return {
+          success: false,
+          error: errorMessage,
+          duration: Date.now() - startTime,
+        };
+      }
 
       // Handle error (retry or fail)
       await this.handleExecutionError(execution, stepConfig, error);
@@ -811,6 +929,7 @@ class WorkflowExecutor extends EventEmitter {
           bioText: bioResult.generatedBio,
           success: true,
         };
+
       case "swipe":
       case "swipe_with_spectre":
         console.log(
@@ -841,6 +960,18 @@ class WorkflowExecutor extends EventEmitter {
           swipeCount: stepConfig.swipeCount,
           taskId: swipeResult.taskId,
           spectreConfigured: true,
+          success: true,
+        };
+
+      case "goto":
+        // Acción especial para loops
+        console.log(
+          `🔄 Goto action: preparing to jump to ${stepConfig.nextStep}`
+        );
+        return {
+          action: "goto",
+          targetStep: stepConfig.nextStep,
+          message: `Loop to ${stepConfig.nextStep}`,
           success: true,
         };
 
