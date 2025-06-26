@@ -766,19 +766,6 @@ class WorkflowExecutor extends EventEmitter {
       duration: Date.now() - startTime,
     };
   }
-  // Nuevo método helper para calcular delays desde el inicio del workflow
-  calculateDelayFromStart(execution, step) {
-    // Para steps como bio_after_24h, necesitamos calcular desde el inicio
-    // no desde el step actual
-    if (step.delay && step.delay > 3600000) {
-      // Si el delay es mayor a 1 hora
-      // Es probable que sea un delay desde el inicio del workflow
-      return step.delay;
-    }
-
-    // Para delays cortos, usar el delay normal
-    return step.delay || 0;
-  }
 
   /**
    * Execute individual step action
@@ -1477,6 +1464,209 @@ class WorkflowExecutor extends EventEmitter {
   }
 
   /**
+   * Get detailed workflow status including database info
+   * @param {string} accountId - Account ID
+   * @returns {Promise<Object|null>} Detailed workflow status
+   */
+  async getDetailedWorkflowStatus(accountId) {
+    try {
+      // Primero intentar obtener de memoria
+      let execution = this.activeExecutions.get(accountId);
+
+      // Si no está en memoria, cargar desde base de datos
+      if (!execution) {
+        console.log(
+          `📥 Loading execution from database for detailed status: ${accountId}`
+        );
+        execution = await this.loadExecutionFromDatabase(accountId);
+
+        if (!execution) {
+          // No hay workflow activo, buscar en la base de datos cualquier estado
+          const workflowInstance =
+            await workflowDb.getWorkflowInstanceByAccountId(accountId);
+
+          if (!workflowInstance) {
+            console.log(`❌ No workflow found for account: ${accountId}`);
+            return null;
+          }
+
+          // Obtener logs de ejecución
+          const executionLogs = await workflowDb.getExecutionLog(
+            workflowInstance.id,
+            20
+          );
+
+          // Obtener tareas programadas
+          const scheduledTasksQuery = `
+          SELECT * FROM scheduled_tasks 
+          WHERE workflow_instance_id = $1 
+          ORDER BY scheduled_for DESC 
+          LIMIT 10
+        `;
+          const scheduledTasks = await workflowDb.db.query(
+            scheduledTasksQuery,
+            [workflowInstance.id]
+          );
+
+          // Retornar información de la base de datos
+          return {
+            accountId: accountId,
+            workflowType: workflowInstance.workflow_type,
+            status: workflowInstance.status,
+            currentStep: workflowInstance.current_step,
+            totalSteps: workflowInstance.total_steps,
+            progress: workflowInstance.progress_percentage || 0,
+            startedAt: workflowInstance.started_at,
+            lastActivity: workflowInstance.last_activity_at,
+            completedAt: workflowInstance.completed_at,
+            failedAt: workflowInstance.failed_at,
+            stoppedAt: workflowInstance.stopped_at,
+            pausedAt: workflowInstance.paused_at,
+            resumedAt: workflowInstance.resumed_at,
+            finalError: workflowInstance.final_error,
+            nextActionAt: workflowInstance.next_action_at,
+            retryCount: workflowInstance.retry_count || 0,
+            executionContext: workflowInstance.execution_context,
+            accountData: workflowInstance.account_data,
+            workflowDefinition: {
+              name: workflowInstance.workflow_name,
+              description: workflowInstance.workflow_description,
+              steps: workflowInstance.steps,
+            },
+            executionLogs: executionLogs.map((log) => ({
+              stepId: log.step_id,
+              stepIndex: log.step_index,
+              action: log.action,
+              description: log.description,
+              success: log.success,
+              result: log.result,
+              error: log.error_message,
+              duration: log.duration_ms,
+              executedAt: log.executed_at,
+            })),
+            scheduledTasks: scheduledTasks.rows.map((task) => ({
+              taskId: task.task_id,
+              stepId: task.step_id,
+              action: task.action,
+              status: task.status,
+              scheduledFor: task.scheduled_for,
+              createdAt: task.created_at,
+              completedAt: task.completed_at,
+              lastError: task.last_error,
+              attempts: task.attempts,
+            })),
+            isInMemory: false,
+          };
+        }
+      }
+
+      // Si está en memoria, obtener información completa
+      const workflowInstance = await workflowDb.getWorkflowInstanceById(
+        execution.workflowInstanceId
+      );
+      const executionLogs = await workflowDb.getExecutionLog(
+        execution.workflowInstanceId,
+        20
+      );
+      const scheduledTasksQuery = `
+      SELECT * FROM scheduled_tasks 
+      WHERE workflow_instance_id = $1 
+      ORDER BY scheduled_for DESC 
+      LIMIT 10
+    `;
+      const scheduledTasks = await workflowDb.db.query(scheduledTasksQuery, [
+        execution.workflowInstanceId,
+      ]);
+
+      return {
+        // Información de memoria
+        executionId: execution.executionId,
+        accountId: execution.accountId,
+        workflowType: execution.workflowType,
+        status: execution.status,
+        currentStep: execution.currentStep,
+        totalSteps: execution.totalSteps,
+        progress: Math.round(
+          (execution.currentStep / execution.totalSteps) * 100
+        ),
+        startedAt: execution.startedAt,
+        lastActivity: execution.lastActivity,
+        retryCount: execution.retryCount,
+        maxRetries: execution.maxRetries,
+        lastError: execution.lastError,
+        continuousSwipeActive: !!execution.continuousSwipeTaskId,
+        continuousSwipeTaskId: execution.continuousSwipeTaskId,
+
+        // Información de base de datos
+        workflowInstanceId: execution.workflowInstanceId,
+        nextActionAt: workflowInstance?.next_action_at,
+        nextTaskId: workflowInstance?.next_task_id,
+        completedAt: workflowInstance?.completed_at,
+        failedAt: workflowInstance?.failed_at,
+        stoppedAt: workflowInstance?.stopped_at,
+        pausedAt: workflowInstance?.paused_at,
+        resumedAt: workflowInstance?.resumed_at,
+        finalError: workflowInstance?.final_error,
+        executionContext: workflowInstance?.execution_context,
+        accountData: execution.accountData,
+
+        // Definición del workflow
+        workflowDefinition: {
+          name: execution.workflowDef.name,
+          description: execution.workflowDef.description,
+          steps: execution.workflowDef.steps,
+          config: execution.workflowDef.config,
+        },
+
+        // Próximo paso
+        nextStep: execution.workflowDef.steps[execution.currentStep],
+
+        // Logs de ejecución (desde DB)
+        executionLogs: executionLogs.map((log) => ({
+          stepId: log.step_id,
+          stepIndex: log.step_index,
+          action: log.action,
+          description: log.description,
+          success: log.success,
+          result: log.result,
+          error: log.error_message,
+          duration: log.duration_ms,
+          executedAt: log.executed_at,
+        })),
+
+        // Tareas programadas activas
+        scheduledTasks: scheduledTasks.rows.map((task) => ({
+          taskId: task.task_id,
+          stepId: task.step_id,
+          action: task.action,
+          status: task.status,
+          scheduledFor: task.scheduled_for,
+          createdAt: task.created_at,
+          completedAt: task.completed_at,
+          lastError: task.last_error,
+          attempts: task.attempts,
+        })),
+
+        // Estado de tareas en memoria
+        memoryScheduledTasks: Array.from(
+          execution.scheduledTasks.entries()
+        ).map(([stepId, taskId]) => ({
+          stepId,
+          taskId,
+        })),
+
+        isInMemory: true,
+      };
+    } catch (error) {
+      console.error(
+        `❌ Error getting detailed workflow status for ${accountId}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Get all active executions
    * @returns {Array} Active executions
    */
@@ -1594,9 +1784,23 @@ class WorkflowExecutor extends EventEmitter {
       FROM workflow_instances
       WHERE account_id = $1
     `;
-    
+
     const result = await workflowDb.db.query(query, [accountId]);
     return result.rows[0];
+  }
+
+  // Nuevo método helper para calcular delays desde el inicio del workflow
+  calculateDelayFromStart(execution, step) {
+    // Para steps como bio_after_24h, necesitamos calcular desde el inicio
+    // no desde el step actual
+    if (step.delay && step.delay > 3600000) {
+      // Si el delay es mayor a 1 hora
+      // Es probable que sea un delay desde el inicio del workflow
+      return step.delay;
+    }
+
+    // Para delays cortos, usar el delay normal
+    return step.delay || 0;
   }
 
   /**
@@ -1649,8 +1853,6 @@ class WorkflowExecutor extends EventEmitter {
         total;
     }
   }
-
-  
 }
 
 // Export singleton instance
