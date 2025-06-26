@@ -156,13 +156,16 @@ class WorkflowExecutor extends EventEmitter {
 
     // Default workflow definitions (can be overridden from database)
     const defaultDefinitions = {
+      // Workflow básico sin loops ni parallel (como antes)
       default: {
         name: "Default Account Automation",
         description:
           "Standard automation: 1h wait → prompt → 10 swipes → 20 swipes → 20 swipes → continuous → bio after 24h",
-        maxRetries: 3,
-        retryBackoffMs: 30000, // 30 seconds base
-        timeoutMs: 600000, // 10 minutes per step
+        config: {
+          maxRetries: 3,
+          retryBackoffMs: 30000,
+          timeoutMs: 600000,
+        },
         steps: [
           {
             id: "initial_wait",
@@ -177,7 +180,7 @@ class WorkflowExecutor extends EventEmitter {
             delay: 0,
             description: "Add AI-generated prompt",
             critical: true,
-            timeout: 120000, // 2 minutes
+            timeout: 120000,
           },
           {
             id: "pre_swipe_wait",
@@ -193,7 +196,7 @@ class WorkflowExecutor extends EventEmitter {
             swipeCount: 10,
             description: "First swipe session - 10 swipes",
             critical: true,
-            timeout: 300000, // 5 minutes
+            timeout: 300000,
           },
           {
             id: "inter_swipe_wait_1",
@@ -209,7 +212,7 @@ class WorkflowExecutor extends EventEmitter {
             swipeCount: 20,
             description: "Second swipe session - 20 swipes",
             critical: true,
-            timeout: 300000, // 5 minutes
+            timeout: 300000,
           },
           {
             id: "inter_swipe_wait_2",
@@ -225,7 +228,7 @@ class WorkflowExecutor extends EventEmitter {
             swipeCount: 20,
             description: "Third swipe session - 20 swipes",
             critical: true,
-            timeout: 300000, // 5 minutes
+            timeout: 300000,
           },
           {
             id: "continuous_swipe_activation",
@@ -238,24 +241,181 @@ class WorkflowExecutor extends EventEmitter {
             description:
               "Activate continuous random swipes (20-30 every 90-180 min)",
             critical: true,
-            timeout: 60000, // 1 minute setup
+            timeout: 60000,
           },
           {
             id: "bio_after_24h",
             action: "add_bio",
-            delay: 24 * 60 * 60 * 1000, // 24 hours from start
+            delay: 24 * 60 * 60 * 1000, // 24 hours
             description: "Add AI-generated bio after 24 hours",
             critical: false,
-            timeout: 120000, // 2 minutes
+            timeout: 120000,
           },
         ],
       },
+
+      // NUEVO: Workflow con loop infinito
+      loop_workflow: {
+        name: "Loop Workflow Automation",
+        description: "Workflow with infinite loop: prompt → swipes → loop back",
+        config: {
+          maxRetries: 3,
+          retryBackoffMs: 30000,
+          timeoutMs: 300000,
+        },
+        steps: [
+          {
+            id: "import_wait",
+            action: "wait",
+            delay: 60 * 60 * 1000, // 1 hour
+            description: "Initial wait 1 hour",
+            critical: false,
+          },
+          {
+            id: "add_prompt",
+            action: "add_prompt",
+            delay: 0,
+            description: "Add AI prompt",
+            critical: true,
+          },
+          {
+            id: "wait_before_swipe",
+            action: "wait",
+            delay: 15 * 60 * 1000, // 15 minutes
+            description: "Wait 15 minutes",
+            critical: false,
+          },
+          {
+            id: "swipe_10",
+            action: "swipe_with_spectre",
+            delay: 0,
+            swipeCount: 10,
+            description: "Swipe 10 times",
+            critical: true,
+          },
+          {
+            id: "wait_1h",
+            action: "wait",
+            delay: 60 * 60 * 1000, // 1 hour
+            description: "Wait 1 hour",
+            critical: false,
+          },
+          {
+            id: "swipe_20_first",
+            action: "swipe_with_spectre",
+            delay: 0,
+            swipeCount: 20,
+            description: "Swipe 20 times",
+            critical: true,
+          },
+          {
+            id: "wait_2h",
+            action: "wait",
+            delay: 2 * 60 * 60 * 1000, // 2 hours
+            description: "Wait 2 hours",
+            critical: false,
+          },
+          {
+            id: "swipe_20_second",
+            action: "swipe_with_spectre",
+            delay: 0,
+            swipeCount: 20,
+            description: "Swipe 20 times again",
+            critical: true,
+          },
+          {
+            id: "loop_back",
+            action: "goto",
+            delay: 0,
+            description: "Loop back to first swipe",
+            nextStep: "swipe_10", // Vuelve al step swipe_10
+          },
+          // Step paralelo - se ejecuta independientemente
+          {
+            id: "bio_parallel",
+            action: "add_bio",
+            delay: 12 * 60 * 60 * 1000 + 20 * 60 * 1000, // 12h 20m desde el inicio
+            description: "Add bio after 12h 20m (parallel)",
+            parallel: true,
+            critical: false,
+          },
+        ],
+      },
+
+      // NUEVO: Workflow con múltiples steps paralelos
+      parallel_workflow: {
+        name: "Parallel Execution Workflow",
+        description:
+          "Multiple parallel tasks: bio at 2h, prompt updates at 4h and 8h",
+        config: {
+          maxRetries: 3,
+          retryBackoffMs: 30000,
+          timeoutMs: 300000,
+        },
+        steps: [
+          // Flujo principal
+          {
+            id: "initial_setup",
+            action: "wait",
+            delay: 30 * 60 * 1000, // 30 minutes
+            description: "Initial setup wait",
+            critical: false,
+          },
+          {
+            id: "first_prompt",
+            action: "add_prompt",
+            delay: 0,
+            description: "Initial AI prompt",
+            critical: true,
+          },
+          {
+            id: "continuous_swipes",
+            action: "activate_continuous_swipe",
+            delay: 30 * 60 * 1000, // 30 minutes after prompt
+            minSwipes: 15,
+            maxSwipes: 25,
+            minIntervalMs: 60 * 60 * 1000, // 1 hour
+            maxIntervalMs: 120 * 60 * 1000, // 2 hours
+            description: "Start continuous swipes",
+            critical: true,
+          },
+          // Steps paralelos - se ejecutan independientemente
+          {
+            id: "bio_2h",
+            action: "add_bio",
+            delay: 2 * 60 * 60 * 1000, // 2 hours desde el inicio
+            description: "Add bio after 2 hours (parallel)",
+            parallel: true,
+            critical: false,
+          },
+          {
+            id: "update_prompt_4h",
+            action: "add_prompt",
+            delay: 4 * 60 * 60 * 1000, // 4 hours desde el inicio
+            description: "Update prompt after 4 hours (parallel)",
+            parallel: true,
+            critical: false,
+          },
+          {
+            id: "update_prompt_8h",
+            action: "add_prompt",
+            delay: 8 * 60 * 60 * 1000, // 8 hours desde el inicio
+            description: "Update prompt again after 8 hours (parallel)",
+            parallel: true,
+            critical: false,
+          },
+        ],
+      },
+
+      // Workflow agresivo actualizado
       aggressive: {
         name: "Aggressive Account Automation",
-        description: "Faster automation for testing with reduced delays",
-        maxRetries: 3,
-        retryBackoffMs: 15000, // 15 seconds
-        timeoutMs: 300000, // 5 minutes per step
+        description: "Faster automation with loop for testing",
+        config: {
+          maxRetries: 3,
+          retryBackoffMs: 15000,
+          timeoutMs: 300000,
+        },
         steps: [
           {
             id: "quick_wait",
@@ -282,39 +442,54 @@ class WorkflowExecutor extends EventEmitter {
             timeout: 300000,
           },
           {
-            id: "quick_bio",
-            action: "add_bio",
-            delay: 60 * 60 * 1000, // 1 hour
-            description: "Add bio after 1 hour",
+            id: "wait_30m",
+            action: "wait",
+            delay: 30 * 60 * 1000, // 30 minutes
+            description: "Wait 30 minutes",
             critical: false,
-            timeout: 120000,
           },
           {
-            id: "aggressive_continuous",
-            action: "activate_continuous_swipe",
+            id: "aggressive_swipe_25",
+            action: "swipe_with_spectre",
             delay: 0,
-            minSwipes: 25,
-            maxSwipes: 35,
-            minIntervalMs: 30 * 60 * 1000, // 30 minutes
-            maxIntervalMs: 60 * 60 * 1000, // 60 minutes
-            description: "Aggressive continuous swipes (25-35 every 30-60 min)",
+            swipeCount: 25,
+            description: "Aggressive swipe session - 25 swipes",
             critical: true,
-            timeout: 60000,
+          },
+          {
+            id: "loop_aggressive",
+            action: "goto",
+            delay: 60 * 60 * 1000, // Wait 1 hour before looping
+            description: "Loop back to first swipe",
+            nextStep: "aggressive_swipe_15",
+          },
+          // Parallel bio
+          {
+            id: "quick_bio",
+            action: "add_bio",
+            delay: 60 * 60 * 1000, // 1 hour desde el inicio
+            description: "Add bio after 1 hour (parallel)",
+            parallel: true,
+            critical: false,
           },
         ],
       },
+
+      // Test workflow mejorado con todas las características
       test: {
-        name: "Test Workflow",
-        description: "Very fast workflow for development testing",
-        maxRetries: 2,
-        retryBackoffMs: 5000, // 5 seconds
-        timeoutMs: 60000, // 1 minute per step
+        name: "Test Workflow - All Features",
+        description: "Quick test with loop and parallel execution",
+        config: {
+          maxRetries: 2,
+          retryBackoffMs: 5000,
+          timeoutMs: 60000,
+        },
         steps: [
           {
             id: "test_wait",
             action: "wait",
             delay: 30 * 1000, // 30 seconds
-            description: "Wait 30 seconds after import",
+            description: "Wait 30 seconds",
             critical: false,
           },
           {
@@ -328,19 +503,43 @@ class WorkflowExecutor extends EventEmitter {
           {
             id: "test_swipe",
             action: "swipe_with_spectre",
-            delay: 0,
+            delay: 30 * 1000, // 30 seconds
             swipeCount: 5,
             description: "Test swipe - 5 swipes",
             critical: true,
             timeout: 120000,
           },
           {
-            id: "test_bio",
-            action: "add_bio",
-            delay: 2 * 60 * 1000, // 2 minutes
-            description: "Add test bio after 2 minutes",
+            id: "test_wait_loop",
+            action: "wait",
+            delay: 60 * 1000, // 1 minute
+            description: "Wait 1 minute before loop",
             critical: false,
-            timeout: 60000,
+          },
+          {
+            id: "test_loop",
+            action: "goto",
+            delay: 0,
+            description: "Loop back to swipe (max 3 times)",
+            nextStep: "test_swipe",
+            // En producción podrías agregar un contador para limitar loops
+          },
+          // Parallel steps para testing
+          {
+            id: "test_bio_parallel",
+            action: "add_bio",
+            delay: 2 * 60 * 1000, // 2 minutes desde el inicio
+            description: "Test bio after 2 min (parallel)",
+            parallel: true,
+            critical: false,
+          },
+          {
+            id: "test_prompt_update",
+            action: "add_prompt",
+            delay: 3 * 60 * 1000, // 3 minutes desde el inicio
+            description: "Update prompt after 3 min (parallel)",
+            parallel: true,
+            critical: false,
           },
         ],
       },
