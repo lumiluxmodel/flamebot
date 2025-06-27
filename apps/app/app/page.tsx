@@ -8,6 +8,7 @@ import Workflows from '../components/Workflows';
 import Definitions from '../components/Definitions';
 import System from '../components/System';
 import Alerts from '../components/Alerts';
+import { WorkflowEditor2 } from '../components/WorkflowEditor2';
 import { useActiveWorkflows } from '../lib/api';
 import { ClientOnlyIcon, formatTime } from '../components/common';
 
@@ -41,8 +42,9 @@ export default function FlameBotDashboard() {
     { id: '001', label: 'OVERVIEW', jp: 'オーバービュー' },
     { id: '002', label: 'WORKFLOWS', jp: 'ワークフロー' },
     { id: '003', label: 'DEFINITIONS', jp: '定義' },
-    { id: '004', label: 'SYSTEM', jp: 'システム' },
-    { id: '005', label: 'ALERTS', jp: 'アラート' }
+    { id: '004', label: 'WORKFLOWS 2.0', jp: 'ビジュアルエディタ' },
+    { id: '005', label: 'SYSTEM', jp: 'システム' },
+    { id: '006', label: 'ALERTS', jp: 'アラート' }
   ];
 
   return (
@@ -128,80 +130,81 @@ export default function FlameBotDashboard() {
 
         {/* Main Content */}
         <div className="flex-1 h-full">
-          <div className="p-4 md:p-8 lg:p-16 h-full">
+          <div className={activeSection === '004' ? 'h-full' : 'p-4 md:p-8 lg:p-16 h-full'}>
             {activeSection === '001' && <Overview />}
             {activeSection === '002' && <Workflows />}
             {activeSection === '003' && <Definitions />}
-            {activeSection === '004' && <System />}
-            {activeSection === '005' && time && <Alerts time={time} />}
+            {activeSection === '004' && <WorkflowEditor2 />}
+            {activeSection === '005' && <System />}
+            {activeSection === '006' && time && <Alerts time={time} />}
           </div>
         </div>
 
         {/* Right Panel - Enhanced with real executions */}
-        <div className="hidden lg:flex w-64 xl:w-80 border-l border-zinc-200 dark:border-zinc-900 p-6 xl:p-8 flex-col justify-between relative overflow-hidden bg-gray-50/50 dark:bg-transparent">
-          {/* Background with FLAME text */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-[120px] xl:text-[200px] font-bold text-zinc-300 dark:text-zinc-700 opacity-30 dark:opacity-20 animate-pulse">炎</div>
-          </div>
-          
-          <div className="text-left text-[10px] text-zinc-500 dark:text-zinc-600 relative z-10">
-            <div className="text-yellow-600 dark:text-yellow-500">001/005</div>
-          </div>
+        {activeSection !== '004' && (
+          <div className="hidden lg:flex w-64 xl:w-80 border-l border-zinc-200 dark:border-zinc-900 p-6 xl:p-8 flex-col justify-between relative overflow-hidden bg-gray-50/50 dark:bg-transparent">
+            {/* Background with FLAME text */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="text-[120px] xl:text-[200px] font-bold text-zinc-300 dark:text-zinc-700 opacity-30 dark:opacity-20 animate-pulse">炎</div>
+            </div>
+            
+            <div className="text-left text-[10px] text-zinc-500 dark:text-zinc-600 relative z-10">
+              <div className="text-yellow-600 dark:text-yellow-500">{activeSection}/00{sections.length}</div>
+            </div>
 
-          {/* Active Executions */}
-          <div className="relative z-10 space-y-4">
-            <div className="text-[10px] text-zinc-500 dark:text-zinc-600 mb-4 text-center">ACTIVE_EXECUTIONS</div>
-            {activeWorkflows && activeWorkflows.length > 0 ? (
-              activeWorkflows.slice(0, 3).map((execution, i) => (
-                <div key={execution.executionId} className="bg-zinc-100/80 dark:bg-zinc-950/40 border border-zinc-300 dark:border-zinc-800/50 p-3 backdrop-blur-sm animate-fade-in" style={{ animationDelay: `${i * 0.2}s` }}>
-                  <div className="text-[9px] text-zinc-600 dark:text-zinc-500 mb-1">EXECUTION_ID</div>
-                  <div className="font-mono text-[10px] text-yellow-600 dark:text-yellow-500 mb-2 break-all">{execution.executionId.slice(-8)}</div>
-                  <div className="flex justify-between text-[9px] mb-2">
-                    <span className="text-zinc-600 dark:text-zinc-400">{execution.workflowType.toUpperCase()}</span>
-                    <span className={`${execution.status === 'active' ? 'text-emerald-600 dark:text-emerald-500' : 'text-zinc-600 dark:text-zinc-500'} pulse-dot`}>
-                      ● {execution.status.toUpperCase()}
-                    </span>
+            {/* Active Executions */}
+            <div className="relative z-10 space-y-4">
+              <div className="text-[10px] text-zinc-500 dark:text-zinc-600 mb-4 text-center">ACTIVE_EXECUTIONS</div>
+              {activeWorkflows && activeWorkflows.length > 0 ? (
+                activeWorkflows.slice(0, 3).map((execution, i) => (
+                  <div key={execution.executionId} className="bg-zinc-100/80 dark:bg-zinc-950/40 border border-zinc-300 dark:border-zinc-800/50 p-3 backdrop-blur-sm animate-fade-in" style={{ animationDelay: `${i * 0.2}s` }}>
+                    <div className="text-[9px] text-zinc-600 dark:text-zinc-500 mb-1">EXECUTION_ID</div>
+                    <div className="font-mono text-[10px] text-yellow-600 dark:text-yellow-500 mb-2 break-all">{execution.executionId.slice(-8)}</div>
+                    <div className="flex justify-between text-[9px] mb-2">
+                      <span className="text-zinc-600 dark:text-zinc-400">{execution.workflowType.toUpperCase()}</span>
+                      <span className={`${execution.status === 'active' ? 'text-emerald-600 dark:text-emerald-500' : 'text-zinc-600 dark:text-zinc-500'} pulse-dot`}>
+                        ● {execution.status.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[9px] mb-2">
+                      <span className="text-zinc-600 dark:text-zinc-500">PROGRESS</span>
+                      <span className="text-yellow-600 dark:text-yellow-500">{execution.progress}%</span>
+                    </div>
+                    <div className="bg-zinc-300 dark:bg-zinc-900 h-1 w-full rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full transition-all duration-1000"
+                        style={{ width: `${execution.progress}%` }}
+                      />
+                    </div>
+                    <div className="text-[8px] text-zinc-600 dark:text-zinc-600 mt-1">{execution.currentStep}</div>
                   </div>
-                  <div className="flex justify-between text-[9px] mb-2">
-                    <span className="text-zinc-600 dark:text-zinc-500">PROGRESS</span>
-                    <span className="text-yellow-600 dark:text-yellow-500">{execution.progress}%</span>
-                  </div>
-                  <div className="bg-zinc-300 dark:bg-zinc-900 h-1 w-full rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full transition-all duration-1000"
-                      style={{ width: `${execution.progress}%` }}
-                    />
-                  </div>
-                  <div className="text-[8px] text-zinc-600 dark:text-zinc-600 mt-1">{execution.currentStep}</div>
+                ))
+              ) : (
+                <div className="text-center text-zinc-500 dark:text-zinc-600 text-[11px]">
+                  No active workflows
                 </div>
-              ))
-            ) : (
-              <div className="text-center text-zinc-500 dark:text-zinc-600 text-[11px]">
-                No active workflows
+              )}
+            </div>
+
+            <div className="text-[10px] text-zinc-500 dark:text-zinc-600 relative z-10">
+              <div className="mb-2 text-yellow-600 dark:text-yellow-500">c.CHOP [B]</div>
+              <div className="flex items-center justify-end gap-1 text-[11px]">
+                <span>made with</span>
+                <ClientOnlyIcon>
+                  <Heart className="w-3 h-3 text-red-500 animate-pulse" />
+                </ClientOnlyIcon>
+                <span>by pimbo</span>
               </div>
-            )}
-          </div>
-
-        
-
-          <div className="text-[10px] text-zinc-500 dark:text-zinc-600 relative z-10">
-            <div className="mb-2 text-yellow-600 dark:text-yellow-500">c.CHOP [B]</div>
-            <div className="flex items-center justify-end gap-1 text-[11px]">
-              <span>made with</span>
-              <ClientOnlyIcon>
-                <Heart className="w-3 h-3 text-red-500 animate-pulse" />
-              </ClientOnlyIcon>
-              <span>by pimbo</span>
+            </div>
+            
+            <div className="absolute bottom-0 right-0 w-10 xl:w-10 h-10 xl:h-10 opacity-50" 
+                 style={{
+                   clipPath: 'polygon(100% 0, 100% 100%, 0 100%)',
+                   background: 'repeating-linear-gradient(45deg, #eab308, #eab308 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)'
+                 }}>
             </div>
           </div>
-          
-          <div className="absolute bottom-0 right-0 w-10 xl:w-10 h-10 xl:h-10 opacity-50" 
-               style={{
-                 clipPath: 'polygon(100% 0, 100% 100%, 0 100%)',
-                 background: 'repeating-linear-gradient(45deg, #eab308, #eab308 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)'
-               }}>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
