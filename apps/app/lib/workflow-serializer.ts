@@ -3,24 +3,22 @@ import { Node, Edge } from '@xyflow/react';
 import { 
   Workflow, 
   WorkflowStep, 
-  WorkflowNode, 
-  WorkflowEdge,
   NODE_TYPE_TO_ACTION 
 } from './workflow-types';
 
 // Convert workflow JSON to React Flow format
 export function workflowToReactFlow(workflow: Workflow): { 
-  nodes: WorkflowNode[]; 
-  edges: WorkflowEdge[]; 
+  nodes: Node[]; 
+  edges: Edge[]; 
 } {
-  const nodes: WorkflowNode[] = [];
-  const edges: WorkflowEdge[] = [];
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
   
   // Create nodes from steps
   workflow.steps.forEach((step, index) => {
     const position = calculateNodePosition(index, step.parallel);
     
-    const node: WorkflowNode = {
+    const node: Node = {
       id: step.id,
       type: getNodeType(step.action),
       position,
@@ -46,7 +44,7 @@ export function workflowToReactFlow(workflow: Workflow): {
   workflow.steps.forEach((step, index) => {
     // Regular flow to next step (if not last and no explicit nextStep)
     if (index < workflow.steps.length - 1 && !step.nextStep) {
-      const edge: WorkflowEdge = {
+      const edge: Edge = {
         id: `${step.id}-${workflow.steps[index + 1].id}`,
         source: step.id,
         target: workflow.steps[index + 1].id,
@@ -57,7 +55,7 @@ export function workflowToReactFlow(workflow: Workflow): {
     
     // Loop connections (goto)
     if (step.nextStep && step.action === 'goto') {
-      const edge: WorkflowEdge = {
+      const edge: Edge = {
         id: `${step.id}-${step.nextStep}`,
         source: step.id,
         sourceHandle: 'loop',
@@ -75,7 +73,7 @@ export function workflowToReactFlow(workflow: Workflow): {
 
   // Add start node if not present
   if (nodes.length > 0 && !nodes.find(n => n.type === 'start')) {
-    const startNode: WorkflowNode = {
+    const startNode: Node = {
       id: 'start',
       type: 'start',
       position: { x: 250, y: 0 },

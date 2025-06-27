@@ -1,5 +1,5 @@
 // components/WorkflowEditor2.tsx
-import React, { useCallback, useRef, useState, useMemo } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -15,15 +15,11 @@ import {
   Node,
   Edge,
   useReactFlow,
-  NodeTypes,
-  EdgeTypes,
-  Position,
   MarkerType,
-  NodeToolbar,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { Download, Plus, Save, Trash2, Upload, Eye, EyeOff } from 'lucide-react';
+import { Download, Trash2, Upload, Eye, EyeOff } from 'lucide-react';
 import { ClientOnlyIcon } from './common';
 
 // Import sidebar
@@ -33,7 +29,7 @@ import { WorkflowSidebar } from './WorkflowSidebar';
 import { workflowToReactFlow, reactFlowToWorkflow } from '../lib/workflow-serializer';
 
 // Types
-import type { WorkflowStep, Workflow } from '../lib/workflow-types';
+import type {  Workflow } from '../lib/workflow-types';
 
 // Import node and edge types directly
 import { nodeTypes } from './nodes/WorkflowNodes';
@@ -409,7 +405,7 @@ export const WorkflowEditor2: React.FC = () => {
 };
 
 // Helper function for default node data
-function getDefaultNodeData(type: string) {
+function getDefaultNodeData(type: string): Record<string, unknown> {
   switch (type) {
     case 'start':
       return { label: 'Start', description: 'Workflow entry point' };

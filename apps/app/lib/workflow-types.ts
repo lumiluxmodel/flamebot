@@ -59,11 +59,10 @@ export type WorkflowNodeData =
   | WaitNodeData 
   | GotoNodeData 
   | SwipeWithSpectreNodeData 
-  | ActivateContinuousSwipeNodeData
-  | Record<string, unknown>;
+  | ActivateContinuousSwipeNodeData;
 
-export type WorkflowNode = Node<WorkflowNodeData, string | undefined>;
-export type WorkflowEdge = Edge<unknown>;
+export type WorkflowNode = Node;
+export type WorkflowEdge = Edge;
 
 // Action type mapping
 export const ACTION_TYPE_MAP: Record<string, string> = {

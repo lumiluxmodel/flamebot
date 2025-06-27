@@ -70,7 +70,7 @@ const nodeTypes: NodeType[] = [
     color: 'bg-red-500',
     description: 'Create loops'
   }
-];
+] as const;
 
 export const WorkflowSidebar: React.FC = () => {
   const onDragStart = (event: React.DragEvent, nodeType: string) => {

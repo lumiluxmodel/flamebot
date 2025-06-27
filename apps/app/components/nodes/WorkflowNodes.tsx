@@ -59,7 +59,8 @@ interface ContinuousSwipeNodeData extends BaseNodeData {
 }
 
 // Start Node
-export const StartNode = memo(({ data, selected }: NodeProps<BaseNodeData>) => {
+export const StartNode = memo(({ data, selected }: NodeProps) => {
+  const nodeData = data as BaseNodeData;
   return (
     <div className={`${baseNodeStyle} ${selected ? 'ring-2 ring-yellow-500 ring-offset-2' : ''} border-emerald-500`}>
       <div className={`${headerStyle} bg-emerald-500`}>
@@ -70,7 +71,7 @@ export const StartNode = memo(({ data, selected }: NodeProps<BaseNodeData>) => {
       </div>
       <div className={contentStyle}>
         <div className="text-xs text-zinc-600 dark:text-zinc-400">
-          {data.description || 'Workflow entry point'}
+          {nodeData.description || 'Workflow entry point'}
         </div>
       </div>
       <Handle
@@ -84,13 +85,14 @@ export const StartNode = memo(({ data, selected }: NodeProps<BaseNodeData>) => {
 StartNode.displayName = 'StartNode';
 
 // Wait Node
-export const WaitNode = memo(({ id, data, selected }: NodeProps<WaitNodeData>) => {
+export const WaitNode = memo(({ id, data, selected }: NodeProps) => {
   const { updateNodeData } = useReactFlow();
+  const nodeData = data as WaitNodeData;
 
   const handleDelayChange = useCallback((value: string) => {
     const delay = parseInt(value) || 0;
-    updateNodeData(id, { ...data, delay });
-  }, [id, data, updateNodeData]);
+    updateNodeData(id, { ...nodeData, delay });
+  }, [id, nodeData, updateNodeData]);
 
   const formatDelay = (ms: number): string => {
     if (ms < 60000) return `${Math.floor(ms / 1000)}s`;
@@ -118,18 +120,18 @@ export const WaitNode = memo(({ id, data, selected }: NodeProps<WaitNodeData>) =
           <label className="text-xs text-zinc-600 dark:text-zinc-400">Delay (ms):</label>
           <input
             type="number"
-            value={data.delay || 0}
+            value={nodeData.delay || 0}
             onChange={(e) => handleDelayChange(e.target.value)}
             className="nodrag w-full px-2 py-1 text-sm bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
             min="0"
             step="1000"
           />
           <div className="text-xs text-blue-600 dark:text-blue-400 font-mono">
-            {formatDelay(data.delay || 0)}
+            {formatDelay(nodeData.delay || 0)}
           </div>
         </div>
         <div className="text-xs text-zinc-600 dark:text-zinc-400">
-          {data.description || 'Wait for specified delay'}
+          {nodeData.description || 'Wait for specified delay'}
         </div>
       </div>
       
@@ -144,27 +146,28 @@ export const WaitNode = memo(({ id, data, selected }: NodeProps<WaitNodeData>) =
 WaitNode.displayName = 'WaitNode';
 
 // Add Prompt Node
-export const AddPromptNode = memo(({ id, data, selected }: NodeProps<BaseNodeData>) => {
+export const AddPromptNode = memo(({ id, data, selected }: NodeProps) => {
   const { updateNodeData } = useReactFlow();
+  const nodeData = data as BaseNodeData;
 
   const handleCriticalChange = useCallback((checked: boolean) => {
-    updateNodeData(id, { ...data, critical: checked });
-  }, [id, data, updateNodeData]);
+    updateNodeData(id, { ...nodeData, critical: checked });
+  }, [id, nodeData, updateNodeData]);
 
   return (
-    <div className={`${baseNodeStyle} ${selected ? 'ring-2 ring-yellow-500 ring-offset-2' : ''} ${data.critical ? 'border-red-500' : 'border-amber-500'}`}>
+    <div className={`${baseNodeStyle} ${selected ? 'ring-2 ring-yellow-500 ring-offset-2' : ''} ${nodeData.critical ? 'border-red-500' : 'border-amber-500'}`}>
       <Handle
         type="target"
         position={Position.Top}
         className="w-3 h-3 bg-amber-500 border-2 border-white dark:border-zinc-900"
       />
       
-      <div className={`${headerStyle} ${data.critical ? 'bg-red-500' : 'bg-amber-500'}`}>
+      <div className={`${headerStyle} ${nodeData.critical ? 'bg-red-500' : 'bg-amber-500'}`}>
         <ClientOnlyIcon>
           <Sparkles className="w-4 h-4" />
         </ClientOnlyIcon>
         <span>ADD PROMPT</span>
-        {data.critical && (
+        {nodeData.critical && (
           <ClientOnlyIcon>
             <AlertCircle className="w-4 h-4 ml-auto" />
           </ClientOnlyIcon>
@@ -176,7 +179,7 @@ export const AddPromptNode = memo(({ id, data, selected }: NodeProps<BaseNodeDat
           <input
             type="checkbox"
             id={`critical-${id}`}
-            checked={data.critical || false}
+            checked={nodeData.critical || false}
             onChange={(e) => handleCriticalChange(e.target.checked)}
             className="nodrag w-4 h-4 text-red-600 rounded focus:ring-red-500"
           />
@@ -185,7 +188,7 @@ export const AddPromptNode = memo(({ id, data, selected }: NodeProps<BaseNodeDat
           </label>
         </div>
         <div className="text-xs text-zinc-600 dark:text-zinc-400">
-          {data.description || 'Add AI-generated prompt'}
+          {nodeData.description || 'Add AI-generated prompt'}
         </div>
       </div>
       
@@ -200,7 +203,8 @@ export const AddPromptNode = memo(({ id, data, selected }: NodeProps<BaseNodeDat
 AddPromptNode.displayName = 'AddPromptNode';
 
 // Add Bio Node
-export const AddBioNode = memo(({ data, selected }: NodeProps<BaseNodeData>) => {
+export const AddBioNode = memo(({ data, selected }: NodeProps) => {
+  const nodeData = data as BaseNodeData;
   return (
     <div className={`${baseNodeStyle} ${selected ? 'ring-2 ring-yellow-500 ring-offset-2' : ''} border-pink-500`}>
       <Handle
@@ -218,7 +222,7 @@ export const AddBioNode = memo(({ data, selected }: NodeProps<BaseNodeData>) => 
       
       <div className={contentStyle}>
         <div className="text-xs text-zinc-600 dark:text-zinc-400">
-          {data.description || 'Add bio information'}
+          {nodeData.description || 'Add bio information'}
         </div>
       </div>
       
@@ -233,13 +237,14 @@ export const AddBioNode = memo(({ data, selected }: NodeProps<BaseNodeData>) => 
 AddBioNode.displayName = 'AddBioNode';
 
 // Swipe with Spectre Node
-export const SwipeWithSpectreNode = memo(({ id, data, selected }: NodeProps<SwipeNodeData>) => {
+export const SwipeWithSpectreNode = memo(({ id, data, selected }: NodeProps) => {
   const { updateNodeData } = useReactFlow();
+  const nodeData = data as SwipeNodeData;
 
   const handleSwipeCountChange = useCallback((value: string) => {
     const swipeCount = parseInt(value) || 1;
-    updateNodeData(id, { ...data, swipeCount });
-  }, [id, data, updateNodeData]);
+    updateNodeData(id, { ...nodeData, swipeCount });
+  }, [id, nodeData, updateNodeData]);
 
   return (
     <div className={`${baseNodeStyle} ${selected ? 'ring-2 ring-yellow-500 ring-offset-2' : ''} border-cyan-500`}>
@@ -261,7 +266,7 @@ export const SwipeWithSpectreNode = memo(({ id, data, selected }: NodeProps<Swip
           <label className="text-xs text-zinc-600 dark:text-zinc-400">Swipe Count:</label>
           <input
             type="number"
-            value={data.swipeCount || 10}
+            value={nodeData.swipeCount || 10}
             onChange={(e) => handleSwipeCountChange(e.target.value)}
             className="nodrag w-full px-2 py-1 text-sm bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
             min="1"
@@ -269,7 +274,7 @@ export const SwipeWithSpectreNode = memo(({ id, data, selected }: NodeProps<Swip
           />
         </div>
         <div className="text-xs text-zinc-600 dark:text-zinc-400">
-          {data.description || 'Swipe with Spectre'}
+          {nodeData.description || 'Swipe with Spectre'}
         </div>
       </div>
       
@@ -284,13 +289,14 @@ export const SwipeWithSpectreNode = memo(({ id, data, selected }: NodeProps<Swip
 SwipeWithSpectreNode.displayName = 'SwipeWithSpectreNode';
 
 // Activate Continuous Swipe Node
-export const ActivateContinuousSwipeNode = memo(({ id, data, selected }: NodeProps<ContinuousSwipeNodeData>) => {
+export const ActivateContinuousSwipeNode = memo(({ id, data, selected }: NodeProps) => {
   const { updateNodeData } = useReactFlow();
+  const nodeData = data as ContinuousSwipeNodeData;
 
   const handleUpdate = useCallback((field: string, value: string) => {
     const numValue = parseInt(value) || 0;
-    updateNodeData(id, { ...data, [field]: numValue });
-  }, [id, data, updateNodeData]);
+    updateNodeData(id, { ...nodeData, [field]: numValue });
+  }, [id, nodeData, updateNodeData]);
 
   return (
     <div className={`${baseNodeStyle} ${selected ? 'ring-2 ring-yellow-500 ring-offset-2' : ''} border-purple-500`}>
@@ -313,7 +319,7 @@ export const ActivateContinuousSwipeNode = memo(({ id, data, selected }: NodePro
             <label className="text-xs text-zinc-600 dark:text-zinc-400">Min Swipes:</label>
             <input
               type="number"
-              value={data.minSwipes || 15}
+              value={nodeData.minSwipes || 15}
               onChange={(e) => handleUpdate('minSwipes', e.target.value)}
               className="nodrag w-full px-2 py-1 text-sm bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
               min="1"
@@ -323,7 +329,7 @@ export const ActivateContinuousSwipeNode = memo(({ id, data, selected }: NodePro
             <label className="text-xs text-zinc-600 dark:text-zinc-400">Max Swipes:</label>
             <input
               type="number"
-              value={data.maxSwipes || 25}
+              value={nodeData.maxSwipes || 25}
               onChange={(e) => handleUpdate('maxSwipes', e.target.value)}
               className="nodrag w-full px-2 py-1 text-sm bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
               min="1"
@@ -331,7 +337,7 @@ export const ActivateContinuousSwipeNode = memo(({ id, data, selected }: NodePro
           </div>
         </div>
         <div className="text-xs text-zinc-600 dark:text-zinc-400 mt-2">
-          {data.description || 'Activate continuous swipe mode'}
+          {nodeData.description || 'Activate continuous swipe mode'}
         </div>
       </div>
       
@@ -346,8 +352,9 @@ export const ActivateContinuousSwipeNode = memo(({ id, data, selected }: NodePro
 ActivateContinuousSwipeNode.displayName = 'ActivateContinuousSwipeNode';
 
 // Goto Node (for loops)
-export const GotoNode = memo(({ id, data, selected }: NodeProps<GotoNodeData>) => {
+export const GotoNode = memo(({ id, data, selected }: NodeProps) => {
   const { updateNodeData, getNodes } = useReactFlow();
+  const nodeData = data as GotoNodeData;
   const nodes = getNodes();
 
   const availableTargets = nodes.filter(node => 
@@ -356,14 +363,14 @@ export const GotoNode = memo(({ id, data, selected }: NodeProps<GotoNodeData>) =
 
   const handleTargetChange = useCallback((value: string) => {
     updateNodeData(id, { 
-      ...data, 
+      ...nodeData, 
       targetNodeId: value,
       loop: true 
     });
-  }, [id, data, updateNodeData]);
+  }, [id, nodeData, updateNodeData]);
 
   return (
-    <div className={`${baseNodeStyle} ${selected ? 'ring-2 ring-yellow-500 ring-offset-2' : ''} border-red-500 ${data.loop ? 'animate-pulse' : ''}`}>
+    <div className={`${baseNodeStyle} ${selected ? 'ring-2 ring-yellow-500 ring-offset-2' : ''} border-red-500 ${nodeData.loop ? 'animate-pulse' : ''}`}>
       <Handle
         type="target"
         position={Position.Top}
@@ -381,20 +388,23 @@ export const GotoNode = memo(({ id, data, selected }: NodeProps<GotoNodeData>) =
         <div className="space-y-2">
           <label className="text-xs text-zinc-600 dark:text-zinc-400">Target Step:</label>
           <select 
-            value={data.targetNodeId || ''} 
+            value={nodeData.targetNodeId || ''} 
             onChange={(e) => handleTargetChange(e.target.value)}
             className="nodrag w-full px-2 py-1 text-sm bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
           >
             <option value="">Select target...</option>
-            {availableTargets.map(node => (
-              <option key={node.id} value={node.id}>
-                {node.data.label || node.id}
-              </option>
-            ))}
+            {availableTargets.map(node => {
+              const targetData = node.data as BaseNodeData;
+              return (
+                <option key={node.id} value={node.id}>
+                  {targetData.label || node.id}
+                </option>
+              );
+            })}
           </select>
         </div>
         <div className="text-xs text-zinc-600 dark:text-zinc-400">
-          {data.description || 'Loop back to previous step'}
+          {nodeData.description || 'Loop back to previous step'}
         </div>
       </div>
       
