@@ -1,12 +1,25 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useWorkflowDefinitions, apiClient } from '../lib/api'
 import WorkflowEditor from './WorkflowEditor'
 import { 
   WorkflowDefinition, 
   WorkflowStep, 
 } from '../types/workflow'
+import { ClientOnlyIcon } from './common'
+import { 
+  Plus,
+  Workflow,
+  Play,
+  Clock,
+  AlertTriangle,
+  Zap,
+  FileText,
+  Download,
+  Upload,
+  RefreshCw
+} from 'lucide-react'
 
 // Sample workflows for testing
 interface SampleWorkflow {
@@ -18,19 +31,10 @@ interface SampleWorkflow {
 
 export function WorkflowManager() {
   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowDefinition | SampleWorkflow | null>(null)
-  const [dimensions, setDimensions] = useState({ width: 1200, height: 600 })
+  const [sidebarExpanded, setSidebarExpanded] = useState(true)
+  const [loading, setLoading] = useState(false)
   
   const { data: workflowDefinitions, refetch: refetchDefinitions } = useWorkflowDefinitions()
-
-  // Set dimensions on client side
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setDimensions({
-        width: Math.min(window.innerWidth - 400, 1400),
-        height: Math.min(window.innerHeight - 100, 700)
-      })
-    }
-  }, [])
 
   // Sample workflows for testing
   const sampleWorkflows: Record<string, SampleWorkflow> = {
@@ -110,6 +114,8 @@ export function WorkflowManager() {
     if (!selectedWorkflow) return
 
     try {
+      setLoading(true)
+      
       if ('id' in selectedWorkflow && selectedWorkflow.id) {
         // Update existing workflow
         await apiClient.updateWorkflowDefinition(selectedWorkflow.type, {
@@ -171,100 +177,331 @@ export function WorkflowManager() {
     } catch (error) {
       console.error('Failed to save workflow:', error)
       alert('Failed to save workflow')
+    } finally {
+      setLoading(false)
     }
   }, [selectedWorkflow, refetchDefinitions])
 
-  return (
-    <div className="h-full bg-zinc-950 text-white flex">
-      {/* Sidebar */}
-      <div className="w-80 bg-zinc-900 border-r border-zinc-800 p-4 overflow-y-auto">
-        <h2 className="text-lg font-semibold mb-4 text-yellow-500">Visual Workflow Editor</h2>
-        
-        {/* New Workflow Button */}
-        <button
-          onClick={handleNewWorkflow}
-          className="w-full mb-4 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded transition-colors text-sm"
-        >
-          New Workflow
-        </button>
 
-        {/* Sample Workflows */}
-        <div className="mb-6">
-          <h3 className="text-sm font-medium text-zinc-400 mb-2">Sample Workflows</h3>
-          <div className="space-y-2">
-            {Object.entries(sampleWorkflows).map(([key, workflow]) => (
-              <button
-                key={key}
-                onClick={() => handleLoadWorkflow(workflow)}
-                className={`w-full text-left p-3 rounded border transition-colors text-sm ${
-                  selectedWorkflow?.type === workflow.type
-                    ? 'border-yellow-500 bg-yellow-500/10'
-                    : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800'
-                }`}
-              >
-                <div className="font-medium">{workflow.name}</div>
-                <div className="text-xs text-zinc-400 mt-1">{workflow.description}</div>
-                <div className="text-xs text-zinc-500 mt-1">{workflow.steps.length} steps</div>
-              </button>
-            ))}
+
+  const formatDelay = (ms: number): string => {
+    if (ms < 1000) return `${ms}ms`
+    if (ms < 60000) return `${Math.round(ms / 1000)}s`
+    if (ms < 3600000) return `${Math.round(ms / 60000)}m`
+    return `${Math.round(ms / 3600000)}h`
+  }
+
+  return (
+    <div className="h-full bg-background text-foreground flex">
+      {/* Sidebar */}
+      <div className={`
+        transition-all duration-300 ease-in-out
+        ${sidebarExpanded ? 'w-96' : 'w-20'}
+        bg-zinc-50/80 dark:bg-zinc-950/80 backdrop-blur-xl
+        border-r border-zinc-200 dark:border-zinc-800
+        overflow-hidden flex flex-col
+      `}>
+        {/* Sidebar Header */}
+        <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/50">
+          <div className="flex items-center justify-between">
+            {sidebarExpanded && (
+              <div className="animate-fade-in">
+                <h2 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                  <ClientOnlyIcon>
+                    <Workflow className="w-5 h-5 text-yellow-600 dark:text-yellow-500" />
+                  </ClientOnlyIcon>
+                  ワークフロー
+                </h2>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1">Visual Editor 2.0</p>
+              </div>
+            )}
+            <button
+              onClick={() => setSidebarExpanded(!sidebarExpanded)}
+              className="p-2 rounded-lg bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors"
+            >
+              <ClientOnlyIcon>
+                <Workflow className={`w-4 h-4 text-yellow-600 dark:text-yellow-500 transition-transform ${sidebarExpanded ? 'rotate-180' : ''}`} />
+              </ClientOnlyIcon>
+            </button>
           </div>
         </div>
 
-        {/* Saved Workflows */}
-        {workflowDefinitions && workflowDefinitions.length > 0 && (
-          <div>
-            <h3 className="text-sm font-medium text-zinc-400 mb-2">Saved Workflows</h3>
-            <div className="space-y-2">
-              {workflowDefinitions.map((workflow: WorkflowDefinition) => (
-                <button
-                  key={workflow.id}
-                  onClick={() => handleLoadWorkflow(workflow)}
-                  className={`w-full text-left p-3 rounded border transition-colors text-sm ${
-                    selectedWorkflow?.type === workflow.type
-                      ? 'border-yellow-500 bg-yellow-500/10'
-                      : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800'
-                  }`}
-                >
-                  <div className="font-medium">{workflow.name}</div>
-                  <div className="text-xs text-zinc-400 mt-1">{workflow.description}</div>
-                  <div className="text-xs text-zinc-500 mt-1">
-                    {workflow.steps.length} steps • v{workflow.version}
+        {/* Sidebar Content */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {sidebarExpanded ? (
+            <div className="p-4 space-y-6">
+              {/* New Workflow Button */}
+              <button
+                onClick={handleNewWorkflow}
+                className="w-full p-3 bg-gradient-to-r from-yellow-500 to-yellow-600 dark:from-yellow-600 dark:to-yellow-500 hover:from-yellow-600 hover:to-yellow-700 dark:hover:from-yellow-500 dark:hover:to-yellow-400 text-white rounded-lg font-medium transition-all duration-200 flex items-center gap-2 shadow-lg"
+              >
+                <ClientOnlyIcon>
+                  <Plus className="w-4 h-4" />
+                </ClientOnlyIcon>
+                New Workflow
+              </button>
+
+              {/* Sample Workflows */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                  <ClientOnlyIcon>
+                    <FileText className="w-4 h-4" />
+                  </ClientOnlyIcon>
+                  Sample Templates
+                </div>
+                <div className="space-y-2">
+                  {Object.entries(sampleWorkflows).map(([key, workflow]) => (
+                    <button
+                      key={`sample-workflow-${key}`}
+                      onClick={() => handleLoadWorkflow(workflow)}
+                      className={`w-full text-left p-3 rounded-lg border transition-all duration-200 group ${
+                        selectedWorkflow?.type === workflow.type
+                          ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-500/10 shadow-md'
+                          : 'border-zinc-200 dark:border-zinc-700 hover:border-yellow-300 dark:hover:border-yellow-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`mt-1 p-1.5 rounded-md ${
+                          selectedWorkflow?.type === workflow.type 
+                            ? 'bg-yellow-500 text-white' 
+                            : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400 group-hover:bg-yellow-100 dark:group-hover:bg-yellow-500/20'
+                        }`}>
+                          <ClientOnlyIcon>
+                            <Workflow className="w-3 h-3" />
+                          </ClientOnlyIcon>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-zinc-900 dark:text-white text-sm truncate">
+                            {workflow.name}
+                          </div>
+                          <div className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 line-clamp-2">
+                            {workflow.description}
+                          </div>
+                          <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500 dark:text-zinc-500">
+                            <span className="flex items-center gap-1">
+                              <ClientOnlyIcon>
+                                <Play className="w-3 h-3" />
+                              </ClientOnlyIcon>
+                              {workflow.steps.length} steps
+                            </span>
+                            {workflow.steps.some(s => s.critical) && (
+                              <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-500">
+                                <ClientOnlyIcon>
+                                  <AlertTriangle className="w-3 h-3" />
+                                </ClientOnlyIcon>
+                                Critical
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Saved Workflows */}
+              {workflowDefinitions && workflowDefinitions.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                    <ClientOnlyIcon>
+                      <Download className="w-4 h-4" />
+                    </ClientOnlyIcon>
+                    Saved Workflows
                   </div>
+                  <div className="space-y-2">
+                    {workflowDefinitions.map((workflow: WorkflowDefinition, index: number) => (
+                      <button
+                        key={`saved-workflow-${workflow.id || workflow.type || index}`}
+                        onClick={() => handleLoadWorkflow(workflow)}
+                        className={`w-full text-left p-3 rounded-lg border transition-all duration-200 group ${
+                          selectedWorkflow?.type === workflow.type
+                            ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-500/10 shadow-md'
+                            : 'border-zinc-200 dark:border-zinc-700 hover:border-yellow-300 dark:hover:border-yellow-600 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`mt-1 p-1.5 rounded-md ${
+                            selectedWorkflow?.type === workflow.type 
+                              ? 'bg-yellow-500 text-white' 
+                              : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400 group-hover:bg-yellow-100 dark:group-hover:bg-yellow-500/20'
+                          }`}>
+                            <ClientOnlyIcon>
+                              <Workflow className="w-3 h-3" />
+                            </ClientOnlyIcon>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-zinc-900 dark:text-white text-sm truncate">
+                              {workflow.name}
+                            </div>
+                            <div className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 line-clamp-2">
+                              {workflow.description}
+                            </div>
+                            <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500 dark:text-zinc-500">
+                              <span className="flex items-center gap-1">
+                                <ClientOnlyIcon>
+                                  <Play className="w-3 h-3" />
+                                </ClientOnlyIcon>
+                                {workflow.steps.length} steps
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <ClientOnlyIcon>
+                                  <Upload className="w-3 h-3" />
+                                </ClientOnlyIcon>
+                                v{workflow.version}
+                              </span>
+                              {workflow.steps.some(s => s.critical) && (
+                                <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-500">
+                                  <ClientOnlyIcon>
+                                    <AlertTriangle className="w-3 h-3" />
+                                  </ClientOnlyIcon>
+                                  Critical
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            // Collapsed sidebar icons
+            <div className="p-2 space-y-2">
+              <button
+                onClick={handleNewWorkflow}
+                className="w-full p-3 bg-yellow-500 hover:bg-yellow-600 dark:bg-yellow-600 dark:hover:bg-yellow-500 text-white rounded-lg transition-colors"
+                title="New Workflow"
+              >
+                <ClientOnlyIcon>
+                  <Plus className="w-4 h-4 mx-auto" />
+                </ClientOnlyIcon>
+              </button>
+              {Object.entries(sampleWorkflows).map(([key, workflow]) => (
+                <button
+                  key={`collapsed-sample-${key}`}
+                  onClick={() => handleLoadWorkflow(workflow)}
+                  className={`w-full p-3 rounded-lg border transition-all ${
+                    selectedWorkflow?.type === workflow.type
+                      ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-500/10'
+                      : 'border-zinc-200 dark:border-zinc-700 hover:border-yellow-300 dark:hover:border-yellow-600'
+                  }`}
+                  title={workflow.name}
+                >
+                  <ClientOnlyIcon>
+                    <Workflow className="w-4 h-4 mx-auto text-zinc-600 dark:text-zinc-400" />
+                  </ClientOnlyIcon>
                 </button>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Main Editor */}
       <div className="flex-1 flex flex-col">
         {selectedWorkflow ? (
           <>
-            <div className="p-4 border-b border-zinc-800 bg-zinc-900">
-              <h2 className="text-xl font-semibold text-yellow-500">{selectedWorkflow.name}</h2>
-              <p className="text-zinc-400 text-sm">{selectedWorkflow.description}</p>
+            {/* Header */}
+            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 backdrop-blur-sm">
+              <div className="flex items-center justify-between">
+                <div className="animate-fade-in-up">
+                  <h2 className="text-xl font-bold text-zinc-900 dark:text-white flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-500/20">
+                      <ClientOnlyIcon>
+                        <Workflow className="w-5 h-5 text-yellow-600 dark:text-yellow-500" />
+                      </ClientOnlyIcon>
+                    </div>
+                    {selectedWorkflow.name}
+                  </h2>
+                  <p className="text-zinc-600 dark:text-zinc-400 text-sm mt-1">{selectedWorkflow.description}</p>
+                  <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500 dark:text-zinc-500">
+                    <span className="flex items-center gap-1">
+                      <ClientOnlyIcon>
+                        <Play className="w-3 h-3" />
+                      </ClientOnlyIcon>
+                      {selectedWorkflow.steps.length} steps
+                    </span>
+                    {selectedWorkflow.steps.some(s => s.critical) && (
+                      <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-500">
+                        <ClientOnlyIcon>
+                          <AlertTriangle className="w-3 h-3" />
+                        </ClientOnlyIcon>
+                        Contains critical steps
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <ClientOnlyIcon>
+                        <Clock className="w-3 h-3" />
+                      </ClientOnlyIcon>
+                      {formatDelay(selectedWorkflow.steps.reduce((sum, step) => sum + step.delay, 0))} total delay
+                    </span>
+                  </div>
+                </div>
+                {loading && (
+                  <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-500">
+                    <ClientOnlyIcon>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    </ClientOnlyIcon>
+                    <span className="text-sm">Saving...</span>
+                  </div>
+                )}
+              </div>
             </div>
             
+            {/* Editor */}
             <div className="flex-1 p-4">
               <WorkflowEditor
                 workflowData={selectedWorkflow}
                 onSave={handleSaveWorkflow}
-                width={dimensions.width}
-                height={dimensions.height}
               />
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-zinc-400">
-              <div className="mb-4">
-                <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+          <div className="flex-1 flex items-center justify-center bg-zinc-50/30 dark:bg-zinc-950/30">
+            <div className="text-center animate-fade-in-up max-w-md">
+              <div className="mb-6 relative">
+                <div className="w-24 h-24 mx-auto bg-gradient-to-br from-yellow-100 to-yellow-200 dark:from-yellow-500/20 dark:to-yellow-600/20 rounded-2xl flex items-center justify-center border border-yellow-200 dark:border-yellow-500/30">
+                  <ClientOnlyIcon>
+                    <Workflow className="w-12 h-12 text-yellow-600 dark:text-yellow-500" />
+                  </ClientOnlyIcon>
+                </div>
+                <div className="absolute -top-2 -right-2 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center">
+                  <ClientOnlyIcon>
+                    <Plus className="w-3 h-3 text-white" />
+                  </ClientOnlyIcon>
+                </div>
               </div>
-              <h3 className="text-lg font-medium mb-2">Select a Workflow</h3>
-              <p className="text-zinc-500">Choose a workflow from the sidebar to start editing, or create a new one.</p>
+              <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-3">
+                ワークフローを選択
+              </h3>
+              <p className="text-zinc-600 dark:text-zinc-400 mb-6 leading-relaxed">
+                Choose a workflow from the sidebar to start editing, or create a new one to begin building your automation.
+              </p>
+              <div className="flex items-center justify-center gap-3 text-xs text-zinc-500 dark:text-zinc-500">
+                <span className="flex items-center gap-1">
+                  <ClientOnlyIcon>
+                    <FileText className="w-3 h-3" />
+                  </ClientOnlyIcon>
+                  Templates available
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <ClientOnlyIcon>
+                    <Zap className="w-3 h-3" />
+                  </ClientOnlyIcon>
+                  Visual editor
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <ClientOnlyIcon>
+                    <Download className="w-3 h-3" />
+                  </ClientOnlyIcon>
+                  Export ready
+                </span>
+              </div>
             </div>
           </div>
         )}

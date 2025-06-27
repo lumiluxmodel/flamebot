@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useWorkflowDefinitions, apiClient } from '../lib/api'
 import WorkflowEditor from './WorkflowEditor'
 import { 
@@ -19,19 +19,8 @@ interface SampleWorkflow {
 const Workflows2: React.FC = () => {
   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowDefinition | SampleWorkflow | null>(null)
   const [saving, setSaving] = useState(false)
-  const [dimensions, setDimensions] = useState({ width: 1200, height: 600 })
   
   const { data: workflowDefinitions, refetch: refetchDefinitions } = useWorkflowDefinitions()
-
-  // Set dimensions on client side
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setDimensions({
-        width: Math.min(window.innerWidth - 400, 1400),
-        height: Math.min(window.innerHeight - 200, 700)
-      })
-    }
-  }, [])
 
   // Sample workflows for testing
   const sampleWorkflows: Record<string, SampleWorkflow> = {
@@ -223,12 +212,12 @@ const Workflows2: React.FC = () => {
                 </div>
               </div>
 
-                             {/* Saved Workflows */}
-               {workflowDefinitions && workflowDefinitions.length > 0 && (
-                 <div>
-                   <h3 className="text-sm font-medium text-zinc-400 mb-2">Saved Workflows</h3>
-                   <div className="space-y-2">
-                     {workflowDefinitions.map((workflow: WorkflowDefinition) => (
+              {/* Saved Workflows */}
+              {workflowDefinitions && workflowDefinitions.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-zinc-400 mb-2">Saved Workflows</h3>
+                  <div className="space-y-2">
+                    {workflowDefinitions.map((workflow: WorkflowDefinition) => (
                       <button
                         key={workflow.id}
                         onClick={() => handleLoadWorkflow(workflow)}
@@ -263,8 +252,6 @@ const Workflows2: React.FC = () => {
                 <WorkflowEditor
                   workflowData={selectedWorkflow}
                   onSave={handleSaveWorkflow}
-                  width={dimensions.width}
-                  height={dimensions.height}
                 />
                 
                 {saving && (

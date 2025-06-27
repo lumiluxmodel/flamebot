@@ -47,17 +47,21 @@ interface WorkflowEditorProps {
   workflowData?: WorkflowDefinition | null
   onSave?: (steps: WorkflowStep[]) => Promise<void>
   onDataChange?: (data: ReactFlowData) => void
-  width?: number
-  height?: number
   readOnly?: boolean
+}
+
+export default function WorkflowEditor(props: WorkflowEditorProps) {
+  return (
+    <ReactFlowProvider>
+      <WorkflowEditorContent {...props} />
+    </ReactFlowProvider>
+  )
 }
 
 function WorkflowEditorContent({
   workflowData,
   onSave,
   onDataChange,
-  width = 1200,
-  height = 600,
   readOnly = false,
 }: WorkflowEditorProps) {
   const reactFlowInstance = useReactFlow()
@@ -194,10 +198,7 @@ function WorkflowEditorContent({
   }, [reactFlowInstance])
 
   return (
-    <div
-      className="workflow-editor-v2 border border-zinc-800 rounded-lg bg-black"
-      style={{ width: `${width}px`, height: `${height}px` }}
-    >
+    <div className="w-full h-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -208,7 +209,6 @@ function WorkflowEditorContent({
         nodeTypes={nodeTypes}
         fitView
         attributionPosition="bottom-left"
-        className="dark"
         nodesDraggable={!readOnly}
         nodesConnectable={!readOnly}
         elementsSelectable={!readOnly}
@@ -241,6 +241,7 @@ function WorkflowEditorContent({
         <NodePropertyEditor
           node={selectedNode}
           isOpen={isPropertyEditorOpen}
+          allNodes={nodes}
           onClose={() => {
             setIsPropertyEditorOpen(false)
             setSelectedNode(null)
@@ -258,13 +259,5 @@ function WorkflowEditorContent({
         />
       )}
     </div>
-  )
-}
-
-export default function WorkflowEditor(props: WorkflowEditorProps) {
-  return (
-    <ReactFlowProvider>
-      <WorkflowEditorContent {...props} />
-    </ReactFlowProvider>
   )
 } 
