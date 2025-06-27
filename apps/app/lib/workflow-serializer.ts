@@ -6,6 +6,37 @@ import {
   NODE_TYPE_TO_ACTION 
 } from './workflow-types';
 
+// Type helper functions
+function getBooleanProperty(data: unknown, key: string): boolean | undefined {
+  if (data && typeof data === 'object' && data !== null && key in data) {
+    const value = (data as Record<string, unknown>)[key];
+    if (typeof value === 'boolean') {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function getNumberProperty(data: unknown, key: string): number | undefined {
+  if (data && typeof data === 'object' && data !== null && key in data) {
+    const value = (data as Record<string, unknown>)[key];
+    if (typeof value === 'number') {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function getStringProperty(data: unknown, key: string): string | undefined {
+  if (data && typeof data === 'object' && data !== null && key in data) {
+    const value = (data as Record<string, unknown>)[key];
+    if (typeof value === 'string') {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 // Convert workflow JSON to React Flow format
 export function workflowToReactFlow(workflow: Workflow): { 
   nodes: Node[]; 
@@ -114,22 +145,58 @@ export function reactFlowToWorkflow(
     const step: WorkflowStep = {
       id: node.id,
       action: NODE_TYPE_TO_ACTION[node.type || ''] || node.type || 'unknown',
-      delay: (node.data && typeof node.data === 'object' && 'delay' in node.data && typeof node.data.delay === 'number') ? node.data.delay : 0,
-      description: (node.data && typeof node.data === 'object' && 'description' in node.data && typeof node.data.description === 'string') ? node.data.description : 
-                   (node.data && typeof node.data === 'object' && 'label' in node.data && typeof node.data.label === 'string') ? node.data.label : '',
-      ...(node.data && typeof node.data === 'object' && 'critical' in node.data && node.data.critical ? { critical: node.data.critical } : {}),
-      ...(node.data && typeof node.data === 'object' && 'parallel' in node.data && node.data.parallel ? { parallel: node.data.parallel } : {}),
-      ...(node.data && typeof node.data === 'object' && 'swipeCount' in node.data && node.data.swipeCount ? { swipeCount: node.data.swipeCount } : {}),
-      ...(node.data && typeof node.data === 'object' && 'minSwipes' in node.data && node.data.minSwipes ? { minSwipes: node.data.minSwipes } : {}),
-      ...(node.data && typeof node.data === 'object' && 'maxSwipes' in node.data && node.data.maxSwipes ? { maxSwipes: node.data.maxSwipes } : {}),
-      ...(node.data && typeof node.data === 'object' && 'minIntervalMs' in node.data && node.data.minIntervalMs ? { minIntervalMs: node.data.minIntervalMs } : {}),
-      ...(node.data && typeof node.data === 'object' && 'maxIntervalMs' in node.data && node.data.maxIntervalMs ? { maxIntervalMs: node.data.maxIntervalMs } : {}),
-      ...(node.data && typeof node.data === 'object' && 'timeout' in node.data && node.data.timeout ? { timeout: node.data.timeout } : {}),
+      delay: getNumberProperty(node.data, 'delay') || 0,
+      description: getStringProperty(node.data, 'description') || 
+                   getStringProperty(node.data, 'label') || '',
     };
 
+    // Add optional properties only if they exist and are of correct type
+    const critical = getBooleanProperty(node.data, 'critical');
+    if (critical !== undefined) {
+      step.critical = critical;
+    }
+
+    const parallel = getBooleanProperty(node.data, 'parallel');
+    if (parallel !== undefined) {
+      step.parallel = parallel;
+    }
+
+    const swipeCount = getNumberProperty(node.data, 'swipeCount');
+    if (swipeCount !== undefined) {
+      step.swipeCount = swipeCount;
+    }
+
+    const minSwipes = getNumberProperty(node.data, 'minSwipes');
+    if (minSwipes !== undefined) {
+      step.minSwipes = minSwipes;
+    }
+
+    const maxSwipes = getNumberProperty(node.data, 'maxSwipes');
+    if (maxSwipes !== undefined) {
+      step.maxSwipes = maxSwipes;
+    }
+
+    const minIntervalMs = getNumberProperty(node.data, 'minIntervalMs');
+    if (minIntervalMs !== undefined) {
+      step.minIntervalMs = minIntervalMs;
+    }
+
+    const maxIntervalMs = getNumberProperty(node.data, 'maxIntervalMs');
+    if (maxIntervalMs !== undefined) {
+      step.maxIntervalMs = maxIntervalMs;
+    }
+
+    const timeout = getNumberProperty(node.data, 'timeout');
+    if (timeout !== undefined) {
+      step.timeout = timeout;
+    }
+
     // Handle goto connections
-    if (node.type === 'goto' && node.data && typeof node.data === 'object' && 'targetNodeId' in node.data && node.data.targetNodeId) {
-      step.nextStep = node.data.targetNodeId as string;
+    if (node.type === 'goto') {
+      const targetNodeId = getStringProperty(node.data, 'targetNodeId');
+      if (targetNodeId) {
+        step.nextStep = targetNodeId;
+      }
     }
 
     return step;

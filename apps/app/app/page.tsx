@@ -8,7 +8,7 @@ import Workflows from '../components/Workflows';
 import Definitions from '../components/Definitions';
 import System from '../components/System';
 import Alerts from '../components/Alerts';
-import { WorkflowEditor2 } from '../components/WorkflowEditor2';
+import { WorkflowManager } from '../components/WorkflowManager';
 import { useActiveWorkflows } from '../lib/api';
 import { ClientOnlyIcon, formatTime } from '../components/common';
 
@@ -134,7 +134,7 @@ export default function FlameBotDashboard() {
             {activeSection === '001' && <Overview />}
             {activeSection === '002' && <Workflows />}
             {activeSection === '003' && <Definitions />}
-            {activeSection === '004' && <WorkflowEditor2 />}
+            {activeSection === '004' && <WorkflowManager />}
             {activeSection === '005' && <System />}
             {activeSection === '006' && time && <Alerts time={time} />}
           </div>

@@ -1,5 +1,5 @@
 // components/nodes/WorkflowNodes.tsx
-import React, { useCallback, memo } from 'react';
+import React, { useCallback, memo, useMemo } from 'react';
 import { Handle, Position, NodeProps, useReactFlow } from '@xyflow/react';
 import { 
   Clock, 
@@ -30,7 +30,7 @@ const contentStyle = `
 `;
 
 // Node data interfaces
-interface BaseNodeData {
+interface BaseNodeData extends Record<string, unknown> {
   label: string;
   description?: string;
   delay?: number;
@@ -40,6 +40,7 @@ interface BaseNodeData {
 
 interface WaitNodeData extends BaseNodeData {
   delay: number;
+  label: string;
 }
 
 interface GotoNodeData extends BaseNodeData {
@@ -58,9 +59,36 @@ interface ContinuousSwipeNodeData extends BaseNodeData {
   maxIntervalMs?: number;
 }
 
+// Type guard functions
+function isBaseNodeData(data: unknown): data is BaseNodeData {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'label' in data &&
+    typeof (data as Record<string, unknown>).label === 'string'
+  );
+}
+
+function isWaitNodeData(data: unknown): data is WaitNodeData {
+  return isBaseNodeData(data) && 'delay' in data && typeof (data as Record<string, unknown>).delay === 'number';
+}
+
+function isSwipeNodeData(data: unknown): data is SwipeNodeData {
+  return isBaseNodeData(data);
+}
+
+function isContinuousSwipeNodeData(data: unknown): data is ContinuousSwipeNodeData {
+  return isBaseNodeData(data);
+}
+
+function isGotoNodeData(data: unknown): data is GotoNodeData {
+  return isBaseNodeData(data);
+}
+
 // Start Node
 export const StartNode = memo(({ data, selected }: NodeProps) => {
-  const nodeData = data as BaseNodeData;
+  const nodeData = isBaseNodeData(data) ? data : { label: 'Start', description: 'Workflow entry point' };
+  
   return (
     <div className={`${baseNodeStyle} ${selected ? 'ring-2 ring-yellow-500 ring-offset-2' : ''} border-emerald-500`}>
       <div className={`${headerStyle} bg-emerald-500`}>
@@ -87,7 +115,14 @@ StartNode.displayName = 'StartNode';
 // Wait Node
 export const WaitNode = memo(({ id, data, selected }: NodeProps) => {
   const { updateNodeData } = useReactFlow();
-  const nodeData = data as WaitNodeData;
+  
+  const nodeData = useMemo(() => {
+    return isWaitNodeData(data) ? data : { 
+      label: 'Wait', 
+      delay: 60000, 
+      description: 'Wait for specified delay' 
+    };
+  }, [data]);
 
   const handleDelayChange = useCallback((value: string) => {
     const delay = parseInt(value) || 0;
@@ -148,7 +183,14 @@ WaitNode.displayName = 'WaitNode';
 // Add Prompt Node
 export const AddPromptNode = memo(({ id, data, selected }: NodeProps) => {
   const { updateNodeData } = useReactFlow();
-  const nodeData = data as BaseNodeData;
+  
+  const nodeData = useMemo(() => {
+    return isBaseNodeData(data) ? data : { 
+      label: 'Add Prompt', 
+      description: 'Add AI-generated prompt',
+      critical: false 
+    };
+  }, [data]);
 
   const handleCriticalChange = useCallback((checked: boolean) => {
     updateNodeData(id, { ...nodeData, critical: checked });
@@ -204,7 +246,11 @@ AddPromptNode.displayName = 'AddPromptNode';
 
 // Add Bio Node
 export const AddBioNode = memo(({ data, selected }: NodeProps) => {
-  const nodeData = data as BaseNodeData;
+  const nodeData = isBaseNodeData(data) ? data : { 
+    label: 'Add Bio', 
+    description: 'Add bio information' 
+  };
+  
   return (
     <div className={`${baseNodeStyle} ${selected ? 'ring-2 ring-yellow-500 ring-offset-2' : ''} border-pink-500`}>
       <Handle
@@ -239,7 +285,14 @@ AddBioNode.displayName = 'AddBioNode';
 // Swipe with Spectre Node
 export const SwipeWithSpectreNode = memo(({ id, data, selected }: NodeProps) => {
   const { updateNodeData } = useReactFlow();
-  const nodeData = data as SwipeNodeData;
+  
+  const nodeData = useMemo(() => {
+    return isSwipeNodeData(data) ? data : { 
+      label: 'Swipe with Spectre', 
+      description: 'Swipe with Spectre',
+      swipeCount: 10 
+    };
+  }, [data]);
 
   const handleSwipeCountChange = useCallback((value: string) => {
     const swipeCount = parseInt(value) || 1;
@@ -291,7 +344,17 @@ SwipeWithSpectreNode.displayName = 'SwipeWithSpectreNode';
 // Activate Continuous Swipe Node
 export const ActivateContinuousSwipeNode = memo(({ id, data, selected }: NodeProps) => {
   const { updateNodeData } = useReactFlow();
-  const nodeData = data as ContinuousSwipeNodeData;
+  
+  const nodeData = useMemo(() => {
+    return isContinuousSwipeNodeData(data) ? data : { 
+      label: 'Continuous Swipe', 
+      description: 'Activate continuous swipe mode',
+      minSwipes: 15,
+      maxSwipes: 25,
+      minIntervalMs: 3600000,
+      maxIntervalMs: 7200000
+    };
+  }, [data]);
 
   const handleUpdate = useCallback((field: string, value: string) => {
     const numValue = parseInt(value) || 0;
@@ -354,7 +417,16 @@ ActivateContinuousSwipeNode.displayName = 'ActivateContinuousSwipeNode';
 // Goto Node (for loops)
 export const GotoNode = memo(({ id, data, selected }: NodeProps) => {
   const { updateNodeData, getNodes } = useReactFlow();
-  const nodeData = data as GotoNodeData;
+  
+  const nodeData = useMemo(() => {
+    return isGotoNodeData(data) ? data : { 
+      label: 'Go To', 
+      description: 'Loop back to previous step',
+      loop: false,
+      targetNodeId: ''
+    };
+  }, [data]);
+  
   const nodes = getNodes();
 
   const availableTargets = nodes.filter(node => 
@@ -394,7 +466,7 @@ export const GotoNode = memo(({ id, data, selected }: NodeProps) => {
           >
             <option value="">Select target...</option>
             {availableTargets.map(node => {
-              const targetData = node.data as BaseNodeData;
+              const targetData = isBaseNodeData(node.data) ? node.data : { label: node.id };
               return (
                 <option key={node.id} value={node.id}>
                   {targetData.label || node.id}
