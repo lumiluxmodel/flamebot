@@ -178,7 +178,7 @@ class FlamebotService {
     return {
       account: accountString,
       class_info: {
-        class_type: accountData.model, 
+        class_type: accountData.model, // <-- CORRECCIÓN: Solo usar el modelo, sin " - Old"
         class_color: modelColor
       }
     };
