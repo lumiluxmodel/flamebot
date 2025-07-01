@@ -16,8 +16,11 @@ class AccountController {
         model,
         location,
         refreshToken,
+        refresh_token, // Support both naming conventions
         deviceId,
+        device_id, // Support both naming conventions
         persistentId,
+        devicePersistentId, // Support both naming conventions
         waitForCompletion = true,
         // NEW: Workflow configuration
         startAutomation = true,
@@ -33,6 +36,24 @@ class AccountController {
             "Missing required fields: authToken, proxy, and model are required",
         });
       }
+      
+      // Check for deviceId
+      const finalDeviceId = deviceId || device_id;
+      if (!finalDeviceId) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required field: deviceId is required",
+        });
+      }
+      
+      // Check for refreshToken
+      const finalRefreshToken = refreshToken || refresh_token;
+      if (!finalRefreshToken) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required field: refreshToken is required",
+        });
+      }
 
       if (!isValidModel(model, config.models.available)) {
         return res.status(400).json({
@@ -43,16 +64,20 @@ class AccountController {
         });
       }
 
-      // Prepare account data
+      // Get persistent ID (support both naming conventions)
+      const finalPersistentId = persistentId || devicePersistentId;
+
+      // Prepare account data with normalized field names
       const accountData = {
         authToken,
         proxy,
         model,
         location,
-        refreshToken,
-        deviceId,
-        persistentId,
-        channel, // Add channel for workflows
+        refreshToken: finalRefreshToken,
+        deviceId: finalDeviceId,
+        persistentId: finalPersistentId,
+        devicePersistentId: finalPersistentId, // Include both for compatibility
+        channel,
         importedAt: new Date().toISOString(),
       };
 
@@ -75,13 +100,13 @@ class AccountController {
         // Obtener el account_id real usando persistent_id
         let realAccountId = result.accountId;
 
-        if (!realAccountId && persistentId) {
+        if (!realAccountId && finalPersistentId) {
           console.log(
-            `🔍 Fetching real account ID using persistent_id: ${persistentId}`
+            `🔍 Fetching real account ID using persistent_id: ${finalPersistentId}`
           );
           try {
             realAccountId = await flamebotService.getAccountIdByPersistentId(
-              persistentId
+              finalPersistentId
             );
             if (realAccountId) {
               console.log(`✅ Found real account ID: ${realAccountId}`);
@@ -98,11 +123,11 @@ class AccountController {
         let workflowResult = null;
 
         // Start automation workflow if requested
-        if (startAutomation) {
+        if (startAutomation && realAccountId) {
           console.log(`\n🤖 Starting automation workflow...`);
           try {
             workflowResult = await workflowManager.startAccountAutomation(
-              realAccountId, // <-- Ahora usando el ID real
+              realAccountId,
               {
                 model,
                 channel,
@@ -137,7 +162,7 @@ class AccountController {
           message: "Account imported successfully",
           data: {
             // Import data
-            accountId: realAccountId || null, // <-- Incluir el ID real si lo encontramos
+            accountId: realAccountId || null,
             taskId: result.taskId,
             model: model,
             channel: channel,
@@ -195,10 +220,27 @@ class AccountController {
 
       // Validate all accounts
       for (const account of accounts) {
+        // Check for required fields
         if (!account.authToken || !account.proxy || !account.model) {
           return res.status(400).json({
             success: false,
             error: "Each account must have authToken, proxy, and model",
+          });
+        }
+        
+        // Check for deviceId (can be deviceId or device_id)
+        if (!account.deviceId && !account.device_id) {
+          return res.status(400).json({
+            success: false,
+            error: "Each account must have deviceId",
+          });
+        }
+        
+        // Check for refreshToken (can be refreshToken or refresh_token)
+        if (!account.refreshToken && !account.refresh_token) {
+          return res.status(400).json({
+            success: false,
+            error: "Each account must have refreshToken",
           });
         }
 
@@ -219,16 +261,29 @@ class AccountController {
         }
       }
 
-      // Import accounts
+      // Import accounts IN A SINGLE REQUEST
+      console.log("📦 Sending bulk import request to Flamebot...");
       const results = await flamebotService.importMultipleAccounts(accounts);
 
       // Start automation workflows for successful imports
       const workflowResults = [];
-      if (startAutomation) {
-        console.log(`\n🤖 Starting automation workflows...`);
+      if (startAutomation && results.successful.length > 0) {
+        console.log(`\n🤖 Starting automation workflows for ${results.successful.length} accounts...`);
 
         for (const successfulImport of results.successful) {
           try {
+            // Skip if we don't have an account ID
+            if (!successfulImport.accountId) {
+              console.log(`⚠️ Skipping workflow for account without ID: ${successfulImport.note || 'No ID retrieved'}`);
+              workflowResults.push({
+                accountId: null,
+                model: successfulImport.model,
+                workflowStarted: false,
+                workflowError: "Account ID not available"
+              });
+              continue;
+            }
+
             const workflowResult = await workflowManager.startAccountAutomation(
               successfulImport.accountId,
               {
@@ -284,17 +339,29 @@ class AccountController {
         `   Workflows Started: ${automationStats.started}/${automationStats.total}`
       );
 
+      // Include task information in response
+      const responseData = {
+        // Import results
+        ...results,
+        
+        // Task information (from bulk import)
+        bulkImport: {
+          taskId: results.taskId,
+          taskCompleted: results.taskStatus?.status === "COMPLETED",
+          importDuration: results.taskStatus ? 
+            `${(results.taskStatus.duration || 0) / 1000}s` : 
+            "Not measured"
+        },
+
+        // Automation results
+        automation: automationStats,
+        workflowResults: workflowResults,
+      };
+
       res.status(200).json({
         success: true,
         message: `Imported ${results.successful.length} of ${results.total} accounts`,
-        data: {
-          // Import results
-          ...results,
-
-          // Automation results
-          automation: automationStats,
-          workflowResults: workflowResults,
-        },
+        data: responseData
       });
     } catch (error) {
       console.error("Import multiple accounts error:", error);

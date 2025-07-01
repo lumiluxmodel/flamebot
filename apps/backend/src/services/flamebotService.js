@@ -1,7 +1,6 @@
 // apps/backend/src/services/flamebotService.js
 const axios = require("axios");
 const config = require("../config");
-const { formatAccountPayload } = require("../utils/formatters");
 
 class FlamebotService {
   constructor() {
@@ -151,6 +150,41 @@ class FlamebotService {
   }
 
   /**
+   * Format account for bulk import
+   * @param {Object} accountData - Account information
+   * @param {string} modelColor - Model color
+   * @returns {Object} Formatted account data
+   */
+  formatAccountForBulkImport(accountData, modelColor) {
+    // Get device ID from either field name
+    const deviceId = accountData.deviceId || accountData.device_id;
+    const refreshToken = accountData.refreshToken || accountData.refresh_token;
+    
+    // Ensure proxy has protocol prefix if not already present
+    let formattedProxy = accountData.proxy;
+    if (!formattedProxy.startsWith('socks5://') && !formattedProxy.startsWith('http://')) {
+      // Default to socks5 if no protocol specified
+      formattedProxy = `socks5://${formattedProxy}`;
+    }
+    
+    // Create the account string in the format: authToken:deviceId:refreshToken:proxy
+    const accountString = [
+      accountData.authToken,
+      deviceId,
+      refreshToken,
+      formattedProxy
+    ].join(':');
+
+    return {
+      account: accountString,
+      class_info: {
+        class_type: `${accountData.model} - Old`, // e.g., "Aura - Old"
+        class_color: modelColor
+      }
+    };
+  }
+
+  /**
    * Import account to Flamebot
    * @param {Object} accountData - Account information
    * @param {boolean} waitForCompletion - Whether to wait for task completion
@@ -158,18 +192,32 @@ class FlamebotService {
    */
   async importAccount(accountData, waitForCompletion = true) {
     try {
-      // Validate required fields for 7-part format
-      const requiredFields = ["authToken", "proxy"];
-      const missingFields = requiredFields.filter(
-        (field) => !accountData[field]
-      );
+      // Validate required fields
+      const requiredFields = ["authToken", "proxy", "model"];
+      const missingFields = requiredFields.filter(field => {
+        if (field === "refreshToken") {
+          return !accountData.refreshToken && !accountData.refresh_token;
+        }
+        return !accountData[field];
+      });
+      
+      // Check for deviceId and refreshToken
+      if (!accountData.deviceId && !accountData.device_id) {
+        missingFields.push("deviceId");
+      }
+      if (!accountData.refreshToken && !accountData.refresh_token) {
+        missingFields.push("refreshToken");
+      }
 
       if (missingFields.length > 0) {
         throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
       }
 
       const modelColor = config.models.colors[accountData.model] || "#44ab6c";
-      const payload = formatAccountPayload(accountData, modelColor);
+      
+      // For single import, we still use the same format but wrap in array
+      const formattedAccount = this.formatAccountForBulkImport(accountData, modelColor);
+      const payload = { accounts: [formattedAccount] };
 
       const response = await this.client.post(
         config.flamebot.endpoints.addTinderCards,
@@ -180,7 +228,6 @@ class FlamebotService {
         success: true,
         data: response.data,
         taskId: response.data.task_id,
-        accountId: response.data.account_id || response.data.id,
         message: "Account import initiated",
       };
 
@@ -190,6 +237,13 @@ class FlamebotService {
         const taskStatus = await this.pollTaskStatus(result.taskId);
         result.taskStatus = taskStatus;
         result.message = "Account imported successfully";
+        
+        // Try to get account ID by persistent_id after import
+        if (accountData.devicePersistentId || accountData.persistentId) {
+          const persistentId = accountData.devicePersistentId || accountData.persistentId;
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          result.accountId = await this.getAccountIdByPersistentId(persistentId);
+        }
       }
 
       return result;
@@ -204,42 +258,183 @@ class FlamebotService {
   }
 
   /**
-   * Import multiple accounts
+   * Import multiple accounts in a single request
    * @param {Array<Object>} accounts - Array of account data
    * @param {boolean} waitForCompletion - Whether to wait for task completion
-   * @returns {Promise<Object>} Results of import operations
+   * @returns {Promise<Object>} Results of import operation
    */
   async importMultipleAccounts(accounts, waitForCompletion = true) {
-    const results = {
-      successful: [],
-      failed: [],
-      total: accounts.length,
-    };
+    try {
+      console.log(`\n🚀 Starting bulk import for ${accounts.length} accounts`);
+      
+      // Validate all accounts first
+      for (const [index, account] of accounts.entries()) {
+        const requiredFields = ["authToken", "proxy", "model", "refreshToken"];
+        const missingFields = requiredFields.filter(field => {
+          // Check for deviceId or device_id
+          if (field === "deviceId") {
+            return !account.deviceId && !account.device_id;
+          }
+          // Check for refreshToken or refresh_token
+          if (field === "refreshToken") {
+            return !account.refreshToken && !account.refresh_token;
+          }
+          return !account[field];
+        });
+        
+        // Also check for deviceId separately
+        if (!account.deviceId && !account.device_id) {
+          missingFields.push("deviceId");
+        }
+        
+        if (missingFields.length > 0) {
+          throw new Error(`Account ${index + 1} missing required fields: ${missingFields.join(", ")}`);
+        }
+      }
 
-    for (const account of accounts) {
-      const result = await this.importAccount(account, waitForCompletion);
+      // Format all accounts into the correct payload structure
+      const formattedAccounts = accounts.map(account => {
+        const modelColor = config.models.colors[account.model] || "#44ab6c";
+        return this.formatAccountForBulkImport(account, modelColor);
+      });
 
-      if (result.success) {
-        results.successful.push({
-          ...account,
-          accountId: result.accountId,
-          taskId: result.taskId,
-          taskStatus: result.taskStatus,
+      const bulkPayload = { accounts: formattedAccounts };
+
+      console.log(`📦 Sending bulk import request with ${formattedAccounts.length} accounts`);
+      console.log(`   Payload example:`, JSON.stringify(formattedAccounts[0], null, 2));
+      
+      // Make a single request with all accounts
+      const response = await this.client.post(
+        config.flamebot.endpoints.addTinderCards,
+        bulkPayload
+      );
+
+      const taskId = response.data.task_id;
+      console.log(`✅ Bulk import initiated. Task ID: ${taskId}`);
+
+      let taskStatus = null;
+      
+      // Wait for completion if requested
+      if (waitForCompletion && taskId) {
+        console.log("\n🔄 Waiting for bulk import to complete...");
+        taskStatus = await this.pollTaskStatus(taskId, 60, 3000); // More attempts for bulk
+      }
+
+      // Process results
+      const results = {
+        successful: [],
+        failed: [],
+        total: accounts.length,
+        taskId: taskId,
+        taskStatus: taskStatus
+      };
+
+      // If we have task status, try to match results with accounts
+      if (taskStatus && taskStatus.status === "COMPLETED") {
+        // The API might return details about each imported account
+        // This depends on Flamebot's response format
+        
+        if (taskStatus.results && Array.isArray(taskStatus.results)) {
+          // If API returns individual results
+          taskStatus.results.forEach((result, index) => {
+            const account = accounts[index];
+            if (result.success) {
+              results.successful.push({
+                ...account,
+                accountId: result.account_id || result.id,
+                taskId: taskId,
+                importResult: result
+              });
+            } else {
+              results.failed.push({
+                ...account,
+                error: result.error || "Import failed",
+                importResult: result
+              });
+            }
+          });
+        } else {
+          // If API doesn't return individual results, we need to fetch accounts by persistent_id
+          console.log("📋 Fetching individual account IDs...");
+          
+          for (const account of accounts) {
+            try {
+              let accountId = null;
+              
+              // Try to get account ID by persistent_id if available
+              if (account.devicePersistentId || account.persistentId) {
+                const persistentId = account.devicePersistentId || account.persistentId;
+                // Wait a bit to ensure the account is created
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                accountId = await this.getAccountIdByPersistentId(persistentId);
+              }
+              
+              if (accountId) {
+                results.successful.push({
+                  ...account,
+                  accountId: accountId,
+                  taskId: taskId,
+                  taskStatus: taskStatus
+                });
+              } else {
+                // If we can't find the account ID, still consider it successful
+                // but note that we couldn't retrieve the ID
+                results.successful.push({
+                  ...account,
+                  accountId: null,
+                  taskId: taskId,
+                  taskStatus: taskStatus,
+                  note: "Account imported but ID could not be retrieved"
+                });
+              }
+            } catch (error) {
+              results.failed.push({
+                ...account,
+                error: error.message || "Failed to retrieve account ID"
+              });
+            }
+          }
+        }
+      } else if (taskStatus && taskStatus.status === "FAILED") {
+        // If the entire task failed, all accounts failed
+        accounts.forEach(account => {
+          results.failed.push({
+            ...account,
+            error: taskStatus.error || "Bulk import task failed"
+          });
         });
       } else {
-        results.failed.push({
-          ...account,
-          error: result.error,
+        // If we don't wait for completion, we can't determine individual results
+        accounts.forEach(account => {
+          results.successful.push({
+            ...account,
+            accountId: null,
+            taskId: taskId,
+            note: "Import initiated but not verified"
+          });
         });
       }
 
-      // Add delay between requests to avoid rate limiting
-      if (accounts.indexOf(account) < accounts.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-    }
+      console.log(`\n📊 Bulk import results:`);
+      console.log(`   ✅ Successful: ${results.successful.length}`);
+      console.log(`   ❌ Failed: ${results.failed.length}`);
 
-    return results;
+      return results;
+
+    } catch (error) {
+      console.error("❌ Bulk import error:", error);
+      
+      // If the request failed entirely, all accounts failed
+      return {
+        successful: [],
+        failed: accounts.map(account => ({
+          ...account,
+          error: error.response?.data?.error || error.message || "Bulk import request failed"
+        })),
+        total: accounts.length,
+        error: error.message
+      };
+    }
   }
 
   /**
