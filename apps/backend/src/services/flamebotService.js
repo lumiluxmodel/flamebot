@@ -178,7 +178,7 @@ class FlamebotService {
     return {
       account: accountString,
       class_info: {
-        class_type: `${accountData.model} - Old`, // e.g., "Aura - Old"
+        class_type: accountData.model, 
         class_color: modelColor
       }
     };
