@@ -56,7 +56,11 @@ importers:
         version: 3.3.1
       zustand:
         specifier: ^5.0.6
+<<<<<<< HEAD
         version: 5.0.6(@types/react@19.0.0)(react@19.1.0)
+=======
+        version: 5.0.6(@types/react@19.1.8)(react@19.1.0)
+>>>>>>> ecbeafb3adbc656020ec33d8e69d91bde522ea36
     devDependencies:
       '@eslint/eslintrc':
         specifier: ^3
@@ -69,10 +73,10 @@ importers:
         version: 20.19.1
       '@types/react':
         specifier: ^19.0.0
-        version: 19.0.0
+        version: 19.1.8
       '@types/react-dom':
         specifier: ^19.0.0
-        version: 19.0.0
+        version: 19.1.6(@types/react@19.1.8)
       eslint:
         specifier: ^9
         version: 9.29.0
@@ -1786,7 +1790,11 @@ packages:
     dev: true
     optional: true
 
+<<<<<<< HEAD
   /@xyflow/react@12.8.0(@types/react@19.0.0)(react-dom@19.1.0)(react@19.1.0):
+=======
+  /@xyflow/react@12.8.0(@types/react@19.1.8)(react-dom@19.1.0)(react@19.1.0):
+>>>>>>> ecbeafb3adbc656020ec33d8e69d91bde522ea36
     resolution: {integrity: sha512-IwWEYs+UISDCPhFd8imOzt21BuAEtfdzVfH8uK4tIqSrASgzZJ96KO67yDniWoEZPxkFfjVv8puFOJWd/MLeoA==}
     peerDependencies:
       react: '>=17'
@@ -1796,7 +1804,11 @@ packages:
       classcat: 5.0.5
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
+<<<<<<< HEAD
       zustand: 4.5.7(@types/react@19.0.0)(react@19.1.0)
+=======
+      zustand: 4.5.7(@types/react@19.1.8)(react@19.1.0)
+>>>>>>> ecbeafb3adbc656020ec33d8e69d91bde522ea36
     transitivePeerDependencies:
       - '@types/react'
       - immer
@@ -6069,7 +6081,11 @@ packages:
     engines: {node: '>=10'}
     dev: true
 
+<<<<<<< HEAD
   /zustand@4.5.7(@types/react@19.0.0)(react@19.1.0):
+=======
+  /zustand@4.5.7(@types/react@19.1.8)(react@19.1.0):
+>>>>>>> ecbeafb3adbc656020ec33d8e69d91bde522ea36
     resolution: {integrity: sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==}
     engines: {node: '>=12.7.0'}
     peerDependencies:
@@ -6084,12 +6100,20 @@ packages:
       react:
         optional: true
     dependencies:
+<<<<<<< HEAD
       '@types/react': 19.0.0
+=======
+      '@types/react': 19.1.8
+>>>>>>> ecbeafb3adbc656020ec33d8e69d91bde522ea36
       react: 19.1.0
       use-sync-external-store: 1.5.0(react@19.1.0)
     dev: false
 
+<<<<<<< HEAD
   /zustand@5.0.6(@types/react@19.0.0)(react@19.1.0):
+=======
+  /zustand@5.0.6(@types/react@19.1.8)(react@19.1.0):
+>>>>>>> ecbeafb3adbc656020ec33d8e69d91bde522ea36
     resolution: {integrity: sha512-ihAqNeUVhe0MAD+X8M5UzqyZ9k3FFZLBTtqo6JLPwV53cbRB/mJwBI0PxcIgqhBBHlEs8G45OTDTMq3gNcLq3A==}
     engines: {node: '>=12.20.0'}
     peerDependencies:
@@ -6107,6 +6131,10 @@ packages:
       use-sync-external-store:
         optional: true
     dependencies:
+<<<<<<< HEAD
       '@types/react': 19.0.0
+=======
+      '@types/react': 19.1.8
+>>>>>>> ecbeafb3adbc656020ec33d8e69d91bde522ea36
       react: 19.1.0
     dev: false

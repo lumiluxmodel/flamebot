@@ -39,7 +39,7 @@ interface WorkflowCardProps {
 const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onRefresh }) => {
   const [expanded, setExpanded] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const { data: detailedStatus, loading: detailsLoading } = useWorkflowDetailedStatus(
+  const { data: detailedStatus, loading: detailsLoading, error: detailsError } = useWorkflowDetailedStatus(
     expanded ? workflow.accountId : '',
     3000
   );
@@ -128,6 +128,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onRefresh }) => {
           <div className={`text-[11px] ${getStatusColor(workflow.status)} pulse-dot`}>
             ● {workflow.status.toUpperCase()}
           </div>
+          
           <a
             href={`https://flamebot-tin.com/accounts/${workflow.accountId}`}
             target="_blank"
@@ -248,13 +249,13 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onRefresh }) => {
             <div>
               <div className="text-[10px] text-zinc-600 mb-2">CURRENT STEP</div>
               <div className="text-zinc-800 dark:text-white">
-                {detailedStatus ? detailedStatus.currentStep : 'Loading...'}
+                {detailedStatus ? `${detailedStatus.currentStep}/${detailedStatus.totalSteps}` : 'Loading...'}
               </div>
             </div>
             <div>
-              <div className="text-[10px] text-zinc-600 mb-2">STEPS</div>
-              <div className="text-zinc-800 dark:text-white">
-                {detailedStatus ? `${detailedStatus.currentStep}/${detailedStatus.totalSteps}` : 'Loading...'}
+              <div className="text-[10px] text-zinc-600 mb-2">WORKFLOW</div>
+              <div className="text-zinc-800 dark:text-white text-[11px]">
+                {detailedStatus?.workflowDefinition?.name || 'Loading...'}
               </div>
             </div>
           </>
@@ -281,9 +282,47 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onRefresh }) => {
             <div className="py-8">
               <LoadingSpinner />
             </div>
+          ) : detailsError ? (
+            <div className="py-8 text-center">
+              <div className="text-red-600 dark:text-red-500 mb-2">Error loading details</div>
+              <div className="text-xs text-zinc-600 dark:text-zinc-500">{detailsError}</div>
+            </div>
           ) : detailedStatus ? (
             <div className="space-y-6">
-              {/* Details Grid */}
+              {/* Account Info */}
+              {detailedStatus.accountData && (
+                <div>
+                  <div className="text-[10px] text-zinc-600 mb-3">ACCOUNT INFORMATION</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-1">MODEL</div>
+                      <div className="text-zinc-800 dark:text-white font-medium">
+                        {detailedStatus.accountData.model}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-1">CHANNEL</div>
+                      <div className="text-zinc-800 dark:text-white">
+                        {detailedStatus.accountData.channel}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-1">IMPORTED AT</div>
+                      <div className="text-zinc-800 dark:text-white">
+                        {new Date(detailedStatus.accountData.importedAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-zinc-600 mb-1">IN MEMORY</div>
+                      <div className={detailedStatus.isInMemory ? 'text-emerald-600 dark:text-emerald-500' : 'text-zinc-600 dark:text-zinc-500'}>
+                        {detailedStatus.isInMemory ? 'YES' : 'NO'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Workflow Details Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
                   <div className="text-[10px] text-zinc-600 mb-1">STARTED AT</div>
@@ -359,51 +398,84 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onRefresh }) => {
                         Delay: {formatDelay(detailedStatus.nextStep.delay)}
                       </div>
                     </div>
+                    {detailedStatus.nextActionAt && (
+                      <div className="mt-2 text-[10px] text-zinc-600 dark:text-zinc-500">
+                        Scheduled for: {new Date(detailedStatus.nextActionAt).toLocaleString()}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
               {/* Error Info */}
-              {detailedStatus.lastError && (
+              {detailedStatus.finalError && (
                 <div>
                   <div className="text-[10px] text-red-600 dark:text-red-500 mb-3">LAST ERROR</div>
                   <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 p-4 rounded">
                     <div className="text-sm text-red-800 dark:text-red-400 font-mono">
-                      {detailedStatus.lastError}
+                      {detailedStatus.finalError}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Execution Log */}
-              <div>
-                <div className="text-[10px] text-zinc-600 mb-3">EXECUTION LOG ({detailedStatus.executionLog.length})</div>
-                <ScrollArea className="max-h-64">
+              {/* Scheduled Tasks */}
+              {detailedStatus.scheduledTasks && detailedStatus.scheduledTasks.length > 0 && (
+                <div>
+                  <div className="text-[10px] text-zinc-600 mb-3">SCHEDULED TASKS ({detailedStatus.scheduledTasks.length})</div>
                   <div className="space-y-2">
-                    {detailedStatus.executionLog.map((log, i) => (
-                      <div key={i} className="flex items-start gap-3 text-[11px] p-2 hover:bg-zinc-50 dark:hover:bg-zinc-950/50 rounded">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-                          log.success ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-500' : 
-                          'bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-500'
-                        }`}>
-                          {log.stepIndex + 1}
+                    {detailedStatus.scheduledTasks.slice(0, 3).map((task, i) => (
+                      <div key={i} className="bg-zinc-100 dark:bg-zinc-900 p-3 rounded text-[11px]">
+                        <div className="flex justify-between">
+                          <span className="font-mono">{task.action}</span>
+                          <span className={`${task.status === 'scheduled' ? 'text-yellow-600 dark:text-yellow-500' : 'text-zinc-600 dark:text-zinc-500'}`}>
+                            {task.status.toUpperCase()}
+                          </span>
                         </div>
-                        <div className="flex-1">
-                          <div className="flex justify-between">
-                            <span className="font-mono text-zinc-800 dark:text-white">{log.action}</span>
-                            <span className={log.success ? 'text-emerald-600 dark:text-emerald-500' : 'text-red-600 dark:text-red-500'}>
-                              {log.success ? 'SUCCESS' : 'FAILED'}
-                            </span>
-                          </div>
-                          <div className="text-zinc-600 dark:text-zinc-500">
-                            {new Date(log.timestamp).toLocaleTimeString()}
-                          </div>
+                        <div className="text-zinc-600 dark:text-zinc-500 mt-1">
+                          Scheduled: {new Date(task.scheduledFor).toLocaleString()}
                         </div>
                       </div>
                     ))}
                   </div>
-                </ScrollArea>
-              </div>
+                </div>
+              )}
+
+              {/* Execution Log */}
+              {detailedStatus.executionLogs && detailedStatus.executionLogs.length > 0 && (
+                <div>
+                  <div className="text-[10px] text-zinc-600 mb-3">EXECUTION LOG ({detailedStatus.executionLogs.length})</div>
+                  <ScrollArea className="max-h-64">
+                    <div className="space-y-2">
+                      {detailedStatus.executionLogs.map((log, i) => (
+                        <div key={i} className="flex items-start gap-3 text-[11px] p-2 hover:bg-zinc-50 dark:hover:bg-zinc-950/50 rounded">
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            log.success ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-500' : 
+                            'bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-500'
+                          }`}>
+                            {log.stepIndex + 1}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex justify-between">
+                              <span className="font-mono text-zinc-800 dark:text-white">{log.action}</span>
+                              <span className={log.success ? 'text-emerald-600 dark:text-emerald-500' : 'text-red-600 dark:text-red-500'}>
+                                {log.success ? 'SUCCESS' : 'FAILED'}
+                              </span>
+                            </div>
+                            <div className="text-zinc-600 dark:text-zinc-500">
+                              {new Date(log.timestamp).toLocaleTimeString()}
+                              {log.duration && ` • ${log.duration}ms`}
+                            </div>
+                            {log.error && (
+                              <div className="text-red-600 dark:text-red-500 mt-1">{log.error}</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8 text-zinc-600 dark:text-zinc-500">

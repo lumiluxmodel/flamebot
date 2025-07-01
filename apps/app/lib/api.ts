@@ -16,12 +16,13 @@ export interface ActiveSwipeTask {
   started_at: string;
 }
 
-// Enhanced workflow status with detailed info
+// Enhanced workflow status with detailed info - UPDATED to match backend response
 export interface WorkflowDetailedStatus {
-  accountId: string;
+  // Core execution data
   executionId: string;
-  status: 'active' | 'paused' | 'stopped' | 'completed' | 'failed';
+  accountId: string;
   workflowType: string;
+  status: 'active' | 'paused' | 'stopped' | 'completed' | 'failed';
   currentStep: number;
   totalSteps: number;
   progress: number;
@@ -29,35 +30,98 @@ export interface WorkflowDetailedStatus {
   lastActivity: string;
   retryCount: number;
   maxRetries: number;
-  lastError: string | null;
-  nextStep?: {
+  continuousSwipeActive: boolean;
+  continuousSwipeTaskId: string | null;
+  workflowInstanceId: number;
+  nextActionAt: string;
+  nextTaskId: string;
+  
+  // Timestamps
+  completedAt: string | null;
+  failedAt: string | null;
+  stoppedAt: string | null;
+  pausedAt: string | null;
+  resumedAt: string | null;
+  
+  // Error info
+  finalError: string | null;
+  
+  // Execution context
+  executionContext: {
+    startedAt: string;
+    maxRetries: number;
+    retryCount: number;
+    currentStep: number;
+    parallelStepIds: string[];
+    hasParallelSteps: boolean;
+  };
+  
+  // Account data
+  accountData: {
+    model: string;
+    channel: string;
+    authToken: string;
+    importedAt: string;
+  };
+  
+  // Workflow definition
+  workflowDefinition: {
+    name: string;
+    description: string;
+    steps: Array<{
+      id: string;
+      delay: number;
+      action: string;
+      critical: boolean;
+      description: string;
+    }>;
+    config: Record<string, unknown>;
+  };
+  
+  // Next step info
+  nextStep: {
     id: string;
-    action: string;
     delay: number;
+    action: string;
+    critical: boolean;
     description: string;
   };
-  continuousSwipeActive: boolean;
-  executionLog: Array<{
+  
+  // Execution logs
+  executionLogs: Array<{
+    id?: string;
+    executionId?: string;
     stepId: string;
     stepIndex: number;
     action: string;
     success: boolean;
+    error?: string | null;
     timestamp: string;
+    duration?: number;
+    metadata?: Record<string, unknown>;
   }>;
-  canResume?: boolean;
-  canPause?: boolean;
-  isPermanentlyStopped?: boolean;
-  isArchived?: boolean;
-  stoppedAt?: string | null;
-  pausedAt?: string | null;
-  resumedAt?: string | null;
-  completedAt?: string | null;
-  failedAt?: string | null;
-  finalError?: string | null;
-  pendingTasks?: number;
-  totalExecutions?: number;
-  successfulExecutions?: number;
-  workflowName?: string;
+  
+  // Scheduled tasks
+  scheduledTasks: Array<{
+    taskId: string;
+    stepId: string;
+    action: string;
+    status: string;
+    scheduledFor: string;
+    createdAt: string;
+    completedAt: string | null;
+    lastError: string | null;
+    attempts: number;
+  }>;
+  
+  // Memory scheduled tasks
+  memoryScheduledTasks: Array<{
+    stepId: string;
+    taskId: string;
+  }>;
+  
+  // Additional flags
+  isInMemory: boolean;
 }
 
 // Alert types
