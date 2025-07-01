@@ -1,7 +1,7 @@
 // src/controllers/accountController.js - Updated with Workflow Integration
 const flamebotService = require("../services/flamebotService");
 const workflowManager = require("../services/workflowManager");
-const { isValidModel } = require("../utils/formatters");
+const { isValidModel, validateAccountData } = require("../utils/formatters");
 const config = require("../config");
 
 class AccountController {
@@ -28,47 +28,13 @@ class AccountController {
         channel = "gram",
       } = req.body;
 
-      // Validation
-      if (!authToken || !proxy || !model) {
-        return res.status(400).json({
-          success: false,
-          error:
-            "Missing required fields: authToken, proxy, and model are required",
-        });
-      }
-      
-      // Check for deviceId
+      // Normalize field names
       const finalDeviceId = deviceId || device_id;
-      if (!finalDeviceId) {
-        return res.status(400).json({
-          success: false,
-          error: "Missing required field: deviceId is required",
-        });
-      }
-      
-      // Check for refreshToken
       const finalRefreshToken = refreshToken || refresh_token;
-      if (!finalRefreshToken) {
-        return res.status(400).json({
-          success: false,
-          error: "Missing required field: refreshToken is required",
-        });
-      }
-
-      if (!isValidModel(model, config.models.available)) {
-        return res.status(400).json({
-          success: false,
-          error: `Invalid model. Available models: ${config.models.available.join(
-            ", "
-          )}`,
-        });
-      }
-
-      // Get persistent ID (support both naming conventions)
       const finalPersistentId = persistentId || devicePersistentId;
 
-      // Prepare account data with normalized field names
-      const accountData = {
+      // Create normalized account data object
+      const normalizedAccountData = {
         authToken,
         proxy,
         model,
@@ -76,8 +42,31 @@ class AccountController {
         refreshToken: finalRefreshToken,
         deviceId: finalDeviceId,
         persistentId: finalPersistentId,
+        channel
+      };
+
+      // Validate using the centralized validator
+      const validation = validateAccountData(normalizedAccountData);
+      if (!validation.isValid) {
+        return res.status(400).json({
+          success: false,
+          error: "Validation failed",
+          details: validation.errors
+        });
+      }
+
+      // Validate model
+      if (!isValidModel(model, config.models.available)) {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid model. Available models: ${config.models.available.join(", ")}`,
+        });
+      }
+
+      // Prepare account data for import
+      const accountData = {
+        ...normalizedAccountData,
         devicePersistentId: finalPersistentId, // Include both for compatibility
-        channel,
         importedAt: new Date().toISOString(),
       };
 
@@ -86,6 +75,13 @@ class AccountController {
       console.log(`   Channel: ${channel}`);
       console.log(`   Start Automation: ${startAutomation}`);
       console.log(`   Workflow Type: ${workflowType}`);
+      console.log(`   Format validation:`, {
+        hasAuthToken: !!accountData.authToken,
+        hasDeviceId: !!accountData.deviceId,
+        hasRefreshToken: !!accountData.refreshToken,
+        hasProxy: !!accountData.proxy,
+        hasPersistentId: !!accountData.persistentId
+      });
 
       // Import to Flamebot
       const result = await flamebotService.importAccount(
@@ -218,52 +214,63 @@ class AccountController {
       console.log(`   Start Automation: ${startAutomation}`);
       console.log(`   Workflow Type: ${workflowType}`);
 
-      // Validate all accounts
-      for (const account of accounts) {
-        // Check for required fields
-        if (!account.authToken || !account.proxy || !account.model) {
+      // Normalize and validate all accounts
+      const normalizedAccounts = [];
+      
+      for (const [index, account] of accounts.entries()) {
+        // Normalize field names
+        const normalizedAccount = {
+          authToken: account.authToken,
+          proxy: account.proxy,
+          model: account.model,
+          location: account.location,
+          refreshToken: account.refreshToken || account.refresh_token,
+          deviceId: account.deviceId || account.device_id,
+          persistentId: account.persistentId || account.devicePersistentId,
+          channel: account.channel || "gram"
+        };
+
+        // Validate using centralized validator
+        const validation = validateAccountData(normalizedAccount);
+        if (!validation.isValid) {
           return res.status(400).json({
             success: false,
-            error: "Each account must have authToken, proxy, and model",
-          });
-        }
-        
-        // Check for deviceId (can be deviceId or device_id)
-        if (!account.deviceId && !account.device_id) {
-          return res.status(400).json({
-            success: false,
-            error: "Each account must have deviceId",
-          });
-        }
-        
-        // Check for refreshToken (can be refreshToken or refresh_token)
-        if (!account.refreshToken && !account.refresh_token) {
-          return res.status(400).json({
-            success: false,
-            error: "Each account must have refreshToken",
+            error: `Account ${index + 1} has validation errors`,
+            details: validation.errors,
+            accountIndex: index
           });
         }
 
-        if (!isValidModel(account.model, config.models.available)) {
+        // Validate model
+        if (!isValidModel(normalizedAccount.model, config.models.available)) {
           return res.status(400).json({
             success: false,
-            error: `Invalid model "${
-              account.model
-            }" in account. Available models: ${config.models.available.join(
-              ", "
-            )}`,
+            error: `Invalid model "${normalizedAccount.model}" in account ${index + 1}. Available models: ${config.models.available.join(", ")}`,
           });
         }
 
-        // Set default channel if not provided
-        if (!account.channel) {
-          account.channel = "gram";
-        }
+        // Add to normalized list with additional fields for compatibility
+        normalizedAccounts.push({
+          ...normalizedAccount,
+          devicePersistentId: normalizedAccount.persistentId, // Include both for compatibility
+          importedAt: new Date().toISOString()
+        });
       }
+
+      // Log validation summary
+      console.log(`✅ All ${normalizedAccounts.length} accounts validated successfully`);
+      console.log(`📊 Sample account format check:`, {
+        hasAuthToken: !!normalizedAccounts[0].authToken,
+        hasDeviceId: !!normalizedAccounts[0].deviceId,
+        hasRefreshToken: !!normalizedAccounts[0].refreshToken,
+        hasProxy: !!normalizedAccounts[0].proxy,
+        model: normalizedAccounts[0].model,
+        channel: normalizedAccounts[0].channel
+      });
 
       // Import accounts IN A SINGLE REQUEST
       console.log("📦 Sending bulk import request to Flamebot...");
-      const results = await flamebotService.importMultipleAccounts(accounts);
+      const results = await flamebotService.importMultipleAccounts(normalizedAccounts);
 
       // Start automation workflows for successful imports
       const workflowResults = [];
