@@ -15,6 +15,8 @@ class AccountController {
         proxy,
         model,
         location,
+        latitude,
+        longitude,
         refreshToken,
         refresh_token, // Support both naming conventions
         deviceId,
@@ -32,6 +34,19 @@ class AccountController {
       const finalDeviceId = deviceId || device_id;
       const finalRefreshToken = refreshToken || refresh_token;
       const finalPersistentId = persistentId || devicePersistentId;
+      
+      // Parse coordinates - can come as separate fields or in location string
+      let finalLatitude = latitude;
+      let finalLongitude = longitude;
+      
+      // If coordinates not provided directly, try to parse from location string
+      if (!finalLatitude && !finalLongitude && location) {
+        const locationParts = location.split(',');
+        if (locationParts.length === 2) {
+          finalLatitude = locationParts[0].trim();
+          finalLongitude = locationParts[1].trim();
+        }
+      }
 
       // Create normalized account data object
       const normalizedAccountData = {
@@ -39,6 +54,8 @@ class AccountController {
         proxy,
         model,
         location,
+        latitude: finalLatitude,
+        longitude: finalLongitude,
         refreshToken: finalRefreshToken,
         deviceId: finalDeviceId,
         persistentId: finalPersistentId,
@@ -77,10 +94,11 @@ class AccountController {
       console.log(`   Workflow Type: ${workflowType}`);
       console.log(`   Format validation:`, {
         hasAuthToken: !!accountData.authToken,
-        hasDeviceId: !!accountData.deviceId,
+        hasPersistentId: !!accountData.persistentId,
         hasRefreshToken: !!accountData.refreshToken,
         hasProxy: !!accountData.proxy,
-        hasPersistentId: !!accountData.persistentId
+        hasLatitude: !!accountData.latitude,
+        hasLongitude: !!accountData.longitude
       });
 
       // Import to Flamebot
@@ -219,11 +237,25 @@ class AccountController {
       
       for (const [index, account] of accounts.entries()) {
         // Normalize field names
+        let finalLatitude = account.latitude;
+        let finalLongitude = account.longitude;
+        
+        // If coordinates not provided directly, try to parse from location string
+        if (!finalLatitude && !finalLongitude && account.location) {
+          const locationParts = account.location.split(',');
+          if (locationParts.length === 2) {
+            finalLatitude = locationParts[0].trim();
+            finalLongitude = locationParts[1].trim();
+          }
+        }
+        
         const normalizedAccount = {
           authToken: account.authToken,
           proxy: account.proxy,
           model: account.model,
           location: account.location,
+          latitude: finalLatitude,
+          longitude: finalLongitude,
           refreshToken: account.refreshToken || account.refresh_token,
           deviceId: account.deviceId || account.device_id,
           persistentId: account.persistentId || account.devicePersistentId,
@@ -261,9 +293,11 @@ class AccountController {
       console.log(`✅ All ${normalizedAccounts.length} accounts validated successfully`);
       console.log(`📊 Sample account format check:`, {
         hasAuthToken: !!normalizedAccounts[0].authToken,
-        hasDeviceId: !!normalizedAccounts[0].deviceId,
+        hasPersistentId: !!normalizedAccounts[0].persistentId,
         hasRefreshToken: !!normalizedAccounts[0].refreshToken,
         hasProxy: !!normalizedAccounts[0].proxy,
+        hasLatitude: !!normalizedAccounts[0].latitude,
+        hasLongitude: !!normalizedAccounts[0].longitude,
         model: normalizedAccounts[0].model,
         channel: normalizedAccounts[0].channel
       });

@@ -1,22 +1,28 @@
 /**
  * Format account string from components
- * FORMATO CORRECTO: authToken:deviceId:refreshToken:socks5://user:pass@host:port
+ * FORMATO CORRECTO: authToken:persistentId:refreshToken:lat:long:socks5://user:pass@host:port
  * 
  * @param {Object} accountData - Account data object
  * @param {string} accountData.authToken - Auth token (UUID)
  * @param {string} accountData.proxy - Proxy string
  * @param {string} accountData.refreshToken - Refresh token
- * @param {string} accountData.deviceId - Device ID
+ * @param {string} accountData.persistentId - Persistent ID
+ * @param {string} accountData.latitude - Latitude
+ * @param {string} accountData.longitude - Longitude
  * @returns {string} Formatted account string
  */
 function formatAccountString(accountData) {
-  const { authToken, proxy, refreshToken, deviceId } = accountData;
+  const { authToken, proxy, refreshToken, persistentId, latitude, longitude } = accountData;
   
   // Manejar ambos nombres de campo para refreshToken
   const finalRefreshToken = refreshToken || accountData.refresh_token || '';
   
-  // Manejar ambos nombres de campo para deviceId
-  const finalDeviceId = deviceId || accountData.device_id || '';
+  // Manejar ambos nombres de campo para persistentId
+  const finalPersistentId = persistentId || accountData.devicePersistentId || '';
+  
+  // Obtener latitude y longitude
+  const finalLatitude = latitude || accountData.lat || '';
+  const finalLongitude = longitude || accountData.long || '';
   
   // Parsear proxy string - puede venir en diferentes formatos
   let formattedProxy = proxy;
@@ -39,8 +45,8 @@ function formatAccountString(accountData) {
     }
   }
   
-  // FORMATO CORRECTO: authToken:deviceId:refreshToken:proxy
-  return `${authToken}:${finalDeviceId}:${finalRefreshToken}:${formattedProxy}`;
+  // FORMATO CORRECTO: authToken:persistentId:refreshToken:lat:long:proxy
+  return `${authToken}:${finalPersistentId}:${finalRefreshToken}:${finalLatitude}:${finalLongitude}:${formattedProxy}`;
 }
 
 /**
@@ -141,14 +147,24 @@ function validateAccountData(accountData) {
     errors.push('authToken is required');
   }
   
-  // Verificar deviceId (puede ser deviceId o device_id)
-  if (!accountData.deviceId && !accountData.device_id) {
-    errors.push('deviceId is required');
+  // Verificar persistentId (puede ser persistentId o devicePersistentId)
+  if (!accountData.persistentId && !accountData.devicePersistentId) {
+    errors.push('persistentId is required');
   }
   
   // Verificar refreshToken (puede ser refreshToken o refresh_token)
   if (!accountData.refreshToken && !accountData.refresh_token) {
     errors.push('refreshToken is required');
+  }
+  
+  // Verificar latitude (puede ser latitude o lat)
+  if (!accountData.latitude && !accountData.lat) {
+    errors.push('latitude is required');
+  }
+  
+  // Verificar longitude (puede ser longitude o long)
+  if (!accountData.longitude && !accountData.long) {
+    errors.push('longitude is required');
   }
   
   if (!accountData.proxy) {

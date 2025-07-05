@@ -191,12 +191,18 @@ class FlamebotService {
         return !accountData[field];
       });
 
-      // Check for deviceId and refreshToken
-      if (!accountData.deviceId && !accountData.device_id) {
-        missingFields.push("deviceId");
+      // Check for persistentId, refreshToken, and coordinates
+      if (!accountData.persistentId && !accountData.devicePersistentId) {
+        missingFields.push("persistentId");
       }
       if (!accountData.refreshToken && !accountData.refresh_token) {
         missingFields.push("refreshToken");
+      }
+      if (!accountData.latitude && !accountData.lat) {
+        missingFields.push("latitude");
+      }
+      if (!accountData.longitude && !accountData.long) {
+        missingFields.push("longitude");
       }
 
       if (missingFields.length > 0) {
@@ -267,9 +273,9 @@ class FlamebotService {
       for (const [index, account] of accounts.entries()) {
         const requiredFields = ["authToken", "proxy", "model", "refreshToken"];
         const missingFields = requiredFields.filter((field) => {
-          // Check for deviceId or device_id
-          if (field === "deviceId") {
-            return !account.deviceId && !account.device_id;
+          // Check for persistentId or devicePersistentId
+          if (field === "persistentId") {
+            return !account.persistentId && !account.devicePersistentId;
           }
           // Check for refreshToken or refresh_token
           if (field === "refreshToken") {
@@ -278,9 +284,15 @@ class FlamebotService {
           return !account[field];
         });
 
-        // Also check for deviceId separately
-        if (!account.deviceId && !account.device_id) {
-          missingFields.push("deviceId");
+        // Also check for persistentId and coordinates separately
+        if (!account.persistentId && !account.devicePersistentId) {
+          missingFields.push("persistentId");
+        }
+        if (!account.latitude && !account.lat) {
+          missingFields.push("latitude");
+        }
+        if (!account.longitude && !account.long) {
+          missingFields.push("longitude");
         }
 
         if (missingFields.length > 0) {
