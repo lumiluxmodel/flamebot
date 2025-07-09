@@ -237,14 +237,13 @@ class FlamebotService {
         result.taskStatus = taskStatus;
         result.message = "Account imported successfully";
 
-        // Try to get account ID by persistent_id after import
-        if (accountData.devicePersistentId || accountData.persistentId) {
-          const persistentId =
-            accountData.devicePersistentId || accountData.persistentId;
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          result.accountId = await this.getAccountIdByPersistentId(
-            persistentId
-          );
+        // Get account ID from successful_ids in task status
+        if (taskStatus.successful_ids && taskStatus.successful_ids.length > 0) {
+          // For single import, take the first (and should be only) ID
+          result.accountId = taskStatus.successful_ids[0];
+          console.log(`✅ Account ID from task status: ${result.accountId}`);
+        } else {
+          console.log(`⚠️ No successful_ids in task status, account ID not available`);
         }
       }
 
@@ -351,64 +350,60 @@ class FlamebotService {
         // The API might return details about each imported account
         // This depends on Flamebot's response format
 
-        if (taskStatus.results && Array.isArray(taskStatus.results)) {
-          // If API returns individual results
-          taskStatus.results.forEach((result, index) => {
-            const account = accounts[index];
-            if (result.success) {
+        // Use successful_ids from task status
+        if (taskStatus.successful_ids && Array.isArray(taskStatus.successful_ids)) {
+          console.log(`📋 Using successful_ids from task status: ${taskStatus.successful_ids.length} IDs`);
+          
+          // Map successful IDs to accounts (assuming order is preserved)
+          const successfulIds = taskStatus.successful_ids;
+          
+          for (let i = 0; i < accounts.length; i++) {
+            const account = accounts[i];
+            
+            if (i < successfulIds.length) {
+              // Account was successfully imported
               results.successful.push({
                 ...account,
-                accountId: result.account_id || result.id,
+                accountId: successfulIds[i],
                 taskId: taskId,
-                importResult: result,
+                taskStatus: taskStatus,
+              });
+            } else {
+              // Account failed (more accounts than successful IDs)
+              results.failed.push({
+                ...account,
+                error: "Import failed - no account ID returned",
+              });
+            }
+          }
+          
+          // Handle case where there are fewer accounts than successful IDs
+          // This shouldn't happen but we handle it for safety
+          if (successfulIds.length > accounts.length) {
+            console.log(`⚠️ Warning: More successful IDs (${successfulIds.length}) than accounts (${accounts.length})`);
+          }
+        } else {
+          // Fallback: use successful/failed counts from task status
+          console.log(`📋 No successful_ids array, using counts from task status`);
+          
+          const successfulCount = taskStatus.successful || 0;
+          const failedCount = taskStatus.failed || 0;
+          
+          for (let i = 0; i < accounts.length; i++) {
+            const account = accounts[i];
+            
+            if (i < successfulCount) {
+              results.successful.push({
+                ...account,
+                accountId: null, // No ID available without successful_ids
+                taskId: taskId,
+                taskStatus: taskStatus,
+                note: "Account imported but ID not available (no successful_ids in response)",
               });
             } else {
               results.failed.push({
                 ...account,
-                error: result.error || "Import failed",
-                importResult: result,
-              });
-            }
-          });
-        } else {
-          // If API doesn't return individual results, we need to fetch accounts by persistent_id
-          console.log("📋 Fetching individual account IDs...");
-
-          for (const account of accounts) {
-            try {
-              let accountId = null;
-
-              // Try to get account ID by persistent_id if available
-              if (account.devicePersistentId || account.persistentId) {
-                const persistentId =
-                  account.devicePersistentId || account.persistentId;
-                // Wait a bit to ensure the account is created
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-                accountId = await this.getAccountIdByPersistentId(persistentId);
-              }
-
-              if (accountId) {
-                results.successful.push({
-                  ...account,
-                  accountId: accountId,
-                  taskId: taskId,
-                  taskStatus: taskStatus,
-                });
-              } else {
-                // If we can't find the account ID, still consider it successful
-                // but note that we couldn't retrieve the ID
-                results.successful.push({
-                  ...account,
-                  accountId: null,
-                  taskId: taskId,
-                  taskStatus: taskStatus,
-                  note: "Account imported but ID could not be retrieved",
-                });
-              }
-            } catch (error) {
-              results.failed.push({
-                ...account,
-                error: error.message || "Failed to retrieve account ID",
+                error: "Import failed based on task counts",
               });
             }
           }

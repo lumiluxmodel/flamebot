@@ -111,27 +111,15 @@ class AccountController {
         console.log(`✅ Account imported successfully`);
         console.log(`   Task ID: ${result.taskId}`);
 
-        // Obtener el account_id real usando persistent_id
-        let realAccountId = result.accountId;
-
-        if (!realAccountId && finalPersistentId) {
+        // Get account ID from import result (now comes from successful_ids)
+        const realAccountId = result.accountId;
+        
+        if (realAccountId) {
+          console.log(`✅ Account ID from import result: ${realAccountId}`);
+        } else {
           console.log(
-            `🔍 Fetching real account ID using persistent_id: ${finalPersistentId}`
+            `⚠️ No account ID returned, workflow automation will not start`
           );
-          try {
-            realAccountId = await flamebotService.getAccountIdByPersistentId(
-              finalPersistentId
-            );
-            if (realAccountId) {
-              console.log(`✅ Found real account ID: ${realAccountId}`);
-            } else {
-              console.log(
-                `⚠️ Could not find account ID, workflow automation will not start`
-              );
-            }
-          } catch (error) {
-            console.error(`❌ Error fetching account ID:`, error);
-          }
         }
 
         let workflowResult = null;
@@ -308,8 +296,17 @@ class AccountController {
 
       // Start automation workflows for successful imports
       const workflowResults = [];
+      
+      // Check if we should start automation and if there are successful imports
+      if (startAutomation) {
+        if (results.successful.length > 0) {
+          console.log(`\n🤖 Starting automation workflows for ${results.successful.length} accounts...`);
+        } else {
+          console.log(`\n⚠️ No accounts were imported successfully. Skipping workflow automation.`);
+        }
+      }
+      
       if (startAutomation && results.successful.length > 0) {
-        console.log(`\n🤖 Starting automation workflows for ${results.successful.length} accounts...`);
 
         for (const successfulImport of results.successful) {
           try {
@@ -361,6 +358,9 @@ class AccountController {
             });
           }
         }
+      } else if (startAutomation && results.successful.length === 0) {
+        // Log that no workflows were started because no accounts were imported
+        console.log(`📊 No workflows started - no successful imports`);
       }
 
       // Calculate automation stats
