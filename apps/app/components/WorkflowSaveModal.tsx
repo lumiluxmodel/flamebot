@@ -68,7 +68,6 @@ export function WorkflowSaveModal({
     e.preventDefault()
     if (validateForm()) {
       onSave(formData)
-      onClose()
     }
   }
 

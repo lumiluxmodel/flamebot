@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { WorkflowNode, BaseNodeData, NODE_TYPES } from '../types/workflow'
 import { X } from 'lucide-react'
 
@@ -22,19 +22,95 @@ export function NodePropertyEditor({
   allNodes = [],
 }: NodePropertyEditorProps) {
   const [formData, setFormData] = useState<BaseNodeData>(node.data)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const config = NODE_TYPES[node.type as keyof typeof NODE_TYPES] || NODE_TYPES.wait
 
   useEffect(() => {
     setFormData(node.data)
+    setErrors({})
   }, [node.data])
+
+  // Handle escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose()
+      }
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [isOpen, onClose])
+
+  const validateForm = useCallback((): boolean => {
+    const newErrors: Record<string, string> = {}
+
+    // Validate label
+    if (!formData.label.trim()) {
+      newErrors.label = 'Label is required'
+    }
+
+    // Validate swipe count
+    if (formData.swipeCount !== undefined && formData.swipeCount < 1) {
+      newErrors.swipeCount = 'Swipe count must be at least 1'
+    }
+
+    // Validate min/max swipes
+    if (formData.minSwipes !== undefined && formData.maxSwipes !== undefined) {
+      if (formData.minSwipes < 1) {
+        newErrors.minSwipes = 'Minimum swipes must be at least 1'
+      }
+      if (formData.maxSwipes < 1) {
+        newErrors.maxSwipes = 'Maximum swipes must be at least 1'
+      }
+      if (formData.minSwipes > formData.maxSwipes) {
+        newErrors.maxSwipes = 'Maximum must be greater than minimum'
+      }
+    }
+
+    // Validate min/max intervals
+    if (formData.minIntervalMs !== undefined && formData.maxIntervalMs !== undefined) {
+      if (formData.minIntervalMs < 1000) {
+        newErrors.minIntervalMs = 'Minimum interval must be at least 1000ms'
+      }
+      if (formData.maxIntervalMs < 1000) {
+        newErrors.maxIntervalMs = 'Maximum interval must be at least 1000ms'
+      }
+      if (formData.minIntervalMs > formData.maxIntervalMs) {
+        newErrors.maxIntervalMs = 'Maximum must be greater than minimum'
+      }
+    }
+
+    // Validate timeout
+    if (formData.timeout !== undefined && formData.timeout < 0) {
+      newErrors.timeout = 'Timeout cannot be negative'
+    }
+
+    // Validate delay
+    if (formData.delay < 0) {
+      newErrors.delay = 'Delay cannot be negative'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }, [formData])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSave(formData)
+    if (validateForm()) {
+      onSave(formData)
+    }
   }
 
   const updateField = (field: keyof BaseNodeData, value: string | number | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+    // Clear error for this field when user starts typing
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev }
+        delete newErrors[field]
+        return newErrors
+      })
+    }
   }
 
   // Get available nodes for goto dropdown (excluding current node)
@@ -77,9 +153,17 @@ export function NodePropertyEditor({
               type="text"
               value={formData.label}
               onChange={(e) => updateField('label', e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded-lg text-zinc-900 dark:text-white text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+              className={`w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border rounded-lg text-zinc-900 dark:text-white text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all ${
+                errors.label 
+                  ? 'border-red-500 dark:border-red-500' 
+                  : 'border-zinc-300 dark:border-zinc-600'
+              }`}
               placeholder="Enter node label"
+              required
             />
+            {errors.label && (
+              <p className="text-xs text-red-500 mt-1">{errors.label}</p>
+            )}
           </div>
 
           {/* Description */}
@@ -104,12 +188,19 @@ export function NodePropertyEditor({
             <input
               type="number"
               value={formData.delay}
-              onChange={(e) => updateField('delay', parseInt(e.target.value) || 0)}
+              onChange={(e) => updateField('delay', Math.max(0, parseInt(e.target.value) || 0))}
               min="0"
               step="1000"
-              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded-lg text-zinc-900 dark:text-white text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+              className={`w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border rounded-lg text-zinc-900 dark:text-white text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all ${
+                errors.delay 
+                  ? 'border-red-500 dark:border-red-500' 
+                  : 'border-zinc-300 dark:border-zinc-600'
+              }`}
               placeholder="0"
             />
+            {errors.delay && (
+              <p className="text-xs text-red-500 mt-1">{errors.delay}</p>
+            )}
           </div>
 
           {/* Toggles */}

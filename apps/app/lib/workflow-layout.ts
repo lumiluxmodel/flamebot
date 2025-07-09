@@ -69,7 +69,7 @@ export interface ViewportState {
   zoom: number
 }
 
-export function saveViewportState(reactFlowInstance: any): ViewportState | null {
+export function saveViewportState(reactFlowInstance: { getViewport: () => ViewportState } | null): ViewportState | null {
   if (!reactFlowInstance) return null
   
   const viewport = reactFlowInstance.getViewport()
@@ -80,7 +80,7 @@ export function saveViewportState(reactFlowInstance: any): ViewportState | null 
   }
 }
 
-export function restoreViewportState(reactFlowInstance: any, state: ViewportState) {
+export function restoreViewportState(reactFlowInstance: { setViewport: (state: ViewportState) => void } | null, state: ViewportState) {
   if (!reactFlowInstance || !state) return
   
   reactFlowInstance.setViewport({

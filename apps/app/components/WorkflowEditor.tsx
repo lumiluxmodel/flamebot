@@ -15,8 +15,7 @@ import {
   useReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { getLayoutedElements, saveViewportState, restoreViewportState } from '../lib/workflow-layout'
-import { useDebounce } from '../hooks/useDebounce'
+import { getLayoutedElements } from '../lib/workflow-layout'
 
 import {
   WorkflowNode,
@@ -125,20 +124,16 @@ function WorkflowEditorContent({
     [readOnly]
   )
 
-  // Debounced save positions function
-  const savePositionsToStorage = useDebounce((positions: Record<string, { x: number; y: number }>, workflowType: string) => {
-    localStorage.setItem(`workflow-positions-${workflowType}`, JSON.stringify(positions))
-  }, 500)
 
   // Save node positions when they change
   const handleNodesChange = useCallback(
-    (changes: any) => {
+    (changes: Parameters<typeof onNodesChange>[0]) => {
       onNodesChange(changes)
       
       // Update positions when nodes are dragged
       if (workflowData?.type) {
         const updatedPositions = { ...nodePositions }
-        changes.forEach((change: any) => {
+        changes.forEach((change) => {
           if (change.type === 'position' && change.dragging === false && change.position) {
             updatedPositions[change.id] = change.position
           }
@@ -146,11 +141,17 @@ function WorkflowEditorContent({
         
         if (Object.keys(updatedPositions).length > Object.keys(nodePositions).length) {
           setNodePositions(updatedPositions)
-          savePositionsToStorage(updatedPositions, workflowData.type)
+          // Save to localStorage with debounce
+          const timeoutId = setTimeout(() => {
+            localStorage.setItem(`workflow-positions-${workflowData.type}`, JSON.stringify(updatedPositions))
+          }, 500)
+          
+          // Store cleanup function
+          cleanupRef.current.push(() => clearTimeout(timeoutId))
         }
       }
     },
-    [onNodesChange, nodePositions, workflowData?.type, savePositionsToStorage]
+    [onNodesChange, nodePositions, workflowData?.type]
   )
 
   const addNode = useCallback(
@@ -220,7 +221,6 @@ function WorkflowEditorContent({
   const handleExportImage = useCallback(async () => {
     try {
       const nodesBounds = reactFlowInstance.getNodesBounds(nodes)
-      const transform = reactFlowInstance.getViewport()
       const imageWidth = nodesBounds.width + 200
       const imageHeight = nodesBounds.height + 200
 
@@ -283,7 +283,7 @@ function WorkflowEditorContent({
 
   const handleAutoLayout = useCallback(() => {
     const { nodes: layoutedNodes } = getLayoutedElements(nodes, edges)
-    setNodes(layoutedNodes)
+    setNodes(layoutedNodes as WorkflowNode[])
     
     // Save the new positions
     if (workflowData?.type) {
@@ -292,7 +292,9 @@ function WorkflowEditorContent({
         newPositions[node.id] = node.position
       })
       setNodePositions(newPositions)
-      localStorage.setItem(`workflow-positions-${workflowData.type}`, JSON.stringify(newPositions))
+      if (workflowData?.type) {
+        localStorage.setItem(`workflow-positions-${workflowData.type}`, JSON.stringify(newPositions))
+      }
     }
     
     // Fit view after layout
@@ -302,12 +304,13 @@ function WorkflowEditorContent({
     
     // Store cleanup function
     cleanupRef.current.push(() => clearTimeout(timeoutId))
-  }, [nodes, edges, setNodes, workflowData?.type, reactFlowInstance, savePositionsToStorage])
+  }, [nodes, edges, setNodes, workflowData?.type, reactFlowInstance])
 
   // Cleanup on unmount
   useEffect(() => {
+    const cleanupFunctions = cleanupRef.current
     return () => {
-      cleanupRef.current.forEach(cleanup => cleanup())
+      cleanupFunctions.forEach(cleanup => cleanup())
     }
   }, [])
 
