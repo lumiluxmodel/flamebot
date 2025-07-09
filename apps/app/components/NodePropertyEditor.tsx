@@ -162,10 +162,17 @@ export function NodePropertyEditor({
               <input
                 type="number"
                 value={formData.swipeCount || 0}
-                onChange={(e) => updateField('swipeCount', parseInt(e.target.value) || 0)}
+                onChange={(e) => updateField('swipeCount', Math.max(1, parseInt(e.target.value) || 0))}
                 min="1"
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded-lg text-zinc-900 dark:text-white text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+                className={`w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border rounded-lg text-zinc-900 dark:text-white text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all ${
+                  errors.swipeCount 
+                    ? 'border-red-500 dark:border-red-500' 
+                    : 'border-zinc-300 dark:border-zinc-600'
+                }`}
               />
+              {errors.swipeCount && (
+                <p className="text-xs text-red-500 mt-1">{errors.swipeCount}</p>
+              )}
             </div>
           )}
 

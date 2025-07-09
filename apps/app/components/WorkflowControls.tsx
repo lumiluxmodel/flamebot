@@ -9,6 +9,7 @@ interface WorkflowControlsProps {
   onExportImage?: () => void
   onExportJSON?: () => void
   onFitView?: () => void
+  onAutoLayout?: () => void
   saving?: boolean
 }
 
@@ -18,6 +19,7 @@ export function WorkflowControls({
   onExportImage,
   onExportJSON,
   onFitView,
+  onAutoLayout,
   saving = false,
 }: WorkflowControlsProps) {
   const [isNodeMenuOpen, setIsNodeMenuOpen] = useState(false)
@@ -125,6 +127,18 @@ export function WorkflowControls({
           </button>
         )}
 
+        {onAutoLayout && (
+          <button
+            onClick={onAutoLayout}
+            className="flex items-center gap-2 px-3 py-2 bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-500 text-white rounded-lg text-sm transition-all duration-200 cyber-button shadow-sm hover:shadow-md"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+            </svg>
+            Auto Layout
+          </button>
+        )}
+
         <div className="flex gap-2">
           {onExportJSON && (
             <button
@@ -166,7 +180,10 @@ export function WorkflowControls({
       {isNodeMenuOpen && (
         <div
           className="fixed inset-0 z-40"
-          onClick={() => setIsNodeMenuOpen(false)}
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsNodeMenuOpen(false)
+          }}
         />
       )}
     </div>

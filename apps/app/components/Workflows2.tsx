@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useWorkflowDefinitions, apiClient } from '../lib/api'
 import WorkflowEditor from './WorkflowEditor'
+import { WorkflowSaveModal } from './WorkflowSaveModal'
 import { 
   WorkflowDefinition, 
   WorkflowStep, 
@@ -19,6 +20,8 @@ interface SampleWorkflow {
 const Workflows2: React.FC = () => {
   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowDefinition | SampleWorkflow | null>(null)
   const [saving, setSaving] = useState(false)
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [pendingSteps, setPendingSteps] = useState<WorkflowStep[]>([])
   
   const { data: workflowDefinitions, refetch: refetchDefinitions } = useWorkflowDefinitions()
 
@@ -99,11 +102,10 @@ const Workflows2: React.FC = () => {
   const handleSaveWorkflow = useCallback(async (steps: WorkflowStep[]) => {
     if (!selectedWorkflow) return
 
-    try {
-      setSaving(true)
-      
-      if ('id' in selectedWorkflow && selectedWorkflow.id) {
-        // Update existing workflow
+    if ('id' in selectedWorkflow && selectedWorkflow.id) {
+      // Update existing workflow
+      try {
+        setSaving(true)
         await apiClient.updateWorkflowDefinition(selectedWorkflow.type, {
           name: selectedWorkflow.name,
           description: selectedWorkflow.description,
@@ -124,49 +126,56 @@ const Workflows2: React.FC = () => {
             config: step.config,
           }))
         })
-      } else {
-        // Create new workflow
-        const name = prompt('Enter workflow name:', selectedWorkflow.name)
-        const type = prompt('Enter workflow type:', selectedWorkflow.type)
-        const description = prompt('Enter workflow description:', selectedWorkflow.description)
-        
-        if (!name || !type || !description) {
-          alert('All fields are required')
-          return
-        }
-
-        await apiClient.createWorkflowDefinition({
-          name,
-          type,
-          description,
-          steps: steps.map(step => ({
-            id: step.id,
-            action: step.action,
-            description: step.description,
-            delay: step.delay,
-            critical: step.critical,
-            timeout: step.timeout,
-            swipeCount: step.swipeCount,
-            minSwipes: step.minSwipes,
-            maxSwipes: step.maxSwipes,
-            minIntervalMs: step.minIntervalMs,
-            maxIntervalMs: step.maxIntervalMs,
-            nextStep: step.nextStep,
-            parallel: step.parallel,
-            config: step.config,
-          }))
-        })
+        await refetchDefinitions()
+        alert('Workflow saved successfully!')
+      } catch (error) {
+        console.error('Failed to save workflow:', error)
+        alert('Failed to save workflow')
+      } finally {
+        setSaving(false)
       }
-      
+    } else {
+      // For new workflow, show modal
+      setPendingSteps(steps)
+      setShowSaveModal(true)
+    }
+  }, [selectedWorkflow, refetchDefinitions])
+
+  const handleModalSave = useCallback(async ({ name, type, description }: { name: string; type: string; description: string }) => {
+    try {
+      setSaving(true)
+      await apiClient.createWorkflowDefinition({
+        name,
+        type,
+        description,
+        steps: pendingSteps.map(step => ({
+          id: step.id,
+          action: step.action,
+          description: step.description,
+          delay: step.delay,
+          critical: step.critical,
+          timeout: step.timeout,
+          swipeCount: step.swipeCount,
+          minSwipes: step.minSwipes,
+          maxSwipes: step.maxSwipes,
+          minIntervalMs: step.minIntervalMs,
+          maxIntervalMs: step.maxIntervalMs,
+          nextStep: step.nextStep,
+          parallel: step.parallel,
+          config: step.config,
+        }))
+      })
       await refetchDefinitions()
-      alert('Workflow saved successfully!')
+      alert('Workflow created successfully!')
+      setShowSaveModal(false)
+      setPendingSteps([])
     } catch (error) {
-      console.error('Failed to save workflow:', error)
-      alert('Failed to save workflow')
+      console.error('Failed to create workflow:', error)
+      alert('Failed to create workflow')
     } finally {
       setSaving(false)
     }
-  }, [selectedWorkflow, refetchDefinitions])
+  }, [pendingSteps, refetchDefinitions])
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -277,6 +286,22 @@ const Workflows2: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Save Modal */}
+      <WorkflowSaveModal
+        isOpen={showSaveModal}
+        onClose={() => {
+          setShowSaveModal(false)
+          setPendingSteps([])
+        }}
+        onSave={handleModalSave}
+        initialData={{
+          name: selectedWorkflow?.name || 'New Workflow',
+          type: selectedWorkflow?.type || 'new_workflow',
+          description: selectedWorkflow?.description || 'A new workflow'
+        }}
+        mode="create"
+      />
     </div>
   )
 }

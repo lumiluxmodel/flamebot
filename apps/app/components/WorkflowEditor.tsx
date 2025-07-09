@@ -15,6 +15,8 @@ import {
   useReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { getLayoutedElements, saveViewportState, restoreViewportState } from '../lib/workflow-layout'
+import { useDebounce } from '../hooks/useDebounce'
 
 import {
   WorkflowNode,
@@ -71,12 +73,30 @@ function WorkflowEditorContent({
   const [isPropertyEditorOpen, setIsPropertyEditorOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const converter = useRef(new WorkflowConverter())
+  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
+  const cleanupRef = useRef<(() => void)[]>([])
 
   // Load workflow data when it changes
   useEffect(() => {
     if (workflowData?.steps) {
       const reactFlowData = converter.current.convertWorkflowStepsToReactFlow(workflowData.steps)
-      setNodes(reactFlowData.nodes)
+      
+      // Restore saved positions if available
+      const savedPositions = localStorage.getItem(`workflow-positions-${workflowData.type}`)
+      if (savedPositions) {
+        const positions = JSON.parse(savedPositions)
+        const nodesWithPositions = reactFlowData.nodes.map(node => {
+          if (positions[node.id]) {
+            return { ...node, position: positions[node.id] }
+          }
+          return node
+        })
+        setNodes(nodesWithPositions)
+        setNodePositions(positions)
+      } else {
+        setNodes(reactFlowData.nodes)
+      }
+      
       setEdges(reactFlowData.edges)
     }
   }, [workflowData, setNodes, setEdges])
@@ -103,6 +123,34 @@ function WorkflowEditorContent({
       setIsPropertyEditorOpen(true)
     },
     [readOnly]
+  )
+
+  // Debounced save positions function
+  const savePositionsToStorage = useDebounce((positions: Record<string, { x: number; y: number }>, workflowType: string) => {
+    localStorage.setItem(`workflow-positions-${workflowType}`, JSON.stringify(positions))
+  }, 500)
+
+  // Save node positions when they change
+  const handleNodesChange = useCallback(
+    (changes: any) => {
+      onNodesChange(changes)
+      
+      // Update positions when nodes are dragged
+      if (workflowData?.type) {
+        const updatedPositions = { ...nodePositions }
+        changes.forEach((change: any) => {
+          if (change.type === 'position' && change.dragging === false && change.position) {
+            updatedPositions[change.id] = change.position
+          }
+        })
+        
+        if (Object.keys(updatedPositions).length > Object.keys(nodePositions).length) {
+          setNodePositions(updatedPositions)
+          savePositionsToStorage(updatedPositions, workflowData.type)
+        }
+      }
+    },
+    [onNodesChange, nodePositions, workflowData?.type, savePositionsToStorage]
   )
 
   const addNode = useCallback(
@@ -171,16 +219,52 @@ function WorkflowEditorContent({
 
   const handleExportImage = useCallback(async () => {
     try {
-      const dataUrl = await reactFlowInstance.getViewport()
-      // Create download link
-      const link = document.createElement('a')
-      link.download = `workflow-${Date.now()}.png`
-      link.href = dataUrl as unknown as string
-      link.click()
+      const nodesBounds = reactFlowInstance.getNodesBounds(nodes)
+      const transform = reactFlowInstance.getViewport()
+      const imageWidth = nodesBounds.width + 200
+      const imageHeight = nodesBounds.height + 200
+
+      const canvas = document.createElement('canvas')
+      canvas.width = imageWidth
+      canvas.height = imageHeight
+
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+
+      // White background
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, imageWidth, imageHeight)
+
+      // Get SVG from React Flow
+      const svgElement = document.querySelector('.react-flow__viewport') as SVGElement
+      if (!svgElement) return
+
+      const svgData = new XMLSerializer().serializeToString(svgElement)
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
+      const svgUrl = URL.createObjectURL(svgBlob)
+
+      const img = new Image()
+      img.onload = () => {
+        ctx.drawImage(img, 100, 100)
+        URL.revokeObjectURL(svgUrl)
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.download = `workflow-${Date.now()}.png`
+            link.href = url
+            link.click()
+            URL.revokeObjectURL(url)
+          }
+        })
+      }
+      img.src = svgUrl
     } catch (error) {
       console.error('Failed to export image:', error)
+      alert('Failed to export workflow as image')
     }
-  }, [reactFlowInstance])
+  }, [reactFlowInstance, nodes])
 
   const handleExportJSON = useCallback(() => {
     const steps = converter.current.convertReactFlowToWorkflowSteps({ nodes, edges })
@@ -197,12 +281,42 @@ function WorkflowEditorContent({
     reactFlowInstance.fitView({ padding: 0.2 })
   }, [reactFlowInstance])
 
+  const handleAutoLayout = useCallback(() => {
+    const { nodes: layoutedNodes } = getLayoutedElements(nodes, edges)
+    setNodes(layoutedNodes)
+    
+    // Save the new positions
+    if (workflowData?.type) {
+      const newPositions: Record<string, { x: number; y: number }> = {}
+      layoutedNodes.forEach(node => {
+        newPositions[node.id] = node.position
+      })
+      setNodePositions(newPositions)
+      localStorage.setItem(`workflow-positions-${workflowData.type}`, JSON.stringify(newPositions))
+    }
+    
+    // Fit view after layout
+    const timeoutId = setTimeout(() => {
+      reactFlowInstance.fitView({ padding: 0.2, duration: 800 })
+    }, 50)
+    
+    // Store cleanup function
+    cleanupRef.current.push(() => clearTimeout(timeoutId))
+  }, [nodes, edges, setNodes, workflowData?.type, reactFlowInstance, savePositionsToStorage])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupRef.current.forEach(cleanup => cleanup())
+    }
+  }, [])
+
   return (
     <div className="w-full h-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
@@ -231,6 +345,7 @@ function WorkflowEditorContent({
               onExportImage={handleExportImage}
               onExportJSON={handleExportJSON}
               onFitView={fitView}
+              onAutoLayout={handleAutoLayout}
               saving={saving}
             />
           </Panel>

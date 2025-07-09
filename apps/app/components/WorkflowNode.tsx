@@ -6,7 +6,22 @@ import { WorkflowNodeProps, NODE_TYPES, WorkflowNodeType } from '../types/workfl
 
 export const WorkflowNode = memo(({ data, selected }: WorkflowNodeProps) => {
   const nodeType = data.nodeType as WorkflowNodeType
-  const config = NODE_TYPES[nodeType] || NODE_TYPES.wait
+  const config = NODE_TYPES[nodeType]
+  
+  if (!config) {
+    console.warn(`Unknown node type: ${nodeType}, falling back to 'wait'`)
+    const fallbackConfig = NODE_TYPES.wait
+    return (
+      <div className="px-4 py-3 border-2 border-red-500 bg-red-50 dark:bg-red-900/20 rounded-xl">
+        <div className="text-sm font-bold text-red-700 dark:text-red-400">
+          Unknown Node Type: {nodeType}
+        </div>
+        <div className="text-xs text-red-600 dark:text-red-500 mt-1">
+          Using fallback configuration
+        </div>
+      </div>
+    )
+  }
   
   return (
     <div
