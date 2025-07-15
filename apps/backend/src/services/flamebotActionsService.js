@@ -25,8 +25,17 @@ class FlamebotActionsService {
   async updateBio(accountId, bio = null) {
     console.log(`📝 Updating bio for account ${accountId}`);
     
-    // Generate bio if not provided
-    if (!bio) {
+    // Check if this is a special model that uses predefined content
+    const specialModels = ['Andria', 'Elliana', 'Lexi', 'Mia'];
+    const accountData = await this.getAccountData(accountId);
+    const model = accountData?.model;
+    
+    if (model && specialModels.includes(model)) {
+      console.log(`🎯 Special model detected: ${model} - using predefined content`);
+      const promptData = require('../config/prompt.json');
+      bio = promptData[model];
+      console.log(`✅ Using predefined bio for ${model}`);
+    } else if (!bio) {
       console.log('🤖 Generating new bio...');
       const bios = await aiService.generateBios(1);
       bio = bios[0].text;
@@ -78,8 +87,16 @@ class FlamebotActionsService {
     let visibleText = promptText;
     let obfuscatedText;
     
-    // Generate prompt if not provided
-    if (!promptText) {
+    // Check if this is a special model that uses predefined content
+    const specialModels = ['Andria', 'Elliana', 'Lexi', 'Mia'];
+    
+    if (model && specialModels.includes(model)) {
+      console.log(`🎯 Special model detected: ${model} - using predefined content`);
+      const promptData = require('../config/prompt.json');
+      visibleText = promptData[model];
+      obfuscatedText = promptData[model]; // Same content for obfuscated
+      console.log(`✅ Using predefined prompt for ${model}`);
+    } else if (!promptText) {
       console.log('🤖 Generating new prompt...');
       const usernameData = await usernameService.getNextUsername(model, channel);
       const promptData = await aiService.generatePrompt(model, channel, usernameData.username);
@@ -374,6 +391,22 @@ class FlamebotActionsService {
   async enableSpectreMode(accountId, spectreConfig = {}) {
     const maxLikes = spectreConfig.max_likes || 50;
     return await this.configureSpectreMode(accountId, maxLikes, spectreConfig);
+  }
+
+  /**
+   * Get account data from database
+   * @param {string} accountId - Account ID
+   * @returns {Promise<Object|null>} Account data
+   */
+  async getAccountData(accountId) {
+    try {
+      const databaseService = require('./databaseService');
+      const accountData = await databaseService.getAccountById(accountId);
+      return accountData;
+    } catch (error) {
+      console.error('❌ Error getting account data:', error.message);
+      return null;
+    }
   }
 }
 
