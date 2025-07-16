@@ -10,7 +10,7 @@ const API_BASE_URL = `http://localhost:${PORT}/api/actions`;
 
 // ⚠️ CAMBIAR ESTOS VALORES POR DATOS REALES
 const TEST_ACCOUNT_ID = "6849f9b45a433b07f26bf749"; // 👈 TU ACCOUNT ID
-const TEST_MODEL = "lola"; // 👈 aura, lola, iris, ciara
+const TEST_MODEL = "Andria"; // 👈 aura, lola, iris, ciara
 const TEST_CHANNEL = "of"; // 👈 snap, gram, of
 
 // Color codes for console output
