@@ -25,16 +25,19 @@ class FlamebotActionsService {
   async updateBio(accountId, bio = null) {
     console.log(`📝 Updating bio for account ${accountId}`);
     
-    // Check if this is a special model that uses predefined content
-    const specialModels = ['Andria', 'Elliana', 'Lexi', 'Mia'];
+    // Check if this is a special model that uses predefined content (case-insensitive)
+    const specialModels = ['andria', 'elliana', 'lexi', 'mia'];
     const accountData = await this.getAccountData(accountId);
-    const model = accountData?.model;
+    const model = (accountData?.model || '').trim();
+    const normalizedModel = model.toLowerCase();
     
-    if (model && specialModels.includes(model)) {
+    if (specialModels.includes(normalizedModel)) {
       console.log(`🎯 Special model detected: ${model} - using predefined content`);
       const promptData = require('../config/prompt.json');
-      bio = promptData[model];
-      console.log(`✅ Using predefined bio for ${model}`);
+      // Accede a la clave con mayúscula inicial para el JSON
+      const jsonKey = model.charAt(0).toUpperCase() + model.slice(1).toLowerCase();
+      bio = promptData[jsonKey];
+      console.log(`✅ Using predefined bio for ${jsonKey}`);
     } else if (!bio) {
       console.log('🤖 Generating new bio...');
       const bios = await aiService.generateBios(1);
@@ -87,15 +90,17 @@ class FlamebotActionsService {
     let visibleText = promptText;
     let obfuscatedText;
     
-    // Check if this is a special model that uses predefined content
-    const specialModels = ['Andria', 'Elliana', 'Lexi', 'Mia'];
-    
-    if (model && specialModels.includes(model)) {
+    // Check if this is a special model that uses predefined content (case-insensitive)
+    const specialModels = ['andria', 'elliana', 'lexi', 'mia'];
+    const normalizedModel = (model || '').trim().toLowerCase();
+    if (specialModels.includes(normalizedModel)) {
       console.log(`🎯 Special model detected: ${model} - using predefined content`);
       const promptData = require('../config/prompt.json');
-      visibleText = promptData[model];
-      obfuscatedText = promptData[model]; // Same content for obfuscated
-      console.log(`✅ Using predefined prompt for ${model}`);
+      // Accede a la clave con mayúscula inicial para el JSON
+      const jsonKey = model.charAt(0).toUpperCase() + model.slice(1).toLowerCase();
+      visibleText = promptData[jsonKey];
+      obfuscatedText = promptData[jsonKey]; // Same content for obfuscated
+      console.log(`✅ Using predefined prompt for ${jsonKey}`);
     } else if (!promptText) {
       console.log('🤖 Generating new prompt...');
       const usernameData = await usernameService.getNextUsername(model, channel);
