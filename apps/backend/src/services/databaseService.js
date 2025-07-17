@@ -12,11 +12,11 @@ class DatabaseService {
     } catch (error) {
       // If database.js doesn't exist, use direct config
       dbConfig = {
-        host: process.env.DB_HOST || "yamabiko.proxy.rlwy.net",
+        host: process.env.DB_HOST || "yambiko..rlwy.net",
         port: process.env.DB_PORT || 18827,
-        database: process.env.DB_NAME || "railway",
-        user: process.env.DB_USER || "postgres",
-        password: process.env.DB_PASSWORD || "pyZSoGjkpyNLzYnfFgRpoHdBGVsQgkie",
+        database: process.env.DB_NAME || "",
+        user: process.env.DB_USER || "",
+        password: process.env.DB_PASSWORD || "",
         ssl: {
           rejectUnauthorized: false,
         },
