@@ -679,6 +679,52 @@ class DatabaseService {
     return result.rows[0];
   }
 
+  // ========== MODELS AND CHANNELS ==========
+
+  /**
+   * Get all available models from database
+   * @returns {Promise<Array>} Array of models
+   */
+  async getAllModels() {
+    const query = `
+      SELECT id, name, color 
+      FROM models 
+      ORDER BY name
+    `;
+    const result = await this.query(query);
+    return result.rows;
+  }
+
+  /**
+   * Get all available channels from database
+   * @returns {Promise<Array>} Array of channels
+   */
+  async getAllChannels() {
+    const query = `
+      SELECT id, name, prefix, format, is_active 
+      FROM channels 
+      WHERE is_active = true 
+      ORDER BY name
+    `;
+    const result = await this.query(query);
+    return result.rows;
+  }
+
+  /**
+   * Get channel by name
+   * @param {string} channelName - Channel name
+   * @returns {Promise<Object|null>} Channel data
+   */
+  async getChannelByName(channelName) {
+    const query = `
+      SELECT id, name, prefix, format, is_active 
+      FROM channels 
+      WHERE LOWER(name) = LOWER($1) AND is_active = true
+    `;
+    const result = await this.query(query, [channelName]);
+    return result.rows[0] || null;
+  }
+
   // ========== CLEANUP ==========
 
   async close() {

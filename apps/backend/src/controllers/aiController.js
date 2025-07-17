@@ -1,6 +1,7 @@
 const aiService = require('../services/aiService');
 const usernameService = require('../services/usernameService');
 const flamebotService = require('../services/flamebotService');
+const databaseService = require('../services/databaseService');
 const config = require('../config');
 
 class AIController {
@@ -33,8 +34,12 @@ class AIController {
                 });
             }
 
-            const validModels = ['aura', 'lola', 'iris', 'ciara'];
-            const validChannels = ['snap', 'gram', 'of'];
+            // Get valid models and channels from database
+            const dbModels = await databaseService.getAllModels();
+            const dbChannels = await databaseService.getAllChannels();
+            
+            const validModels = dbModels.map(m => m.name.toLowerCase());
+            const validChannels = dbChannels.map(c => c.name.toLowerCase());
 
             if (!validModels.includes(model.toLowerCase())) {
                 clearTimeout(timeout);
