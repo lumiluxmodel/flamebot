@@ -523,14 +523,17 @@ class DatabaseService {
 
     const result = await this.query(query);
 
-    // Format results to match existing structure
+    // Format results preserving original case from database
     const stats = {};
     for (const row of result.rows) {
-      if (!stats[row.model_name.toLowerCase()]) {
-        stats[row.model_name.toLowerCase()] = {};
+      // Use exact model name from database (preserve original case)
+      const modelKey = row.model_name; // NO toLowerCase here
+      
+      if (!stats[modelKey]) {
+        stats[modelKey] = {};
       }
 
-      stats[row.model_name.toLowerCase()][row.channel_name] = {
+      stats[modelKey][row.channel_name] = {
         count: parseInt(row.username_count) || 0,
         currentIndex: row.current_index || 0,
         exists: row.exists || false,

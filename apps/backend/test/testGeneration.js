@@ -307,8 +307,9 @@ async function loadConfiguration() {
     const dbModels = await databaseService.getAllModels();
     const dbChannels = await databaseService.getAllChannels();
     
-    TEST_MODELS = dbModels.map(m => m.name.toLowerCase());
-    TEST_CHANNELS = dbChannels.map(c => c.name.toLowerCase());
+    // Use EXACT names from database (no toLowerCase conversion)
+    TEST_MODELS = dbModels.map(m => m.name);
+    TEST_CHANNELS = dbChannels.map(c => c.name);
     
     console.log(`${colors.green}✅ Configuration loaded from database${colors.reset}`);
     console.log(`   Models: ${TEST_MODELS.join(', ')}`);
@@ -322,9 +323,9 @@ async function loadConfiguration() {
     
   } catch (error) {
     console.error(`${colors.red}❌ Failed to load configuration from database:${colors.reset}`, error.message);
-    // Fallback to hardcoded values
-    TEST_MODELS = ["aura", "lola", "iris", "ciara"];
-    TEST_CHANNELS = ["snap", "gram", "of"];
+    // Fallback to hardcoded values with proper case
+    TEST_MODELS = ["CiaraBot"]; // Use exact case as in database
+    TEST_CHANNELS = ["gram", "of", "snap"];
     console.log(`${colors.yellow}⚠️ Using fallback configuration${colors.reset}`);
   }
 }

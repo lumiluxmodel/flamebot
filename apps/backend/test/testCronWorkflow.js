@@ -141,8 +141,8 @@ async function startWorkflow(accountId, workflowType = 'default') {
 
     // Datos de cuenta simulados para la prueba
     const accountData = {
-        model: 'Aura',
-        channel: 'gram',
+        model: 'CiaraBot', // Use exact case as in database
+        channel: 'gram',    // Changed back to gram (now has usernames)
         authToken: 'test_token',
         importedAt: new Date().toISOString()
     };
