@@ -13,7 +13,13 @@
     "test:swipe": "node test/testSwipe.js",
     "test:spectre": "node test/testSpectre.js",
     "test:bioprompt": "node test/testBioPrompt.js",
-    "test:all": "pnpm run test:ai && pnpm run test:import && pnpm run test:swipe && pnpm run test:spectre && pnpm run test:bioprompt"
+    "test:generation": "node test/testGenerationDirect.js",
+    "test:special-models": "node test/testSpecialModels.js",
+    "test:generation:bio": "node test/testGenerationDirect.js bio",
+    "test:generation:prompt": "node test/testGenerationDirect.js prompt",
+    "test:generation:all": "node test/testGenerationDirect.js -- --all",
+    "test:all": "pnpm run test:ai && pnpm run test:import && pnpm run test:swipe && pnpm run test:spectre && pnpm run test:bioprompt",
+    "test:models": "pnpm run test:special-models && pnpm run test:generation"
   },
   "dependencies": {
     "axios": "^1.6.0",

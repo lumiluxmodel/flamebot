@@ -28,16 +28,24 @@ class FlamebotActionsService {
     // Check if this is a special model that uses predefined content (case-insensitive)
     const specialModels = ['andria', 'elliana', 'lexi', 'mia'];
     const accountData = await this.getAccountData(accountId);
-    const model = (accountData?.model || '').trim();
+    const model = (accountData?.model_name || '').trim();
     const normalizedModel = model.toLowerCase();
+    
+    console.log(`🔍 Debug BIO - Account data model_name: "${accountData?.model_name}", model: "${model}"`);
     
     if (specialModels.includes(normalizedModel)) {
       console.log(`🎯 Special model detected: ${model} - using predefined content`);
       const promptData = require('../config/prompt.json');
       // Accede a la clave con mayúscula inicial para el JSON
       const jsonKey = model.charAt(0).toUpperCase() + model.slice(1).toLowerCase();
+      console.log(`🔑 Using JSON key: "${jsonKey}" for bio lookup`);
       bio = promptData[jsonKey];
-      console.log(`✅ Using predefined bio for ${jsonKey}`);
+      console.log(`✅ Using predefined bio for ${jsonKey}: "${bio?.substring(0, 50)}..."`);
+      
+      if (!bio) {
+        console.error(`❌ No bio found for key "${jsonKey}" in prompt.json`);
+        console.log(`Available keys:`, Object.keys(promptData));
+      }
     } else if (!bio) {
       console.log('🤖 Generating new bio...');
       const bios = await aiService.generateBios(1);
@@ -92,19 +100,34 @@ class FlamebotActionsService {
     
     // Check if this is a special model that uses predefined content (case-insensitive)
     const specialModels = ['andria', 'elliana', 'lexi', 'mia'];
-    const normalizedModel = (model || '').trim().toLowerCase();
+    
+    // 🔧 FIX: Get model from database like updateBio does, with fallback to parameter
+    const accountData = await this.getAccountData(accountId);
+    const actualModel = (accountData?.model_name || model || '').trim();
+    const normalizedModel = actualModel.toLowerCase();
+    
+    console.log(`🔍 Debug - Account data model_name: "${accountData?.model_name}", fallback model: "${model}", actualModel: "${actualModel}"`);
+    
     if (specialModels.includes(normalizedModel)) {
-      console.log(`🎯 Special model detected: ${model} - using predefined content`);
+      console.log(`🎯 Special model detected: ${actualModel} - using predefined content`);
       const promptData = require('../config/prompt.json');
       // Accede a la clave con mayúscula inicial para el JSON
-      const jsonKey = model.charAt(0).toUpperCase() + model.slice(1).toLowerCase();
+      const jsonKey = actualModel.charAt(0).toUpperCase() + actualModel.slice(1).toLowerCase();
+      console.log(`🔑 Using JSON key: "${jsonKey}" for prompt lookup`);
       visibleText = promptData[jsonKey];
       obfuscatedText = promptData[jsonKey]; // Same content for obfuscated
-      console.log(`✅ Using predefined prompt for ${jsonKey}`);
+      console.log(`✅ Using predefined prompt for ${jsonKey}: "${visibleText?.substring(0, 50)}..."`);
+      
+      if (!visibleText) {
+        console.error(`❌ No prompt found for key "${jsonKey}" in prompt.json`);
+        console.log(`Available keys:`, Object.keys(promptData));
+      }
     } else if (!promptText) {
       console.log('🤖 Generating new prompt...');
-      const usernameData = await usernameService.getNextUsername(model, channel);
-      const promptData = await aiService.generatePrompt(model, channel, usernameData.username);
+      // Use the actual model for AI generation
+      const finalModel = actualModel || model;
+      const usernameData = await usernameService.getNextUsername(finalModel, channel);
+      const promptData = await aiService.generatePrompt(finalModel, channel, usernameData.username);
       visibleText = promptData.visibleText;
       obfuscatedText = promptData.obfuscatedText;
       console.log(`✅ Generated prompt: "${visibleText}"`);
