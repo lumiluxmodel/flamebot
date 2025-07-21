@@ -12,11 +12,11 @@ class DatabaseService {
     } catch (error) {
       // If database.js doesn't exist, use direct config
       dbConfig = {
-        host: process.env.DB_HOST || "yamabiko.proxy.rlwy.net",
+        host: process.env.DB_HOST || "yambiko..rlwy.net",
         port: process.env.DB_PORT || 18827,
-        database: process.env.DB_NAME || "railway",
-        user: process.env.DB_USER || "postgres",
-        password: process.env.DB_PASSWORD || "pyZSoGjkpyNLzYnfFgRpoHdBGVsQgkie",
+        database: process.env.DB_NAME || "",
+        user: process.env.DB_USER || "",
+        password: process.env.DB_PASSWORD || "",
         ssl: {
           rejectUnauthorized: false,
         },
@@ -523,14 +523,17 @@ class DatabaseService {
 
     const result = await this.query(query);
 
-    // Format results to match existing structure
+    // Format results preserving original case from database
     const stats = {};
     for (const row of result.rows) {
-      if (!stats[row.model_name.toLowerCase()]) {
-        stats[row.model_name.toLowerCase()] = {};
+      // Use exact model name from database (preserve original case)
+      const modelKey = row.model_name; // NO toLowerCase here
+      
+      if (!stats[modelKey]) {
+        stats[modelKey] = {};
       }
 
-      stats[row.model_name.toLowerCase()][row.channel_name] = {
+      stats[modelKey][row.channel_name] = {
         count: parseInt(row.username_count) || 0,
         currentIndex: row.current_index || 0,
         exists: row.exists || false,
@@ -677,6 +680,52 @@ class DatabaseService {
 
     const result = await this.query(query);
     return result.rows[0];
+  }
+
+  // ========== MODELS AND CHANNELS ==========
+
+  /**
+   * Get all available models from database
+   * @returns {Promise<Array>} Array of models
+   */
+  async getAllModels() {
+    const query = `
+      SELECT id, name, color 
+      FROM models 
+      ORDER BY name
+    `;
+    const result = await this.query(query);
+    return result.rows;
+  }
+
+  /**
+   * Get all available channels from database
+   * @returns {Promise<Array>} Array of channels
+   */
+  async getAllChannels() {
+    const query = `
+      SELECT id, name, prefix, format, is_active 
+      FROM channels 
+      WHERE is_active = true 
+      ORDER BY name
+    `;
+    const result = await this.query(query);
+    return result.rows;
+  }
+
+  /**
+   * Get channel by name
+   * @param {string} channelName - Channel name
+   * @returns {Promise<Object|null>} Channel data
+   */
+  async getChannelByName(channelName) {
+    const query = `
+      SELECT id, name, prefix, format, is_active 
+      FROM channels 
+      WHERE LOWER(name) = LOWER($1) AND is_active = true
+    `;
+    const result = await this.query(query, [channelName]);
+    return result.rows[0] || null;
   }
 
   // ========== CLEANUP ==========

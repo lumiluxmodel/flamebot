@@ -25,11 +25,8 @@ class AIService {
       "\u{E030F}",
     ];
 
-    this.prefixes = {
-      snap: "Sn\u{03B1}p;", // α griega
-      gram: "Gr\u{03B1}m;", // α griega
-      of: "\u{041E}\u{043F}Iyf\u{03B1}ns;", // Matching Python: ОпIyfαns;
-    };
+    // Prefixes will be loaded dynamically from database
+    this.prefixes = {};
   }
 
   /**
@@ -131,6 +128,33 @@ class AIService {
   }
 
   /**
+   * Load channel prefixes from database
+   * @returns {Promise<void>}
+   */
+  async loadChannelPrefixes() {
+    try {
+      const databaseService = require('./databaseService');
+      const channels = await databaseService.getAllChannels();
+      
+      // Build prefixes object from database
+      this.prefixes = {};
+      channels.forEach(channel => {
+        this.prefixes[channel.name.toLowerCase()] = channel.prefix;
+      });
+      
+      console.log('✅ Loaded channel prefixes from database:', this.prefixes);
+    } catch (error) {
+      console.error('❌ Failed to load channel prefixes from database:', error.message);
+      // Fallback to default prefixes
+      this.prefixes = {
+        snap: "Snαp;",
+        gram: "Grαm;",
+        of: "ОпIyfαns;"
+      };
+    }
+  }
+
+  /**
    * Generate a short Tinder prompt
    * @param {string} model - Model name (Aura, Lola, Iris, Ciara)
    * @param {string} channel - Channel type (snap/gram/of)
@@ -142,47 +166,31 @@ class AIService {
       `🎨 Generating prompt for ${model}/${channel} with username: ${username}`
     );
 
-    // System prompt for "discovery vibe" - matching Python code exactly
-    const systemPrompt =
-      "You are writing short, casual Tinder-style prompts that appear after someone has stumbled across a hidden social handle. " +
-      "The tone is playful, low effort, and sounds like a hot girl reacting to being 'found' or 'revealed.' " +
-      "All responses must be lowercase and short — less than 40 characters. " +
-      "The prompt should feel like the viewer just discovered a hidden Snap or OnlyFans tag. " +
-      "Avoid sounding robotic, poetic, or flirty. Be natural, relaxed, and a bit cheeky. " +
-      "Never use emojis. No punctuation unless it feels natural. These lines come after a snap; or onlyfans; username, so they should sound like the girl is reacting to that moment of discovery.";
+    // Load prefixes if not already loaded
+    if (Object.keys(this.prefixes).length === 0) {
+      await this.loadChannelPrefixes();
+    }
 
-    // User prompt with discovery examples - matching Python code exactly
+    // System prompt - matching Python script exactly
+    const systemPrompt =
+      "you are writing short, casual, inviting lines meant to appear after someone finds a hidden social handle. " +
+      "tone is playful, easygoing, and sounds like a real hot girl encouraging a dm or a shot. " +
+      "all lowercase, no robotic or poetic language, less than 40 characters. " +
+      "no hashtags, no emojis. sound natural and direct, as if she's telling someone to message or shoot their shot if she doesn't reply.";
+
+    // User prompt - matching Python script exactly
     const userPrompt =
-      "generate one line in lowercase casual tone. imagine someone just found a hidden social media handle " +
-      "(like snap;username or onlyfans;username) and now the girl is reacting in a playful, low-key, or cheeky way. " +
-      "the line must sound natural, like something a real hot girl would type right after being 'seen' or 'discovered'.\n\n" +
-      "it is HIGHLY important that the line is under 40 characters MAX. this is a HARD LIMIT. it can be as short as 20–30 chars. short is better.\n\n" +
+      "generate one line in lowercase casual tone, under 40 characters max. " +
+      "it must feel like a real girl inviting someone to dm her or shoot their shot if she doesn't reply. no hashtags, no emojis, no extra punctuation. " +
       "examples:\n" +
-      "oh wow look what u found\n" +
-      "guess the secrets out now\n" +
-      "now what, come say hi\n" +
-      "well will u look at that\n" +
-      "uh oh u found it huh\n" +
-      "oh, that must be new\n" +
-      "this feels illegal lol\n" +
-      "not hidden anymore i guess\n" +
-      "there u go u got it\n" +
-      "who leaked that haha\n" +
-      "take a peak, u wont regret it\n" +
-      "oh wow look what u found\n" +
-      "now what, come say hi\n" +
-      "say hi im online\n" +
-      "uh oh what do we got here\n" +
-      "well will you look at that\n" +
-      "oh, that must be new\n" +
-      "who put this here haha\n" +
-      "u found the treasure\n" +
-      "oh look u found it\n" +
-      "look at what u found haha\n" +
-      "you found my secret stash huh\n" +
-      "well hello there stranger\n" +
-      "uh oh busted\n" +
-      "how did u even find this";
+      "incase i dont answer\n" +
+      "shoot ur shot if i dont reply\n" +
+      "if i dont reply, hmu\n" +
+      "shoot ur shot haha\n" +
+      "send me memes\n" +
+      "send me something funny\n" +
+      "incase im offline\n" +
+      "always online hmu";
 
     // Generate AI text
     console.log("   Calling OpenAI API...");
@@ -206,12 +214,10 @@ class AIService {
 
     console.log(`   Cleaned to: "${aiText}" (${aiText.length} chars)`);
 
-    // Create obfuscated output
-    console.log("   Creating obfuscated output...");
+    // Create output using exact database prefixes (no obfuscation)
+    console.log("   Creating output with database prefixes...");
     const prefixBlock = this.prefixes[channel] + username + " ";
-    const obfPrefix = this.obfuscate(prefixBlock, 4);
-    const obfBio = this.obfuscate(aiText, 1);
-    const finalOutput = obfPrefix + obfBio;
+    const finalOutput = prefixBlock + aiText;
 
     console.log("   ✅ Prompt generation complete");
 

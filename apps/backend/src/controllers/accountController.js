@@ -1,7 +1,7 @@
 // src/controllers/accountController.js - Updated with Workflow Integration
 const flamebotService = require("../services/flamebotService");
 const workflowManager = require("../services/workflowManager");
-const { isValidModel, validateAccountData } = require("../utils/formatters");
+const { validateAccountDataWithDB, getAvailableModels } = require("../utils/formatters");
 const config = require("../config");
 
 class AccountController {
@@ -62,21 +62,14 @@ class AccountController {
         channel
       };
 
-      // Validate using the centralized validator
-      const validation = validateAccountData(normalizedAccountData);
+      // Validate using database-based validator
+      const validation = await validateAccountDataWithDB(normalizedAccountData);
       if (!validation.isValid) {
         return res.status(400).json({
           success: false,
           error: "Validation failed",
-          details: validation.errors
-        });
-      }
-
-      // Validate model
-      if (!isValidModel(model, config.models.available)) {
-        return res.status(400).json({
-          success: false,
-          error: `Invalid model. Available models: ${config.models.available.join(", ")}`,
+          details: validation.errors,
+          availableModels: validation.availableModels
         });
       }
 
@@ -92,6 +85,7 @@ class AccountController {
       console.log(`   Channel: ${channel}`);
       console.log(`   Start Automation: ${startAutomation}`);
       console.log(`   Workflow Type: ${workflowType}`);
+      console.log(`   Available Models: ${validation.availableModels.join(', ')}`);
       console.log(`   Format validation:`, {
         hasAuthToken: !!accountData.authToken,
         hasPersistentId: !!accountData.persistentId,
@@ -170,6 +164,7 @@ class AccountController {
             channel: channel,
             importedAt: accountData.importedAt,
             taskStatus: result.taskStatus,
+            availableModels: validation.availableModels,
 
             // Workflow data
             automation: {
@@ -220,6 +215,18 @@ class AccountController {
       console.log(`   Start Automation: ${startAutomation}`);
       console.log(`   Workflow Type: ${workflowType}`);
 
+      // Get available models from database once
+      const availableModels = await getAvailableModels();
+      
+      if (availableModels.length === 0) {
+        return res.status(500).json({
+          success: false,
+          error: "No models available in database",
+        });
+      }
+
+      console.log(`   Available Models: ${availableModels.join(', ')}`);
+
       // Normalize and validate all accounts
       const normalizedAccounts = [];
       
@@ -250,22 +257,15 @@ class AccountController {
           channel: account.channel || "gram"
         };
 
-        // Validate using centralized validator
-        const validation = validateAccountData(normalizedAccount);
+        // Validate using database-based validator
+        const validation = await validateAccountDataWithDB(normalizedAccount);
         if (!validation.isValid) {
           return res.status(400).json({
             success: false,
             error: `Account ${index + 1} has validation errors`,
             details: validation.errors,
-            accountIndex: index
-          });
-        }
-
-        // Validate model
-        if (!isValidModel(normalizedAccount.model, config.models.available)) {
-          return res.status(400).json({
-            success: false,
-            error: `Invalid model "${normalizedAccount.model}" in account ${index + 1}. Available models: ${config.models.available.join(", ")}`,
+            accountIndex: index,
+            availableModels: validation.availableModels
           });
         }
 
@@ -393,6 +393,9 @@ class AccountController {
             `${(results.taskStatus.duration || 0) / 1000}s` : 
             "Not measured"
         },
+
+        // Models info
+        availableModels: availableModels,
 
         // Automation results
         automation: automationStats,
@@ -613,16 +616,28 @@ async getDetailedWorkflowStatus(req, res) {
 }
 
   /**
-   * Get available models (unchanged)
+   * Get available models (updated to use database)
    */
   async getModels(req, res) {
-    res.json({
-      success: true,
-      data: {
-        models: config.models.available,
-        colors: config.models.colors,
-      },
-    });
+    try {
+      const availableModels = await getAvailableModels();
+      
+      res.json({
+        success: true,
+        data: {
+          models: availableModels,
+          colors: config.models.colors,
+          source: 'database'
+        },
+      });
+    } catch (error) {
+      console.error("Get models error:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to get models from database",
+        message: error.message,
+      });
+    }
   }
 
   /**

@@ -1,6 +1,7 @@
 const aiService = require('../services/aiService');
 const usernameService = require('../services/usernameService');
 const flamebotService = require('../services/flamebotService');
+const databaseService = require('../services/databaseService');
 const config = require('../config');
 
 class AIController {
@@ -11,13 +12,12 @@ class AIController {
         // Set timeout for this request
         const timeout = setTimeout(() => {
             if (!res.headersSent) {
-                console.error('⏱️ Request timeout after 25 seconds');
-                res.status(504).json({
+                res.status(408).json({
                     success: false,
-                    error: 'Request timeout - generation took too long'
+                    error: 'Request timeout - prompt generation took too long'
                 });
             }
-        }, 25000);
+        }, 30000); // 30 second timeout
 
         try {
             console.log('\n🎯 Generate Prompt Request:', req.body);
@@ -33,22 +33,39 @@ class AIController {
                 });
             }
 
-            const validModels = ['aura', 'lola', 'iris', 'ciara'];
-            const validChannels = ['snap', 'gram', 'of'];
+            // Get valid models and channels from database (keep original case)
+            const dbModels = await databaseService.getAllModels();
+            const dbChannels = await databaseService.getAllChannels();
+            
+            // Create case-insensitive lookup maps
+            const modelLookup = new Map();
+            const channelLookup = new Map();
+            
+            dbModels.forEach(m => {
+                modelLookup.set(m.name.toLowerCase(), m.name); // map lowercase to original
+            });
+            
+            dbChannels.forEach(c => {
+                channelLookup.set(c.name.toLowerCase(), c.name); // map lowercase to original  
+            });
 
-            if (!validModels.includes(model.toLowerCase())) {
+            // Find exact model and channel names from database
+            const exactModelName = modelLookup.get(model.toLowerCase());
+            const exactChannelName = channelLookup.get(channel.toLowerCase());
+
+            if (!exactModelName) {
                 clearTimeout(timeout);
                 return res.status(400).json({
                     success: false,
-                    error: `Invalid model. Valid models: ${validModels.join(', ')}`
+                    error: `Invalid model. Valid models: ${Array.from(modelLookup.values()).join(', ')}`
                 });
             }
 
-            if (!validChannels.includes(channel.toLowerCase())) {
+            if (!exactChannelName) {
                 clearTimeout(timeout);
                 return res.status(400).json({
                     success: false,
-                    error: `Invalid channel. Valid channels: ${validChannels.join(', ')}`
+                    error: `Invalid channel. Valid channels: ${Array.from(channelLookup.values()).join(', ')}`
                 });
             }
 
@@ -61,11 +78,11 @@ class AIController {
                 });
             }
 
-            // Get next username with timeout
+            // Get next username with timeout using EXACT names from database
             console.log('📂 Getting next username...');
             let usernameData;
             try {
-                usernameData = await usernameService.getNextUsername(model, channel);
+                usernameData = await usernameService.getNextUsername(exactModelName, exactChannelName);
                 console.log('✅ Username obtained:', usernameData.username);
             } catch (error) {
                 console.error('❌ Error getting username:', error.message);
@@ -76,13 +93,13 @@ class AIController {
                 });
             }
             
-            // Generate prompt with AI with timeout
+            // Generate prompt with AI with timeout using EXACT names
             console.log('🤖 Generating prompt with AI...');
             let promptData;
             try {
                 promptData = await aiService.generatePrompt(
-                    model,
-                    channel,
+                    exactModelName,
+                    exactChannelName,
                     usernameData.username
                 );
                 console.log('✅ Prompt generated successfully');
