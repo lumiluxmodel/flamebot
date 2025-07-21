@@ -69,47 +69,98 @@ class AIController {
                 });
             }
 
-            // Check if OpenAI API key is configured
-            if (!config.openai.apiKey) {
-                clearTimeout(timeout);
-                return res.status(500).json({
-                    success: false,
-                    error: 'OpenAI API key not configured. Please set OPENAI_API_KEY in .env file'
-                });
-            }
-
-            // Get next username with timeout using EXACT names from database
-            console.log('📂 Getting next username...');
-            let usernameData;
-            try {
-                usernameData = await usernameService.getNextUsername(exactModelName, exactChannelName);
-                console.log('✅ Username obtained:', usernameData.username);
-            } catch (error) {
-                console.error('❌ Error getting username:', error.message);
-                clearTimeout(timeout);
-                return res.status(500).json({
-                    success: false,
-                    error: `Failed to get username: ${error.message}`
-                });
-            }
+            // 🎯 Check if this is a special model that uses predefined content
+            const specialModels = ['andria', 'elliana', 'lexi', 'mia'];
+            const normalizedModel = exactModelName.toLowerCase();
             
-            // Generate prompt with AI with timeout using EXACT names
-            console.log('🤖 Generating prompt with AI...');
             let promptData;
-            try {
-                promptData = await aiService.generatePrompt(
-                    exactModelName,
-                    exactChannelName,
-                    usernameData.username
-                );
-                console.log('✅ Prompt generated successfully');
-            } catch (error) {
-                console.error('❌ Error generating prompt:', error.message);
-                clearTimeout(timeout);
-                return res.status(500).json({
-                    success: false,
-                    error: `Failed to generate prompt: ${error.message}`
-                });
+            let usernameData = null;
+            
+            if (specialModels.includes(normalizedModel)) {
+                console.log(`🎯 Special model detected: ${exactModelName} - using predefined content from prompt.json`);
+                
+                try {
+                    const promptJsonData = require('../config/prompt.json');
+                    const jsonKey = exactModelName.charAt(0).toUpperCase() + exactModelName.slice(1).toLowerCase();
+                    const predefinedText = promptJsonData[jsonKey];
+                    
+                    if (!predefinedText) {
+                        console.error(`❌ No predefined content found for key "${jsonKey}" in prompt.json`);
+                        console.log(`Available keys:`, Object.keys(promptJsonData));
+                        throw new Error(`No predefined content found for model ${exactModelName}`);
+                    }
+                    
+                    console.log(`✅ Using predefined content for ${jsonKey}: "${predefinedText.substring(0, 50)}..."`);
+                    
+                    // For special models, create mock prompt data
+                    promptData = {
+                        visibleText: predefinedText,
+                        obfuscatedText: predefinedText, // Same content for both
+                        model: exactModelName,
+                        channel: exactChannelName
+                    };
+                    
+                    // Create mock username data for special models
+                    usernameData = {
+                        username: `${exactModelName}User`,
+                        index: 1,
+                        total: 1
+                    };
+                    
+                    console.log('✅ Special model prompt prepared successfully');
+                    
+                } catch (error) {
+                    console.error('❌ Error loading predefined content:', error.message);
+                    clearTimeout(timeout);
+                    return res.status(500).json({
+                        success: false,
+                        error: `Failed to load predefined content: ${error.message}`
+                    });
+                }
+                
+            } else {
+                console.log(`🤖 Normal model detected: ${exactModelName} - using AI generation`);
+                
+                // Check if OpenAI API key is configured
+                if (!config.openai.apiKey) {
+                    clearTimeout(timeout);
+                    return res.status(500).json({
+                        success: false,
+                        error: 'OpenAI API key not configured. Please set OPENAI_API_KEY in .env file'
+                    });
+                }
+
+                // Get next username with timeout using EXACT names from database
+                console.log('📂 Getting next username...');
+                try {
+                    usernameData = await usernameService.getNextUsername(exactModelName, exactChannelName);
+                    console.log('✅ Username obtained:', usernameData.username);
+                } catch (error) {
+                    console.error('❌ Error getting username:', error.message);
+                    clearTimeout(timeout);
+                    return res.status(500).json({
+                        success: false,
+                        error: `Failed to get username: ${error.message}`
+                    });
+                }
+                
+                // Generate prompt with AI with timeout using EXACT names
+                console.log('🤖 Generating prompt with AI...');
+                try {
+                    promptData = await aiService.generatePrompt(
+                        exactModelName,
+                        exactChannelName,
+                        usernameData.username
+                    );
+                    console.log('✅ Prompt generated successfully');
+                } catch (error) {
+                    console.error('❌ Error generating prompt:', error.message);
+                    clearTimeout(timeout);
+                    return res.status(500).json({
+                        success: false,
+                        error: `Failed to generate prompt: ${error.message}`
+                    });
+                }
             }
 
             // Clear timeout on success

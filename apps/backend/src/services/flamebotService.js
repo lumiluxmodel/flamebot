@@ -175,6 +175,39 @@ class FlamebotService {
   }
 
   /**
+   * Get model color from database
+   * @param {string} modelName - Model name
+   * @returns {Promise<string>} Model color
+   */
+  async getModelColorFromDatabase(modelName) {
+    try {
+      const databaseService = require('./databaseService');
+      const models = await databaseService.getAllModels();
+      
+      const model = models.find(m => m.name.toLowerCase() === modelName.toLowerCase());
+      
+      if (model && model.color) {
+        console.log(`🎨 Using database color for ${modelName}: ${model.color}`);
+        return model.color;
+      }
+      
+      // Fallback to config or default
+      const configColor = config.models.colors[modelName];
+      if (configColor) {
+        console.log(`🎨 Using config color for ${modelName}: ${configColor}`);
+        return configColor;
+      }
+      
+      console.log(`🎨 Using default color for ${modelName}: #44ab6c`);
+      return "#44ab6c";
+    } catch (error) {
+      console.error(`❌ Error getting color for model ${modelName}:`, error.message);
+      // Fallback to config or default
+      return config.models.colors[modelName] || "#44ab6c";
+    }
+  }
+
+  /**
    * Import account to Flamebot
    * @param {Object} accountData - Account information
    * @param {boolean} waitForCompletion - Whether to wait for task completion
@@ -209,7 +242,8 @@ class FlamebotService {
         throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
       }
 
-      const modelColor = config.models.colors[accountData.model] || "#44ab6c";
+      // 🔧 FIX: Get model color from database instead of hardcoded config
+      const modelColor = await this.getModelColorFromDatabase(accountData.model);
 
       // For single import, we still use the same format but wrap in array
       const formattedAccount = this.formatAccountForBulkImport(
@@ -304,8 +338,16 @@ class FlamebotService {
       }
 
       // Format all accounts into the correct payload structure
+      // 🔧 FIX: Get model colors from database for each unique model
+      const uniqueModels = [...new Set(accounts.map(acc => acc.model))];
+      const modelColors = {};
+      
+      for (const modelName of uniqueModels) {
+        modelColors[modelName] = await this.getModelColorFromDatabase(modelName);
+      }
+      
       const formattedAccounts = accounts.map((account) => {
-        const modelColor = config.models.colors[account.model] || "#44ab6c";
+        const modelColor = modelColors[account.model];
         return this.formatAccountForBulkImport(account, modelColor);
       });
 

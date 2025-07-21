@@ -15,11 +15,20 @@
     "test:bioprompt": "node test/testBioPrompt.js",
     "test:generation": "node test/testGenerationDirect.js",
     "test:special-models": "node test/testSpecialModels.js",
+    "test:special-models-real": "node test/testSpecialModelsReal.js",
+    "test:model-colors": "node test/testModelColors.js",
     "test:generation:bio": "node test/testGenerationDirect.js bio",
     "test:generation:prompt": "node test/testGenerationDirect.js prompt",
     "test:generation:all": "node test/testGenerationDirect.js -- --all",
+    "test:prompt-generator": "node test/testPromptGenerator.js",
+    "test:prompt-generator:all": "node test/testPromptGenerator.js --all",
+    "test:prompt-generator:special": "node test/testPromptGenerator.js special",
+    "test:prompt-generator:normal": "node test/testPromptGenerator.js normal",
+    "test:prompt-generator:show-json": "node test/testPromptGenerator.js show-json",
     "test:all": "pnpm run test:ai && pnpm run test:import && pnpm run test:swipe && pnpm run test:spectre && pnpm run test:bioprompt",
-    "test:models": "pnpm run test:special-models && pnpm run test:generation"
+    "test:models": "pnpm run test:special-models && pnpm run test:generation",
+    "test:models-real": "pnpm run test:special-models-real",
+    "test:complete": "pnpm run test:special-models-real && pnpm run test:model-colors"
   },
   "dependencies": {
     "axios": "^1.6.0",
