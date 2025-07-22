@@ -1103,16 +1103,49 @@ class WorkflowExecutor extends EventEmitter {
 
       case "add_prompt":
         console.log(`📝 Adding prompt for ${accountId}...`);
+        
+        // 🔧 FIX: Use aiController directly (which handles special models correctly)
+        // instead of flamebotActionsService which depends on database lookup
+        const aiController = require('../controllers/aiController');
+        
+        // Create mock request/response for aiController
+        const req = { 
+          body: { 
+            model: accountData.model, 
+            channel: accountData.channel || "gram" 
+          } 
+        };
+        const res = {
+          statusCode: 200,
+          data: null,
+          status(code) { this.statusCode = code; return this; },
+          json(data) { this.data = data; this.headersSent = true; return this; }
+        };
+        
+        // Generate prompt using production controller (handles special models perfectly)
+        await aiController.generatePrompt(req, res);
+        
+        if (!res.data || !res.data.success) {
+          throw new Error(`Prompt generation failed: ${res.data?.error || 'Unknown error'}`);
+        }
+        
+        const generatedPrompt = res.data.data;
+        console.log(`✅ Generated prompt: "${generatedPrompt.visibleText?.substring(0, 50)}..."`);
+        
+        // Now upload the generated prompt to Flamebot using flamebotActionsService  
+        // but pass the pre-generated text so it doesn't try to generate again
         const promptResult = await flamebotActionsService.updatePrompt(
           accountId,
           accountData.model,
           accountData.channel || "gram",
-          null // Generate new prompt
+          generatedPrompt.obfuscatedText || generatedPrompt.visibleText
         );
+        
         return {
           action: "add_prompt",
           taskId: promptResult.taskId,
-          visibleText: promptResult.visibleText,
+          visibleText: generatedPrompt.visibleText,
+          obfuscatedText: generatedPrompt.obfuscatedText,
           success: true,
         };
 
