@@ -101,63 +101,28 @@ async function testBioGeneration(count = 3) {
  * Test prompt generation using production controller
  */
 async function testPromptGeneration(model, channel) {
-  console.log(`\n${colors.bright}💬 Testing Prompt Generation (Production Controller)${colors.reset}`);
-  console.log(`   Model: ${model} | Channel: ${channel}`);
-
   try {
-    // Create mock request and response
-    const req = {
-      body: { model, channel }
-    };
+    const req = { body: { model, channel } };
     const res = createMockResponse();
-
-    // Call production controller directly
     await aiController.generatePrompt(req, res);
-
     if (res.data && res.data.success) {
-      console.log(`${colors.green}✅ Prompt generation successful!${colors.reset}`);
-      console.log(`   Model: ${res.data.data.model}`);
-      console.log(`   Channel: ${res.data.data.channel}`);
-      console.log(`   Username: ${res.data.data.username}`);
-      console.log(`   Visible Text: "${res.data.data.visibleText}"`);
-      console.log(`   Username Info: Index ${res.data.data.usernameInfo.index}/${res.data.data.usernameInfo.total}`);
-      
-      if (res.data.data.obfuscatedText) {
-        console.log(`   Obfuscated Text (FULL):`);
-        console.log(`   "${res.data.data.obfuscatedText}"`);
-        console.log(`   Obfuscated Length: ${res.data.data.obfuscatedText.length} chars`);
-        
-        // Show copyable version
-        console.log(`\n   ${colors.yellow}📋 COPYABLE OBFUSCATED TEXT:${colors.reset}`);
-        console.log(`${colors.cyan}${res.data.data.obfuscatedText}${colors.reset}`);
-        console.log(`   ${colors.yellow}📋 END COPYABLE TEXT${colors.reset}\n`);
-        
-        // Save to file
-        const filename = `obfuscated_${model}_${channel}_${Date.now()}.txt`;
+      // Si se llama desde CLI, guardar en archivo el texto FINAL (obfuscatedText)
+      if (require.main === module) {
+        const filename = `prompt_${model}_${channel}_${Date.now()}.txt`;
         const filepath = path.join(__dirname, filename);
-        try {
-          fs.writeFileSync(filepath, res.data.data.obfuscatedText);
-          console.log(`   ${colors.green}💾 Saved to file: ${filename}${colors.reset}`);
-        } catch (error) {
-          console.log(`   ${colors.red}❌ Failed to save file: ${error.message}${colors.reset}`);
-        }
-      }
-      
-      // Validate prompt length
-      const visibleLength = res.data.data.visibleText.length;
-      if (visibleLength <= 40) {
-        console.log(`   ${colors.green}✓${colors.reset} Prompt length within limit (${visibleLength}/40 chars)`);
+        require('fs').writeFileSync(filepath, res.data.data.obfuscatedText);
+        console.log(filepath);
       } else {
-        console.log(`   ${colors.yellow}⚠️${colors.reset} Prompt too long: ${visibleLength}/40 chars`);
+        // Si se llama como función, solo retorna el texto
+        return { success: true, data: res.data.data };
       }
-      
-      return { success: true, data: res.data.data };
     } else {
-      console.error(`${colors.red}❌ Prompt generation failed:${colors.reset}`, res.data?.error || 'Unknown error');
+      // Solo imprime el error puro
+      console.log(res.data?.error || 'Unknown error');
       return { success: false, error: res.data?.error };
     }
   } catch (error) {
-    console.error(`${colors.red}❌ Prompt generation error:${colors.reset}`, error.message);
+    console.log(error.message);
     return { success: false, error: error.message };
   }
 }
@@ -166,44 +131,23 @@ async function testPromptGeneration(model, channel) {
  * Test multiple prompt generation using production controller
  */
 async function testMultiplePromptGeneration(model, channel, count = 3) {
-  console.log(`\n${colors.bright}🔄 Testing Multiple Prompt Generation (Production Controller)${colors.reset}`);
-  console.log(`   Model: ${model} | Channel: ${channel} | Count: ${count}`);
-
   try {
-    // Create mock request and response
-    const req = {
-      body: { model, channel, count }
-    };
+    const req = { body: { model, channel, count } };
     const res = createMockResponse();
-
-    // Call production controller directly
     await aiController.generateMultiplePrompts(req, res);
-
     if (res.data && res.data.success) {
-      console.log(`${colors.green}✅ Multiple prompt generation successful!${colors.reset}`);
-      console.log(`   Generated: ${res.data.data.generated}/${res.data.data.total}`);
-      console.log(`   Failed: ${res.data.data.failed}`);
-      
-      res.data.data.prompts.forEach((prompt, i) => {
-        console.log(`\n   ${colors.cyan}Prompt ${i + 1}${colors.reset}:`);
-        console.log(`   Username: ${prompt.username} (${prompt.usernameInfo.index}/${prompt.usernameInfo.total})`);
-        console.log(`   Text: "${prompt.visibleText}" (${prompt.visibleText.length} chars)`);
+      // Imprime solo los textos reales, uno por línea
+      res.data.data.prompts.forEach((prompt) => {
+        console.log(prompt.visibleText);
       });
-      
-      if (res.data.data.errors.length > 0) {
-        console.log(`\n   ${colors.yellow}Errors:${colors.reset}`);
-        res.data.data.errors.forEach(error => {
-          console.log(`   ${colors.red}• Index ${error.index}: ${error.error}${colors.reset}`);
-        });
-      }
-      
       return { success: true, data: res.data.data };
     } else {
-      console.error(`${colors.red}❌ Multiple prompt generation failed:${colors.reset}`, res.data?.error || 'Unknown error');
+      // Solo imprime el error puro
+      console.log(res.data?.error || 'Unknown error');
       return { success: false, error: res.data?.error };
     }
   } catch (error) {
-    console.error(`${colors.red}❌ Multiple prompt generation error:${colors.reset}`, error.message);
+    console.log(error.message);
     return { success: false, error: error.message };
   }
 }
@@ -405,23 +349,19 @@ ${colors.bright}╔════════════════════�
  * Test prompt generation and show only obfuscated text for copying
  */
 async function showObfuscatedOnly(model, channel) {
-  console.log(`\n${colors.bright}📋 Obfuscated Text Generator${colors.reset}`);
-  console.log(`   Model: ${model} | Channel: ${channel}`);
-
   try {
     const req = { body: { model, channel } };
     const res = createMockResponse();
     await aiController.generatePrompt(req, res);
-
-    if (res.data && res.data.success && res.data.data.obfuscatedText) {
-      console.log(`\n${colors.bright}Generated Obfuscated Text:${colors.reset}`);
-      console.log(`${colors.cyan}${res.data.data.obfuscatedText}${colors.reset}`);
-      console.log(`\n${colors.yellow}💡 Select and copy the cyan text above${colors.reset}`);
+    if (res.data && res.data.success && res.data.data.visibleText) {
+      // Solo imprime el texto real
+      console.log(res.data.data.visibleText);
     } else {
-      console.error(`${colors.red}❌ Failed to generate obfuscated text${colors.reset}`);
+      // Solo imprime el error puro
+      console.log(res.data?.error || 'Unknown error');
     }
   } catch (error) {
-    console.error(`${colors.red}❌ Error:${colors.reset}`, error.message);
+    console.log(error.message);
   }
 }
 
