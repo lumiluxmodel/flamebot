@@ -8,12 +8,17 @@
     "start": "node src/index.js",
     "build": "echo 'Backend build'",
     "lint": "eslint . --ext js --report-unused-disable-directives --max-warnings 0",
-    "test:ai": "node test/testAI.js",
-    "test:import": "node test/testImport.js",
-    "test:swipe": "node test/testSwipe.js",
-    "test:spectre": "node test/testSpectre.js",
-    "test:bioprompt": "node test/testBioPrompt.js",
-    "test:all": "pnpm run test:ai && pnpm run test:import && pnpm run test:swipe && pnpm run test:spectre && pnpm run test:bioprompt"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest --testPathPattern=tests/__tests__",
+    "test:verbose": "jest --verbose",
+    "test:old:ai": "node test/testAI.js",
+    "test:old:import": "node test/testImport.js",
+    "test:old:swipe": "node test/testSwipe.js",
+    "test:old:spectre": "node test/testSpectre.js",
+    "test:old:bioprompt": "node test/testBioPrompt.js",
+    "test:old:all": "pnpm run test:old:ai && pnpm run test:old:import && pnpm run test:old:swipe && pnpm run test:old:spectre && pnpm run test:old:bioprompt"
   },
   "dependencies": {
     "axios": "^1.6.0",
@@ -28,7 +33,12 @@
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/supertest": "^6.0.3",
     "eslint": "^8.55.0",
-    "nodemon": "^3.0.2"
+    "jest": "^30.0.5",
+    "jest-environment-node": "^30.0.5",
+    "nodemon": "^3.0.2",
+    "supertest": "^7.1.4"
   }
 }
