@@ -11,14 +11,12 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:unit": "jest --testPathPattern=tests/__tests__",
-    "test:verbose": "jest --verbose",
-    "test:old:ai": "node test/testAI.js",
-    "test:old:import": "node test/testImport.js",
-    "test:old:swipe": "node test/testSwipe.js",
-    "test:old:spectre": "node test/testSpectre.js",
-    "test:old:bioprompt": "node test/testBioPrompt.js",
-    "test:old:all": "pnpm run test:old:ai && pnpm run test:old:import && pnpm run test:old:swipe && pnpm run test:old:spectre && pnpm run test:old:bioprompt"
+    "test:prompt": "jest tests/promptGeneration.test.js",
+    "test:rotation": "jest tests/usernameRotation.test.js",
+    "test:generation": "node test/testGeneration.js",
+    "test:generation:prompt": "node test/testGeneration.js prompt",
+    "test:generation:bio": "node test/testGeneration.js bio",
+    "test:generation:batch": "node test/testGeneration.js multiple"
   },
   "dependencies": {
     "axios": "^1.6.0",

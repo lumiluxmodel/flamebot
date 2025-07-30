@@ -384,10 +384,10 @@ class DatabaseService {
 
   async getNextUsername(modelName, channelName) {
     const client = await this.getClient();
-
+    
     try {
       await client.query("BEGIN");
-
+      
       // Get model and channel IDs (case-insensitive)
       const modelResult = await client.query(
         "SELECT id FROM models WHERE LOWER(name) = LOWER($1)",
@@ -397,79 +397,91 @@ class DatabaseService {
         "SELECT id FROM channels WHERE LOWER(name) = LOWER($1)",
         [channelName]
       );
-
+      
       if (!modelResult.rows[0] || !channelResult.rows[0]) {
         throw new Error("Model or channel not found");
       }
-
+      
       const modelId = modelResult.rows[0].id;
       const channelId = channelResult.rows[0].id;
-
-      // Get current pointer
+      
+      // 🔴 FIX: Use SELECT FOR UPDATE to lock the row and prevent race conditions
       let pointerResult = await client.query(
-        "SELECT current_index FROM username_pointers WHERE model_id = $1 AND channel_id = $2",
+        `SELECT current_index 
+         FROM username_pointers 
+         WHERE model_id = $1 AND channel_id = $2 
+         FOR UPDATE`,  // This locks the row until transaction commits
         [modelId, channelId]
       );
-
+      
       let currentIndex = 0;
       if (!pointerResult.rows[0]) {
-        // Create pointer if doesn't exist
+        // Create pointer if doesn't exist with ON CONFLICT to handle concurrent creation
         await client.query(
-          "INSERT INTO username_pointers (model_id, channel_id, current_index) VALUES ($1, $2, 0)",
+          `INSERT INTO username_pointers (model_id, channel_id, current_index) 
+           VALUES ($1, $2, 0) 
+           ON CONFLICT (model_id, channel_id) DO NOTHING`,
           [modelId, channelId]
         );
+        
+        // Re-select with lock after insert
+        pointerResult = await client.query(
+          `SELECT current_index 
+           FROM username_pointers 
+           WHERE model_id = $1 AND channel_id = $2 
+           FOR UPDATE`,
+          [modelId, channelId]
+        );
+        currentIndex = pointerResult.rows[0].current_index;
       } else {
         currentIndex = pointerResult.rows[0].current_index;
       }
-
-      // Get username at current index
-      const usernameResult = await client.query(
-        `SELECT username FROM usernames 
-                 WHERE model_id = $1 AND channel_id = $2 
-                 ORDER BY created_at 
-                 LIMIT 1 OFFSET $3`,
-        [modelId, channelId, currentIndex]
-      );
-
-      if (!usernameResult.rows[0]) {
-        // Reset to beginning if we've reached the end
-        currentIndex = 0;
-        const firstUsername = await client.query(
-          `SELECT username FROM usernames 
-                     WHERE model_id = $1 AND channel_id = $2 
-                     ORDER BY created_at 
-                     LIMIT 1`,
-          [modelId, channelId]
-        );
-
-        if (!firstUsername.rows[0]) {
-          throw new Error("No usernames available");
-        }
-
-        usernameResult.rows[0] = firstUsername.rows[0];
-      }
-
-      // Update pointer
+      
+      // Get total count of usernames
       const totalCount = await client.query(
         "SELECT COUNT(*) FROM usernames WHERE model_id = $1 AND channel_id = $2",
         [modelId, channelId]
       );
-
-      const nextIndex = (currentIndex + 1) % parseInt(totalCount.rows[0].count);
-
+      
+      const total = parseInt(totalCount.rows[0].count);
+      if (total === 0) {
+        throw new Error("No usernames available");
+      }
+      
+      // Calculate actual index (handle case where pointer is beyond total)
+      const actualIndex = currentIndex % total;
+      
+      // Get username at current index with deterministic ordering
+      const usernameResult = await client.query(
+        `SELECT username 
+         FROM usernames 
+         WHERE model_id = $1 AND channel_id = $2 
+         ORDER BY created_at, username ASC 
+         LIMIT 1 OFFSET $3`,
+        [modelId, channelId, actualIndex]
+      );
+      
+      if (!usernameResult.rows[0]) {
+        throw new Error("Username not found at index");
+      }
+      
+      // Calculate next index
+      const nextIndex = (actualIndex + 1) % total;
+      
+      // Update pointer to next position
       await client.query(
         `UPDATE username_pointers 
-                 SET current_index = $3, updated_at = CURRENT_TIMESTAMP 
-                 WHERE model_id = $1 AND channel_id = $2`,
+         SET current_index = $3, updated_at = CURRENT_TIMESTAMP 
+         WHERE model_id = $1 AND channel_id = $2`,
         [modelId, channelId, nextIndex]
       );
-
+      
       await client.query("COMMIT");
-
+      
       return {
         username: usernameResult.rows[0].username,
-        index: currentIndex,
-        total: parseInt(totalCount.rows[0].count),
+        index: actualIndex,
+        total: total,
         nextIndex: nextIndex,
       };
     } catch (error) {

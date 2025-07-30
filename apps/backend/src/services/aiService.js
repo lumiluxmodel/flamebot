@@ -1,5 +1,6 @@
 const { OpenAI } = require("openai");
 const config = require("../config");
+const { channelStrategyService } = require("./channelStrategyService");
 
 class AIService {
   constructor() {
@@ -27,6 +28,28 @@ class AIService {
 
     // Prefixes will be loaded dynamically from database
     this.prefixes = {};
+  }
+
+  /**
+   * Obfuscate text by adding invisible Unicode characters
+   * @param {string} text - Text to obfuscate
+   * @param {number} numTags - Number of invisible chars to add after each character
+   * @returns {string} Obfuscated text
+   */
+  obfuscateText(text, numTags = 2) {
+    let obfuscated = '';
+    
+    for (let char of text) {
+      obfuscated += char;
+      
+      // Add random invisible characters after each visible character
+      for (let i = 0; i < numTags; i++) {
+        const randomTag = this.tagChars[Math.floor(Math.random() * this.tagChars.length)];
+        obfuscated += randomTag;
+      }
+    }
+    
+    return obfuscated;
   }
 
   /**
@@ -203,32 +226,67 @@ class AIService {
       throw error;
     }
 
-    // Enforce strict 40-char limit and clean text
-    aiText = aiText.substring(0, 40).trim();
+    // Use channel strategy for text formatting and validation
+    console.log("   Using channel strategy for formatting...");
+    
+    try {
+      // First validate the generated text
+      const validation = await channelStrategyService.validateText(channel, aiText);
+      if (!validation.isValid) {
+        console.warn(`   Text validation warning: ${validation.error}`);
+      }
 
-    // Remove quotes and emojis to match Python behavior
-    aiText = aiText
-      .replace(/["""'']/g, "")
-      .replace(/😉|😊|😎|🎯|💕|❤️|🔥/g, "")
-      .trim();
+      // Format text using channel strategy
+      const finalOutput = await channelStrategyService.formatText(channel, aiText, username);
+      
+      // Apply obfuscation with invisible Unicode characters
+      const obfuscatedOutput = this.obfuscateText(finalOutput);
+      
+      console.log(`   Formatted output: "${finalOutput}"`);
+      console.log(`   Obfuscated output: "${obfuscatedOutput}"`);
+      
+      return {
+        model,
+        channel,
+        username,
+        visibleText: aiText,
+        obfuscatedText: obfuscatedOutput,
+        timestamp: new Date().toISOString(),
+      };
+      
+    } catch (strategyError) {
+      console.warn(`   Channel strategy error: ${strategyError.message}, falling back to legacy method`);
+      
+      // Fallback to legacy method if strategy fails
+      // Load prefixes if not already loaded
+      if (Object.keys(this.prefixes).length === 0) {
+        await this.loadChannelPrefixes();
+      }
+      
+      // Legacy formatting
+      aiText = aiText.substring(0, 40).trim();
+      aiText = aiText
+        .replace(/["""'']/g, "")
+        .replace(/😉|😊|😎|🎯|💕|❤️|🔥/g, "")
+        .trim();
 
-    console.log(`   Cleaned to: "${aiText}" (${aiText.length} chars)`);
+      const prefixBlock = this.prefixes[channel] + username + " ";
+      const finalOutput = prefixBlock + aiText;
+      
+      // Apply obfuscation with invisible Unicode characters
+      const obfuscatedOutput = this.obfuscateText(finalOutput);
+      
+      console.log("   ✅ Prompt generation complete (legacy fallback)");
 
-    // Create output using exact database prefixes (no obfuscation)
-    console.log("   Creating output with database prefixes...");
-    const prefixBlock = this.prefixes[channel] + username + " ";
-    const finalOutput = prefixBlock + aiText;
-
-    console.log("   ✅ Prompt generation complete");
-
-    return {
-      model,
-      channel,
-      username,
-      visibleText: aiText,
-      obfuscatedText: finalOutput,
-      timestamp: new Date().toISOString(),
-    };
+      return {
+        model,
+        channel,
+        username,
+        visibleText: aiText,
+        obfuscatedText: obfuscatedOutput,
+        timestamp: new Date().toISOString(),
+      };
+    }
   }
 
   /**
