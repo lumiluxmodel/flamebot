@@ -123,57 +123,6 @@ describe('Workflow Step Execution Tests - All Step Types', () => {
       }
     });
 
-    it('should execute activate_continuous_swipe step correctly', async () => {
-      const stepConfig = {
-        id: 'continuous_swipe_test',
-        action: 'activate_continuous_swipe',
-        delay: 0,
-        minSwipes: 2,
-        maxSwipes: 5,
-        minIntervalMs: 1000,
-        maxIntervalMs: 3000,
-        description: 'Test continuous swipe step'
-      };
-
-      // Este test requiere el servicio real de flamebot
-      try {
-        const result = await executionService.executeStepAction(baseExecution, stepConfig);
-        
-        // Si funciona, verificar resultado
-        expect(result.success).toBe(true);
-        expect(result.taskId).toBeDefined();
-        expect(result.continuousSwipeActivated).toBe(true);
-        expect(result.minSwipes).toBe(2);
-        expect(result.maxSwipes).toBe(5);
-      } catch (error) {
-        // Si falla por dependencias externas, solo verificar que el error es esperado
-        expect(error.message).toMatch(/flamebot|network|timeout|connection/i);
-        console.log('⚠️ activate_continuous_swipe test skipped due to external dependency:', error.message);
-      }
-    });
-
-    it('should execute deactivate_continuous_swipe step correctly', async () => {
-      const stepConfig = {
-        id: 'deactivate_continuous_swipe_test',
-        action: 'deactivate_continuous_swipe',
-        delay: 0,
-        description: 'Test deactivate continuous swipe step'
-      };
-
-      // Este test requiere el servicio real de flamebot
-      try {
-        const result = await executionService.executeStepAction(baseExecution, stepConfig);
-        
-        // Si funciona, verificar resultado
-        expect(result.success).toBe(true);
-        expect(result.taskId).toBeDefined();
-        expect(result.continuousSwipeDeactivated).toBe(true);
-      } catch (error) {
-        // Si falla por dependencias externas, solo verificar que el error es esperado
-        expect(error.message).toMatch(/flamebot|network|timeout|connection/i);
-        console.log('⚠️ deactivate_continuous_swipe test skipped due to external dependency:', error.message);
-      }
-    });
   });
 
   describe('Control Flow Steps', () => {

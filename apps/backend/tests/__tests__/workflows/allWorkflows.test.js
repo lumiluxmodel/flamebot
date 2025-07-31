@@ -100,16 +100,6 @@ describe('All Workflows Tests', () => {
           description: "Initial prompt",
           critical: true,
         },
-        {
-          id: "continuous",
-          action: "activate_continuous_swipe",
-          delay: 500, // Reducido para testing
-          minSwipes: 2,
-          maxSwipes: 4,
-          minIntervalMs: 1000,
-          maxIntervalMs: 2000,
-          description: "Start continuous swipes",
-        },
         // Parallel steps
         {
           id: "bio_2h",
@@ -396,12 +386,6 @@ describe('All Workflows Tests', () => {
             expect(step.swipeCount).toBeGreaterThan(0);
           }
 
-          if (step.action === 'activate_continuous_swipe') {
-            expect(step.minSwipes).toBeDefined();
-            expect(step.maxSwipes).toBeDefined();
-            expect(step.minIntervalMs).toBeDefined();
-            expect(step.maxIntervalMs).toBeDefined();
-          }
         });
       });
     });

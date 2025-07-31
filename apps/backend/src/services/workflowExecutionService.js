@@ -36,17 +36,8 @@ class WorkflowExecutionService extends EventEmitter {
           result = await this.executeAddBio(execution, stepConfig);
           break;
 
-        case "swipe":
         case "swipe_with_spectre":
           result = await this.executeSwipe(execution, stepConfig);
-          break;
-
-        case "activate_continuous_swipe":
-          result = await this.executeActivateContinuousSwipe(execution, stepConfig);
-          break;
-
-        case "deactivate_continuous_swipe":
-          result = await this.executeDeactivateContinuousSwipe(execution, stepConfig);
           break;
 
         case "wait":
@@ -158,48 +149,6 @@ class WorkflowExecutionService extends EventEmitter {
     };
   }
 
-  /**
-   * Execute activate_continuous_swipe action
-   * @param {Object} execution - Execution context
-   * @param {Object} stepConfig - Step configuration
-   * @returns {Promise<Object>} Execution result
-   */
-  async executeActivateContinuousSwipe(execution, stepConfig) {
-    const { accountData } = execution;
-
-    console.log(`🔄 Activating continuous swipe for ${accountData.card_id}`);
-
-    const result = await flamebotActionsService.activateContinuousSwipe(
-      accountData.card_id
-    );
-
-    return {
-      success: true,
-      continuousTaskId: result.continuousTaskId,
-      message: "Continuous swipe activated"
-    };
-  }
-
-  /**
-   * Execute deactivate_continuous_swipe action
-   * @param {Object} execution - Execution context
-   * @param {Object} stepConfig - Step configuration
-   * @returns {Promise<Object>} Execution result
-   */
-  async executeDeactivateContinuousSwipe(execution, stepConfig) {
-    const { accountData } = execution;
-
-    console.log(`⏹️ Deactivating continuous swipe for ${accountData.card_id}`);
-
-    const result = await flamebotActionsService.deactivateContinuousSwipe(
-      accountData.card_id
-    );
-
-    return {
-      success: true,
-      message: "Continuous swipe deactivated"
-    };
-  }
 
   /**
    * Execute wait action

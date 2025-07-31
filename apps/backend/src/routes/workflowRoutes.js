@@ -525,7 +525,6 @@ router.post(
         "add_prompt",
         "add_bio",
         "swipe_with_spectre",
-        "activate_continuous_swipe",
         "spectre_config",
         "swipe",
         "goto",
@@ -567,21 +566,6 @@ router.post(
           });
         }
 
-        if (step.action === "activate_continuous_swipe") {
-          if (
-            !step.minSwipes ||
-            !step.maxSwipes ||
-            !step.minIntervalMs ||
-            !step.maxIntervalMs
-          ) {
-            return res.status(400).json({
-              success: false,
-              error: `Step ${i + 1} (${
-                step.id
-              }): continuous swipe requires minSwipes, maxSwipes, minIntervalMs, maxIntervalMs`,
-            });
-          }
-        }
 
         if (step.action === "goto" && !step.nextStep) {
           return res.status(400).json({
@@ -688,8 +672,7 @@ router.put(
           "add_prompt",
           "add_bio",
           "swipe_with_spectre",
-          "activate_continuous_swipe",
-          "spectre_config",
+            "spectre_config",
           "swipe",
           "goto",
         ];
@@ -1084,16 +1067,6 @@ router.get(
             description: "Initial prompt",
             critical: true,
           },
-          {
-            id: "continuous",
-            action: "activate_continuous_swipe",
-            delay: 1800000,
-            minSwipes: 15,
-            maxSwipes: 25,
-            minIntervalMs: 3600000,
-            maxIntervalMs: 7200000,
-            description: "Start continuous swipes",
-          },
           // Parallel steps
           {
             id: "bio_2h",
@@ -1251,7 +1224,6 @@ router.get(
           "add_prompt - Generate and add AI prompt",
           "add_bio - Generate and add AI bio",
           "swipe_with_spectre - Configure Spectre and swipe (requires: swipeCount)",
-          "activate_continuous_swipe - Start infinite random swipes",
           "goto - Jump to another step (requires: nextStep)",
         ],
         features: {

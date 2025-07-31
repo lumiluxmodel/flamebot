@@ -407,8 +407,6 @@ class WorkflowExecutor extends EventEmitter {
       'swipe': 180000, // 3 minutes  
       'swipe_with_spectre': 300000, // 5 minutes
       'wait': Math.min((stepConfig.delay || 0) + 30000, 600000), // delay + 30s buffer, max 10min
-      'activate_continuous_swipe': 60000, // 1 minute
-      'deactivate_continuous_swipe': 60000, // 1 minute
       'default': 120000 // 2 minutes
     };
 
@@ -532,7 +530,15 @@ class WorkflowExecutor extends EventEmitter {
    * @returns {Object} Combined statistics from all services
    */
   getStatistics() {
+    const monitoringStats = this.monitoringService.getMonitoringStats();
+    
     return {
+      isInitialized: this.isInitialized,
+      activeExecutions: this.activeExecutions?.size || 0,
+      workflowDefinitions: this.workflowDefinitions.size,
+      totalExecutions: monitoringStats.totalExecutions || 0,
+      successfulExecutions: monitoringStats.successfulExecutions || 0,
+      failedExecutions: monitoringStats.failedExecutions || 0,
       executor: {
         isInitialized: this.isInitialized,
         activeExecutions: this.activeExecutions?.size || 0,
@@ -540,7 +546,7 @@ class WorkflowExecutor extends EventEmitter {
       },
       execution: this.executionService.getExecutionStats(),
       scheduling: this.schedulingService.getSchedulingStats(),
-      monitoring: this.monitoringService.getMonitoringStats(),
+      monitoring: monitoringStats,
       recovery: this.recoveryService.getRecoveryStats()
     };
   }
@@ -659,23 +665,6 @@ class WorkflowExecutor extends EventEmitter {
     }
   }
 
-  /**
-   * Execute continuous swipe (for TaskScheduler)
-   * @param {Object} payload - Swipe payload
-   * @returns {Promise<Object>} Result
-   */
-  async executeContinuousSwipe(payload) {
-    console.log(`🔄 Executing continuous swipe:`, payload);
-    
-    try {
-      // Delegate to execution service
-      return await this.executionService.executeContinuousSwipe(payload);
-      
-    } catch (error) {
-      console.error(`❌ Failed to execute continuous swipe:`, error);
-      return { success: false, error: error.message };
-    }
-  }
 
   // Safe execution methods (inherited from original)
   async safeGetExecution(executionId) {

@@ -161,11 +161,20 @@ const workflowExecutorProxy = new Proxy({}, {
     if (prop === 'createTestScope') return createTestScope;
     if (prop === 'getService') return getService;
     
+    // For EventEmitter methods like 'on', 'emit', etc. return dummy functions if not initialized
+    if (prop === 'on' || prop === 'emit' || prop === 'once' || prop === 'removeListener') {
+      if (!factoryInitialized) {
+        // Return a dummy function that does nothing until initialized
+        return () => {};
+      }
+    }
+    
     // For all other properties, ensure system is initialized and delegate to executor
     if (!factoryInitialized) {
-      // Auto-initialize for backward compatibility
+      // Auto-initialize for backward compatibility (async, non-blocking)
       ensureInitialized();
-      throw new Error(`Workflow system is initializing. Please wait or call initialize() explicitly.`);
+      // Return undefined for properties that can't be accessed yet
+      return undefined;
     }
     
     const executor = getWorkflowExecutor();

@@ -98,29 +98,6 @@ Performs automated swiping with Spectre integration.
 }
 ```
 
-#### **activate_continuous_swipe**
-Activates continuous automated swiping.
-```javascript
-{
-  id: "continuous_on",
-  action: "activate_continuous_swipe",
-  delay: 0,
-  minSwipes: 5,
-  maxSwipes: 20,
-  minIntervalMs: 60000,
-  maxIntervalMs: 180000
-}
-```
-
-#### **deactivate_continuous_swipe**
-Deactivates continuous swiping.
-```javascript
-{
-  id: "continuous_off",
-  action: "deactivate_continuous_swipe",
-  delay: 0
-}
-```
 
 #### **goto** ⭐ NEW!
 Jumps to a specific step, enabling loops and conditional flows.

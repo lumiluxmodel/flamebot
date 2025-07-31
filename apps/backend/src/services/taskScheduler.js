@@ -38,11 +38,9 @@ class TaskScheduler extends EventEmitter {
         this.taskExecutors.set('add_prompt', this.executeAddPromptTask.bind(this));
         this.taskExecutors.set('add_bio', this.executeAddBioTask.bind(this));
         this.taskExecutors.set('swipe', this.executeSwipeTask.bind(this));
-        this.taskExecutors.set('continuous_swipe', this.executeContinuousSwipeTask.bind(this));
         this.taskExecutors.set('spectre_config', this.executeSpectreConfigTask.bind(this));
 
         this.taskExecutors.set('execute_workflow_step', this.executeWorkflowStep.bind(this));
-        this.taskExecutors.set('execute_continuous_swipe', this.executeContinuousSwipeTask.bind(this));
         
         console.log(`📋 Registered ${this.taskExecutors.size} task executors`);
     }
@@ -140,21 +138,6 @@ async executeWorkflowStep(task) {
     return await workflowExecutor.executeWorkflowStep(payload);
 }
 
-    /**
-     * Execute continuous swipe - delegates to WorkflowExecutor
-     * @param {Object} task - Task from database
-     * @returns {Promise<Object>} Result
-     */
-    async executeContinuousSwipeTask(task) {
-        const payload = task.payload || {};
-        console.log(`🔄 Executing continuous swipe via TaskScheduler`);
-        
-        // Get WorkflowExecutor instance
-        const workflowExecutor = require('./workflowExecutorV2');
-        
-        // Call the workflow executor's method
-        return await workflowExecutor.executeContinuousSwipe(payload);
-    }
 
     /**
      * Schedule a task for future execution
@@ -345,38 +328,6 @@ async executeWorkflowStep(task) {
         }
     }
 
-    /**
-     * Execute continuous swipe task
-     * @param {Object} task - Task configuration
-     * @returns {Promise<Object>} Result
-     */
-    async executeContinuousSwipeTask(task) {
-        const payload = task.payload || {};
-        const accountId = task.account_id;
-        
-        // Calculate random swipe count
-        const minSwipes = payload.minSwipes || 20;
-        const maxSwipes = payload.maxSwipes || 30;
-        const swipeCount = Math.floor(Math.random() * (maxSwipes - minSwipes + 1)) + minSwipes;
-        
-        console.log(`🔄 Continuous swipe task for account: ${accountId} (${swipeCount} swipes)`);
-        
-        // Execute like a regular swipe task
-        const modifiedTask = {
-            ...task,
-            payload: { ...payload, swipeCount }
-        };
-        
-        const result = await this.executeSwipeTask(modifiedTask);
-        result.continuous = true;
-        result.minSwipes = minSwipes;
-        result.maxSwipes = maxSwipes;
-        
-        // Schedule next continuous swipe
-        await this.scheduleNextContinuousSwipe(task, payload);
-        
-        return result;
-    }
 
     /**
      * Execute Spectre configuration task
@@ -404,35 +355,6 @@ async executeWorkflowStep(task) {
         };
     }
 
-    /**
-     * Schedule next continuous swipe
-     * @param {Object} task - Current task
-     * @param {Object} payload - Task payload
-     */
-    async scheduleNextContinuousSwipe(task, payload) {
-        try {
-            const minInterval = payload.minInterval || 90 * 60 * 1000; // 90 minutes
-            const maxInterval = payload.maxInterval || 180 * 60 * 1000; // 180 minutes
-            
-            // Calculate random next execution time
-            const randomDelay = Math.floor(Math.random() * (maxInterval - minInterval)) + minInterval;
-            const nextExecution = new Date(Date.now() + randomDelay);
-            
-            console.log(`⏰ Scheduling next continuous swipe for ${nextExecution.toLocaleString()}`);
-            
-            // Schedule next continuous swipe
-            await this.scheduleTask({
-                workflowInstanceId: task.workflow_instance_id,
-                stepId: task.step_id, // Keep same step ID for continuous
-                action: 'continuous_swipe',
-                scheduledFor: nextExecution,
-                payload: payload
-            });
-            
-        } catch (error) {
-            console.error(`❌ Failed to schedule next continuous swipe:`, error);
-        }
-    }
 
     /**
      * Process task queue

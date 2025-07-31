@@ -16,9 +16,6 @@ class WorkflowManager {
     this.monitor = cronMonitor;
     this.taskScheduler = taskScheduler;
     this.isInitialized = false;
-
-    // Setup event listeners
-    this.setupEventListeners();
   }
 
   /**
@@ -35,6 +32,9 @@ class WorkflowManager {
 
       // Initialize workflow executor
       await this.executor.initialize();
+
+      // Setup event listeners after executor is initialized
+      this.setupEventListeners();
 
       // Start cron manager
       await this.cronManager.start();
@@ -504,11 +504,11 @@ class WorkflowManager {
           activeExecutions: executorStats.activeExecutions,
           totalExecutions: executorStats.totalExecutions,
           successRate:
-            executorStats.totalExecutions > 0
-              ? (executorStats.successfulExecutions /
+            (executorStats.totalExecutions || 0) > 0
+              ? ((executorStats.successfulExecutions || 0) /
                   executorStats.totalExecutions) *
                 100
-              : 0,
+              : 100, // Return 100% when no executions yet (optimistic default)
         },
         cronManager: {
           running: cronStatus.isRunning,
