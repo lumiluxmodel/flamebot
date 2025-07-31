@@ -328,8 +328,8 @@ class WorkflowServiceContainer {
     });
 
     this.registerSingleton('workflowDatabaseService', () => {
-      const WorkflowDatabaseService = require('./workflowDatabaseService');
-      return new WorkflowDatabaseService();
+      const workflowDatabaseService = require('./workflowDatabaseService');
+      return workflowDatabaseService;
     });
 
     // Register System Config Service

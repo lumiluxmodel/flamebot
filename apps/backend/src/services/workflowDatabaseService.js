@@ -882,4 +882,4 @@ class WorkflowDatabaseService {
 }
 
 // Export singleton instance
-module.exports = WorkflowDatabaseService;
+module.exports = new WorkflowDatabaseService();

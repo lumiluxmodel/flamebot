@@ -126,7 +126,7 @@ router.get(
           ...status,
           progressPercentage: status.progress,
           isRunning: status.status === "active",
-          timeElapsed: Date.now() - status.startedAt.getTime(),
+          timeElapsed: Date.now() - new Date(status.startedAt).getTime(),
           nextStepDescription:
             status.nextStep?.description || "Workflow completed",
           nextStepETA: status.nextStep
@@ -213,7 +213,7 @@ router.get(
         })`
       );
 
-      let activeExecutions = workflowExecutor.getAllActiveExecutions();
+      let activeExecutions = await workflowExecutor.getAllActiveExecutions();
 
       // Filter by status (active | paused | stopped | completed | failed)
       if (status && status !== "all") {
