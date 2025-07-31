@@ -236,4 +236,4 @@ class WorkflowMonitoringService extends EventEmitter {
   }
 }
 
-module.exports = new WorkflowMonitoringService();
+module.exports = WorkflowMonitoringService;

@@ -272,4 +272,4 @@ class WorkflowExecutionService extends EventEmitter {
   }
 }
 
-module.exports = new WorkflowExecutionService();
+module.exports = WorkflowExecutionService;

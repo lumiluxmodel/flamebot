@@ -79,7 +79,7 @@ class WorkflowDatabaseService {
   // ========== WORKFLOW INSTANCES ==========
 
   /**
-   * Create new workflow instance
+   * Create new workflow instance with transaction
    * @param {Object} workflowData - Workflow instance data
    * @returns {Promise<Object>} Created workflow instance
    */
@@ -92,28 +92,52 @@ class WorkflowDatabaseService {
       executionContext = {},
     } = workflowData;
 
-    // Get workflow definition ID
-    const workflowDef = await this.getWorkflowDefinition(workflowType);
-    if (!workflowDef) {
-      throw new Error(`Workflow definition not found: ${workflowType}`);
+    const client = await this.db.getClient();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Check if account already has active workflow
+      const existingQuery = `
+        SELECT id FROM workflow_instances 
+        WHERE account_id = $1 AND status IN ('active', 'paused')
+      `;
+      const existingResult = await client.query(existingQuery, [accountId]);
+      
+      if (existingResult.rows.length > 0) {
+        throw new Error(`Account ${accountId} already has an active workflow`);
+      }
+      
+      // Get workflow definition ID
+      const workflowDef = await this.getWorkflowDefinition(workflowType);
+      if (!workflowDef) {
+        throw new Error(`Workflow definition not found: ${workflowType}`);
+      }
+
+      const query = `
+        INSERT INTO workflow_instances (
+          workflow_id, account_id, total_steps, account_data, execution_context
+        ) VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+      `;
+
+      const result = await client.query(query, [
+        workflowDef.id,
+        accountId,
+        totalSteps,
+        JSON.stringify(accountData),
+        JSON.stringify(executionContext),
+      ]);
+      
+      await client.query('COMMIT');
+      return result.rows[0];
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    const query = `
-            INSERT INTO workflow_instances (
-                workflow_id, account_id, total_steps, account_data, execution_context
-            ) VALUES ($1, $2, $3, $4, $5)
-            RETURNING *
-        `;
-
-    const result = await this.db.query(query, [
-      workflowDef.id,
-      accountId,
-      totalSteps,
-      JSON.stringify(accountData),
-      JSON.stringify(executionContext),
-    ]);
-
-    return result.rows[0];
   }
 
   /**
@@ -353,39 +377,103 @@ class WorkflowDatabaseService {
   }
 
   /**
-   * Pause workflow instance
+   * Pause workflow instance with transaction and race condition protection
    * @param {string} accountId - Account ID
    * @returns {Promise<Object>} Updated workflow instance
    */
   async pauseWorkflowInstance(accountId) {
-    const query = `
-            UPDATE workflow_instances 
-            SET status = 'paused',
-                paused_at = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE account_id = $1 AND status = 'active'
-            RETURNING *
-        `;
-    const result = await this.db.query(query, [accountId]);
-    return result.rows[0];
+    const client = await this.db.getClient();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Lock the row to prevent race conditions
+      const lockQuery = `
+        SELECT id, status FROM workflow_instances 
+        WHERE account_id = $1 
+        FOR UPDATE
+      `;
+      const lockResult = await client.query(lockQuery, [accountId]);
+      
+      if (lockResult.rows.length === 0) {
+        throw new Error(`Workflow instance not found for account: ${accountId}`);
+      }
+      
+      const currentStatus = lockResult.rows[0].status;
+      if (currentStatus !== 'active') {
+        throw new Error(`Cannot pause workflow with status: ${currentStatus}`);
+      }
+      
+      const query = `
+        UPDATE workflow_instances 
+        SET status = 'paused',
+            paused_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE account_id = $1
+        RETURNING *
+      `;
+      
+      const result = await client.query(query, [accountId]);
+      
+      await client.query('COMMIT');
+      return result.rows[0];
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**
-   * Resume workflow instance
+   * Resume workflow instance with transaction and race condition protection
    * @param {string} accountId - Account ID
    * @returns {Promise<Object>} Updated workflow instance
    */
   async resumeWorkflowInstance(accountId) {
-    const query = `
-            UPDATE workflow_instances 
-            SET status = 'active',
-                resumed_at = CURRENT_TIMESTAMP,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE account_id = $1 AND status = 'paused'
-            RETURNING *
-        `;
-    const result = await this.db.query(query, [accountId]);
-    return result.rows[0];
+    const client = await this.db.getClient();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Lock the row to prevent race conditions
+      const lockQuery = `
+        SELECT id, status FROM workflow_instances 
+        WHERE account_id = $1 
+        FOR UPDATE
+      `;
+      const lockResult = await client.query(lockQuery, [accountId]);
+      
+      if (lockResult.rows.length === 0) {
+        throw new Error(`Workflow instance not found for account: ${accountId}`);
+      }
+      
+      const currentStatus = lockResult.rows[0].status;
+      if (currentStatus !== 'paused') {
+        throw new Error(`Cannot resume workflow with status: ${currentStatus}`);
+      }
+      
+      const query = `
+        UPDATE workflow_instances 
+        SET status = 'active',
+            resumed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE account_id = $1
+        RETURNING *
+      `;
+      
+      const result = await client.query(query, [accountId]);
+      
+      await client.query('COMMIT');
+      return result.rows[0];
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**
@@ -483,7 +571,7 @@ class WorkflowDatabaseService {
   // ========== SCHEDULED TASKS ==========
 
   /**
-   * Create scheduled task
+   * Create scheduled task with duplicate protection
    * @param {Object} taskData - Task data
    * @returns {Promise<Object>} Created task
    */
@@ -497,23 +585,44 @@ class WorkflowDatabaseService {
       payload = {},
     } = taskData;
 
-    const query = `
-            INSERT INTO scheduled_tasks (
-                task_id, workflow_instance_id, step_id, action, scheduled_for, payload
-            ) VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING *
-        `;
+    const client = await this.db.getClient();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Check for duplicate task_id
+      const duplicateQuery = 'SELECT id FROM scheduled_tasks WHERE task_id = $1';
+      const duplicateResult = await client.query(duplicateQuery, [taskId]);
+      
+      if (duplicateResult.rows.length > 0) {
+        throw new Error(`Scheduled task with ID ${taskId} already exists`);
+      }
+      
+      const query = `
+        INSERT INTO scheduled_tasks (
+          task_id, workflow_instance_id, step_id, action, scheduled_for, payload
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *
+      `;
 
-    const result = await this.db.query(query, [
-      taskId,
-      workflowInstanceId,
-      stepId,
-      action,
-      scheduledFor,
-      JSON.stringify(payload),
-    ]);
-
-    return result.rows[0];
+      const result = await client.query(query, [
+        taskId,
+        workflowInstanceId,
+        stepId,
+        action,
+        scheduledFor,
+        JSON.stringify(payload),
+      ]);
+      
+      await client.query('COMMIT');
+      return result.rows[0];
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**
@@ -773,4 +882,4 @@ class WorkflowDatabaseService {
 }
 
 // Export singleton instance
-module.exports = new WorkflowDatabaseService();
+module.exports = WorkflowDatabaseService;

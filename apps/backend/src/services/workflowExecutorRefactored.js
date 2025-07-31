@@ -1,6 +1,7 @@
-// src/services/workflowExecutorRefactored.js - Refactored Workflow Executor using DI and Specialized Services
+// src/services/workflowExecutorRefactored.js - Database-First Workflow Executor
 
 const EventEmitter = require("events");
+const SystemConfigService = require('./systemConfigService');
 
 /**
  * WorkflowExecutor - Refactored to use dependency injection and specialized services
@@ -25,13 +26,14 @@ class WorkflowExecutor extends EventEmitter {
     this.recoveryService = recoveryService;
     this.workflowDb = workflowDatabaseService;
     this.taskScheduler = taskScheduler;
+    this.systemConfig = new SystemConfigService(workflowDatabaseService.db);
     
-    // Core state (minimal)
-    this.workflowDefinitions = new Map(); // workflowType -> definition
+    // 🚀 DATABASE-FIRST: Removed activeExecutions Map and workflowDefinitions Map
+    // All workflow state now comes from database queries
     this.isInitialized = false;
     this.eventListenersSetup = false;
 
-    console.log("🎯 Workflow Executor (Refactored) initialized with dependency injection");
+    console.log("🎯 Workflow Executor (Database-First) initialized with dependency injection");
   }
 
   /**
@@ -46,8 +48,8 @@ class WorkflowExecutor extends EventEmitter {
     console.log("🚀 Initializing Workflow Executor...");
 
     try {
-      // Load workflow definitions
-      await this.loadWorkflowDefinitions();
+      // 🚀 DATABASE-FIRST: No need to load definitions into memory
+      // Workflow definitions are loaded on-demand from database
 
       // Setup event listeners (only once)
       if (!this.eventListenersSetup) {
@@ -78,8 +80,8 @@ class WorkflowExecutor extends EventEmitter {
     console.log(`🚀 Starting workflow execution: ${workflowType} for account ${accountId}`);
 
     try {
-      // Get workflow definition
-      const workflowDef = this.workflowDefinitions.get(workflowType);
+      // 🚀 DATABASE-FIRST: Get workflow definition from database
+      const workflowDef = await this.workflowDb.getWorkflowDefinition(workflowType);
       if (!workflowDef) {
         throw new Error(`Workflow definition not found: ${workflowType}`);
       }
@@ -105,8 +107,7 @@ class WorkflowExecutor extends EventEmitter {
         totalSteps: execution.totalSteps
       });
 
-      // Store execution using safe method
-      await this.safeSetExecution(accountId, execution);
+      // 🚀 DATABASE-FIRST: Execution state is stored in database, not memory
 
       // Create workflow instance in database
       const workflowInstance = await this.workflowDb.createWorkflowInstance({
@@ -237,8 +238,8 @@ class WorkflowExecutor extends EventEmitter {
     const startTime = Date.now();
 
     try {
-      // Get dynamic timeout
-      const timeout = this.getDynamicTimeout(stepConfig, execution.workflowDef.config);
+      // Get dynamic timeout from database
+      const timeout = await this.getDynamicTimeout(stepConfig, execution.workflowDef.config);
       
       // Create timeout promise
       const timeoutPromise = new Promise((_, reject) => {
@@ -281,7 +282,9 @@ class WorkflowExecutor extends EventEmitter {
    */
   async handleStepFailure(execution, stepConfig, error) {
     const { accountId, workflowDef } = execution;
-    const maxRetries = workflowDef.config?.maxRetries || 3;
+    // 🚀 DATABASE-FIRST: Get retry config from database
+    const retryConfig = await this.systemConfig.getRetryConfig();
+    const maxRetries = workflowDef.config?.maxRetries || retryConfig.maxRetries;
 
     console.log(`🔄 Handling step failure for ${accountId} - Retry ${execution.retryCount}/${maxRetries}`);
 
@@ -334,8 +337,8 @@ class WorkflowExecutor extends EventEmitter {
       // Complete monitoring
       this.monitoringService.completeExecution(accountId, true);
 
-      // Clean up active execution
-      await this.safeDeleteExecution(accountId);
+      // 🚀 DATABASE-FIRST: No in-memory cleanup needed
+      // Database status is already updated
 
       this.emit('execution:completed', {
         accountId,
@@ -374,8 +377,8 @@ class WorkflowExecutor extends EventEmitter {
       // Complete monitoring
       this.monitoringService.completeExecution(accountId, false, error.message);
 
-      // Clean up active execution
-      await this.safeDeleteExecution(accountId);
+      // 🚀 DATABASE-FIRST: No in-memory cleanup needed
+      // Database status is already updated
 
       this.emit('execution:failed', {
         accountId,
@@ -392,29 +395,26 @@ class WorkflowExecutor extends EventEmitter {
   }
 
   /**
-   * Get dynamic timeout based on step action type
+   * Get dynamic timeout from database configuration
    * @param {Object} stepConfig - Step configuration
    * @param {Object} workflowConfig - Workflow configuration  
-   * @returns {number} Timeout in milliseconds
+   * @returns {Promise<number>} Timeout in milliseconds
    */
-  getDynamicTimeout(stepConfig, workflowConfig) {
+  async getDynamicTimeout(stepConfig, workflowConfig) {
     // Custom timeout for step takes priority
     if (stepConfig.timeout) {
       return stepConfig.timeout;
     }
 
-    // Dynamic timeouts based on action type
-    const actionTimeouts = {
-      'add_bio': 120000, // 2 minutes
-      'add_prompt': 90000, // 1.5 minutes
-      'swipe': 180000, // 3 minutes  
-      'swipe_with_spectre': 300000, // 5 minutes
-      'wait': Math.min((stepConfig.delay || 0) + 30000, 600000), // delay + 30s buffer, max 10min
-      'default': 120000 // 2 minutes
-    };
-
-    const actionTimeout = actionTimeouts[stepConfig.action] || actionTimeouts['default'];
+    // 🚀 DATABASE-FIRST: Get timeout from system configuration
+    const actionTimeout = await this.systemConfig.getWorkflowTimeout(stepConfig.action);
     const workflowTimeout = workflowConfig?.timeoutMs || 600000; // 10 minutes max
+    
+    // For wait actions, add buffer time
+    if (stepConfig.action === 'wait') {
+      const waitTimeout = Math.min((stepConfig.delay || 0) + 30000, 600000);
+      return Math.min(waitTimeout, workflowTimeout);
+    }
     
     return Math.min(actionTimeout, workflowTimeout);
   }
@@ -462,8 +462,8 @@ class WorkflowExecutor extends EventEmitter {
 
     console.log(`🔄 Resuming execution for ${accountId} from step ${currentStep}`);
 
-    // Recreate execution context
-    const workflowDef = this.workflowDefinitions.get(workflowType);
+    // 🚀 DATABASE-FIRST: Get workflow definition from database
+    const workflowDef = await this.workflowDb.getWorkflowDefinition(workflowType);
     if (!workflowDef) {
       throw new Error(`Workflow definition not found: ${workflowType}`);
     }
@@ -488,43 +488,23 @@ class WorkflowExecutor extends EventEmitter {
       totalSteps: execution.totalSteps
     });
 
-    // Store execution
-    await this.safeSetExecution(accountId, execution);
+    // 🚀 DATABASE-FIRST: Execution state managed by database
 
     // Continue from current step
     await this.processNextStep(execution);
   }
 
   /**
-   * Load workflow definitions
+   * Get available workflow types (DATABASE-FIRST)
+   * @returns {Promise<Array>} Available workflow types
    */
-  async loadWorkflowDefinitions() {
-    console.log("📋 Loading workflow definitions from database...");
-    
+  async getAvailableWorkflowTypes() {
     try {
-      // Get all active workflow definitions from database
       const definitions = await this.workflowDb.getAllWorkflowDefinitions();
-      
-      console.log(`📊 Found ${definitions.length} definitions in database`);
-      
-      // Clear existing definitions
-      this.workflowDefinitions.clear();
-      
-      // Load each definition into memory
-      for (const def of definitions) {
-        this.workflowDefinitions.set(def.type, def);
-        console.log(`✅ Loaded workflow: ${def.type} - ${def.name}`);
-      }
-      
-      console.log(`✅ Loaded ${this.workflowDefinitions.size} workflow definitions`);
-      
-      // Debug: show all loaded types
-      const loadedTypes = Array.from(this.workflowDefinitions.keys());
-      console.log(`📋 Available workflow types: ${loadedTypes.join(', ')}`);
-      
+      return definitions.map(def => def.type);
     } catch (error) {
-      console.error("❌ Error loading workflow definitions:", error);
-      throw error;
+      console.error("❌ Error getting workflow types:", error);
+      return [];
     }
   }
 

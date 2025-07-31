@@ -298,23 +298,23 @@ class WorkflowServiceContainer {
     // Register core specialized services
     this.registerSingleton('workflowExecutionService', () => {
       const WorkflowExecutionService = require('./workflowExecutionService');
-      return WorkflowExecutionService;
+      return new WorkflowExecutionService();
     });
 
-    this.registerSingleton('workflowSchedulingService', () => {
+    this.registerSingleton('workflowSchedulingService', (workflowDb) => {
       const WorkflowSchedulingService = require('./workflowSchedulingService');  
-      return WorkflowSchedulingService;
-    });
+      return new WorkflowSchedulingService(workflowDb);
+    }, ['workflowDatabaseService']);
 
     this.registerSingleton('workflowMonitoringService', () => {
       const WorkflowMonitoringService = require('./workflowMonitoringService');
-      return WorkflowMonitoringService;
+      return new WorkflowMonitoringService();
     });
 
-    this.registerSingleton('workflowRecoveryService', () => {
+    this.registerSingleton('workflowRecoveryService', (workflowDb) => {
       const WorkflowRecoveryService = require('./workflowRecoveryService');
-      return WorkflowRecoveryService;
-    });
+      return new WorkflowRecoveryService(workflowDb);
+    }, ['workflowDatabaseService']);
 
     // Register external dependencies
     this.registerSingleton('databaseService', () => {
@@ -328,27 +328,51 @@ class WorkflowServiceContainer {
     });
 
     this.registerSingleton('workflowDatabaseService', () => {
-      const workflowDb = require('./workflowDatabaseService');
-      return workflowDb;
+      const WorkflowDatabaseService = require('./workflowDatabaseService');
+      return new WorkflowDatabaseService();
     });
 
-    // Register the main refactored WorkflowExecutor with all dependencies
+    // Register System Config Service
+    this.registerSingleton('systemConfigService', (databaseService) => {
+      const SystemConfigService = require('./systemConfigService');
+      return new SystemConfigService(databaseService);
+    }, ['databaseService']);
+    
+    // Register Workflow Cleanup Service
+    this.registerSingleton('workflowCleanupService', (workflowDb) => {
+      const WorkflowCleanupService = require('./workflowCleanupService');
+      return new WorkflowCleanupService(workflowDb);
+    }, ['workflowDatabaseService']);
+    
+    // Register Workflow Lock Service
+    this.registerSingleton('workflowLockService', (databaseService) => {
+      const WorkflowLockService = require('./workflowLockService');
+      return new WorkflowLockService(databaseService);
+    }, ['databaseService']);
+
+    // Register the improved WorkflowExecutor with all dependencies
     this.registerSingleton('workflowExecutor', (
       executionService,
       schedulingService,
       monitoringService,
       recoveryService,
       workflowDb,
-      taskScheduler
+      taskScheduler,
+      systemConfig,
+      lockService,
+      cleanupService
     ) => {
-      const WorkflowExecutor = require('./workflowExecutorRefactored');
-      return new WorkflowExecutor(
+      const WorkflowExecutorImproved = require('./workflowExecutorImproved');
+      return new WorkflowExecutorImproved(
         executionService,
         schedulingService,
         monitoringService,
         recoveryService,
         workflowDb,
-        taskScheduler
+        taskScheduler,
+        systemConfig,
+        lockService,
+        cleanupService
       );
     }, [
       'workflowExecutionService',
@@ -356,7 +380,10 @@ class WorkflowServiceContainer {
       'workflowMonitoringService',
       'workflowRecoveryService',
       'workflowDatabaseService',
-      'taskScheduler'
+      'taskScheduler',
+      'systemConfigService',
+      'workflowLockService',
+      'workflowCleanupService'
     ]);
 
     console.log("✅ Default workflow services registered");

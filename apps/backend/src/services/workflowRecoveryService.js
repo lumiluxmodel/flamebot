@@ -1,15 +1,16 @@
 // src/services/workflowRecoveryService.js - Specialized Workflow Recovery Service
 
 const EventEmitter = require("events");
-const workflowDb = require("./workflowDatabaseService");
 
 /**
  * WorkflowRecoveryService - Handles single responsibility of workflow recovery and cleanup
  * Separated from WorkflowExecutor to follow Single Responsibility Principle
  */
 class WorkflowRecoveryService extends EventEmitter {
-  constructor() {
+  constructor(workflowDatabaseService) {
     super();
+    
+    this.workflowDb = workflowDatabaseService;
     
     this.recoveryStats = {
       totalRecoveryAttempts: 0,
@@ -116,7 +117,7 @@ class WorkflowRecoveryService extends EventEmitter {
     const cutoffTime = new Date(Date.now() - this.recoveryConfig.maxRecoveryAge);
     
     try {
-      const workflows = await workflowDb.getWorkflowsForRecovery();
+      const workflows = await this.workflowDb.getWorkflowsForRecovery();
       
       // Filter and validate workflows for recovery
       const validWorkflows = [];
@@ -281,7 +282,7 @@ class WorkflowRecoveryService extends EventEmitter {
       retry_count: (workflow.retry_count || 0) + 1
     };
 
-    await workflowDb.updateWorkflowInstance(workflow.account_id, updates);
+    await this.workflowDb.updateWorkflowInstance(workflow.account_id, updates);
     
     console.log(`🔄 Reset workflow state for ${workflow.account_id}`);
   }
@@ -298,7 +299,7 @@ class WorkflowRecoveryService extends EventEmitter {
       completed_at: new Date()
     };
 
-    await workflowDb.updateWorkflowInstance(workflow.account_id, updates);
+    await this.workflowDb.updateWorkflowInstance(workflow.account_id, updates);
     
     console.log(`❌ Marked workflow ${workflow.account_id} as unrecoverable: ${reason}`);
   }
@@ -315,7 +316,7 @@ class WorkflowRecoveryService extends EventEmitter {
       completed_at: new Date()
     };
 
-    await workflowDb.updateWorkflowInstance(workflow.account_id, updates);
+    await this.workflowDb.updateWorkflowInstance(workflow.account_id, updates);
     
     console.log(`❌ Marked workflow ${workflow.account_id} as permanently failed: ${error}`);
   }
@@ -402,7 +403,7 @@ class WorkflowRecoveryService extends EventEmitter {
     const cutoffDate = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000)); // 30 days
     
     try {
-      const result = await workflowDb.cleanupOldWorkflows(cutoffDate);
+      const result = await this.workflowDb.cleanupOldWorkflows(cutoffDate);
       console.log(`🧹 Cleaned up ${result} old workflow records`);
       return result;
     } catch (error) {
@@ -431,7 +432,7 @@ class WorkflowRecoveryService extends EventEmitter {
     const cutoffDate = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)); // 7 days
     
     try {
-      const result = await workflowDb.cleanupOldExecutionLogs(cutoffDate);
+      const result = await this.workflowDb.cleanupOldExecutionLogs(cutoffDate);
       console.log(`🧹 Cleaned up ${result} old execution log entries`);
       return result;
     } catch (error) {
@@ -472,4 +473,4 @@ class WorkflowRecoveryService extends EventEmitter {
   }
 }
 
-module.exports = new WorkflowRecoveryService();
+module.exports = WorkflowRecoveryService;

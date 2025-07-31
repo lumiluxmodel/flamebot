@@ -4,15 +4,16 @@ const EventEmitter = require("events");
 const taskScheduler = require("./taskScheduler");
 
 /**
- * WorkflowSchedulingService - Handles single responsibility of workflow and step scheduling
- * Separated from WorkflowExecutor to follow Single Responsibility Principle
+ * WorkflowSchedulingService - Database-First Workflow and Step Scheduling
+ * Follows CODING_STANDARDS.md: Database is the Single Source of Truth
  */
 class WorkflowSchedulingService extends EventEmitter {
-  constructor() {
+  constructor(workflowDatabaseService) {
     super();
-    this.scheduledWorkflows = new Map(); // workflowId -> scheduling info
-    this.scheduledSteps = new Map(); // stepId -> scheduling info
-    console.log("📅 Workflow Scheduling Service initialized");
+    this.workflowDb = workflowDatabaseService;
+    // 🚀 DATABASE-FIRST: Removed in-memory Maps
+    // All scheduling info is stored in database via scheduled_tasks table
+    console.log("📅 Workflow Scheduling Service initialized (Database-First)");
   }
 
   /**
@@ -46,15 +47,19 @@ class WorkflowSchedulingService extends EventEmitter {
         maxAttempts: nextStep.critical ? 3 : 1,
       });
 
-      // Store scheduling info
-      this.scheduledSteps.set(nextStep.id, {
+      // 🚀 DATABASE-FIRST: Store scheduling info in database
+      await this.workflowDb.createScheduledTask({
         taskId,
+        workflowInstanceId: execution.workflowInstanceId,
         stepId: nextStep.id,
-        accountId: execution.accountId,
-        executeAt,
-        delay,
-        scheduledAt: new Date(),
-        status: 'scheduled'
+        action: "execute_workflow_step",
+        scheduledFor: executeAt,
+        payload: {
+          accountId: execution.accountId,
+          stepId: nextStep.id,
+          delay,
+          scheduledAt: new Date().toISOString()
+        }
       });
 
       this.emit('step:scheduled', {
@@ -112,17 +117,20 @@ class WorkflowSchedulingService extends EventEmitter {
         maxAttempts: 1, // Only one attempt for retry tasks
       });
 
-      // Store retry scheduling info
-      this.scheduledWorkflows.set(`${execution.accountId}_retry_${retryCount}`, {
+      // 🚀 DATABASE-FIRST: Store retry scheduling info in database
+      await this.workflowDb.createScheduledTask({
         taskId: retryTaskId,
-        accountId: execution.accountId,
-        workflowType: execution.workflowType,
-        retryCount,
-        executeAt: retryAt,
-        delay: retryDelay,
-        scheduledAt: new Date(),
-        status: 'retry_scheduled',
-        originalError: error.message
+        workflowInstanceId: execution.workflowInstanceId,
+        stepId: `retry_${execution.currentStep}_${retryCount}`,
+        action: "retry_workflow_step",
+        scheduledFor: retryAt,
+        payload: {
+          accountId: execution.accountId,
+          retryCount,
+          delay: retryDelay,
+          originalError: error.message,
+          scheduledAt: new Date().toISOString()
+        }
       });
 
       this.emit('workflow:retry_scheduled', {
@@ -185,16 +193,20 @@ class WorkflowSchedulingService extends EventEmitter {
 
           scheduledTasks.push({ stepId: step.id, taskId, executeAt });
           
-          // Store parallel step scheduling info
-          this.scheduledSteps.set(`${step.id}_parallel`, {
+          // 🚀 DATABASE-FIRST: Store parallel step scheduling info in database
+          await this.workflowDb.createScheduledTask({
             taskId,
+            workflowInstanceId: execution.workflowInstanceId,
             stepId: step.id,
-            accountId: execution.accountId,
-            executeAt,
-            delay: step.delay,
-            scheduledAt: new Date(),
-            status: 'parallel_scheduled',
-            isParallel: true
+            action: "execute_parallel_step",
+            scheduledFor: executeAt,
+            payload: {
+              accountId: execution.accountId,
+              stepId: step.id,
+              delay: step.delay,
+              isParallel: true,
+              scheduledAt: new Date().toISOString()
+            }
           });
 
         } else {
@@ -235,35 +247,42 @@ class WorkflowSchedulingService extends EventEmitter {
    * @param {string} stepId - Step ID to cancel
    * @returns {Promise<boolean>} Success status
    */
-  async cancelScheduledStep(stepId) {
-    const scheduledInfo = this.scheduledSteps.get(stepId) || this.scheduledSteps.get(`${stepId}_parallel`);
-    
-    if (!scheduledInfo) {
-      console.warn(`⚠️ No scheduled step found for ${stepId}`);
-      return false;
-    }
-
+  /**
+   * Cancel scheduled step (DATABASE-FIRST)
+   * @param {string} taskId - Task ID to cancel
+   * @returns {Promise<boolean>} Success status
+   */
+  async cancelScheduledTask(taskId) {
     try {
-      if (scheduledInfo.taskId !== 'immediate') {
-        await taskScheduler.cancelTask(scheduledInfo.taskId);
+      // 🚀 DATABASE-FIRST: Get scheduled task from database
+      const scheduledTask = await this.workflowDb.getScheduledTask(taskId);
+      
+      if (!scheduledTask) {
+        console.warn(`⚠️ No scheduled task found for ${taskId}`);
+        return false;
       }
 
-      scheduledInfo.status = 'cancelled';
+      // Cancel in task scheduler
+      if (taskId !== 'immediate') {
+        await taskScheduler.cancelTask(taskId);
+      }
+
+      // Update database
+      await this.workflowDb.cancelScheduledTask(taskId);
       
       this.emit('step:cancelled', {
-        stepId,
-        taskId: scheduledInfo.taskId,
-        accountId: scheduledInfo.accountId
+        taskId,
+        stepId: scheduledTask.step_id,
+        accountId: scheduledTask.account_id
       });
 
-      console.log(`✅ Cancelled scheduled step ${stepId} (task: ${scheduledInfo.taskId})`);
+      console.log(`✅ Cancelled scheduled task ${taskId}`);
       return true;
 
     } catch (error) {
-      console.error(`❌ Failed to cancel scheduled step ${stepId}:`, error);
+      console.error(`❌ Failed to cancel scheduled task ${taskId}:`, error);
       this.emit('step:cancel_failed', {
-        stepId,
-        taskId: scheduledInfo.taskId,
+        taskId,
         error: error.message
       });
       return false;
@@ -274,69 +293,71 @@ class WorkflowSchedulingService extends EventEmitter {
    * Get scheduling statistics
    * @returns {Object} Scheduling statistics
    */
-  getSchedulingStats() {
-    const scheduledStepsCount = this.scheduledSteps.size;
-    const scheduledWorkflowsCount = this.scheduledWorkflows.size;
-    
-    let activeScheduled = 0;
-    let cancelledScheduled = 0;
-    let retryScheduled = 0;
-
-    for (const [, info] of this.scheduledSteps) {
-      if (info.status === 'scheduled' || info.status === 'parallel_scheduled') {
-        activeScheduled++;
-      } else if (info.status === 'cancelled') {
-        cancelledScheduled++;
-      }
+  /**
+   * Get scheduling statistics from database (DATABASE-FIRST)
+   * @returns {Promise<Object>} Scheduling statistics
+   */
+  async getSchedulingStats() {
+    try {
+      // 🚀 DATABASE-FIRST: Get stats from database
+      const query = `
+        SELECT 
+          COUNT(*) as total_scheduled,
+          COUNT(*) FILTER (WHERE status = 'scheduled') as active_scheduled,
+          COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled_scheduled,
+          COUNT(*) FILTER (WHERE status = 'completed') as completed_scheduled,
+          COUNT(*) FILTER (WHERE status = 'failed') as failed_scheduled,
+          COUNT(*) FILTER (WHERE action = 'retry_workflow_step') as retry_scheduled
+        FROM scheduled_tasks
+        WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '24 hours'
+      `;
+      
+      const result = await this.workflowDb.db.query(query);
+      const stats = result.rows[0];
+      
+      return {
+        service: 'WorkflowSchedulingService',
+        totalScheduled: parseInt(stats.total_scheduled) || 0,
+        activeScheduled: parseInt(stats.active_scheduled) || 0,
+        cancelledScheduled: parseInt(stats.cancelled_scheduled) || 0,
+        completedScheduled: parseInt(stats.completed_scheduled) || 0,
+        failedScheduled: parseInt(stats.failed_scheduled) || 0,
+        retryScheduled: parseInt(stats.retry_scheduled) || 0,
+        listenerCount: this.listenerCount('step:scheduled') + this.listenerCount('workflow:retry_scheduled')
+      };
+    } catch (error) {
+      console.error('❌ Error getting scheduling stats:', error);
+      return {
+        service: 'WorkflowSchedulingService',
+        error: error.message
+      };
     }
-
-    for (const [, info] of this.scheduledWorkflows) {
-      if (info.status === 'retry_scheduled') {
-        retryScheduled++;
-      }
-    }
-
-    return {
-      service: 'WorkflowSchedulingService',
-      scheduledSteps: scheduledStepsCount,
-      scheduledWorkflows: scheduledWorkflowsCount,
-      activeScheduled,
-      cancelledScheduled,
-      retryScheduled,
-      listenerCount: this.listenerCount('step:scheduled') + this.listenerCount('workflow:retry_scheduled')
-    };
   }
 
   /**
    * Cleanup completed or expired scheduling info
    * @param {number} maxAgeMs - Maximum age in milliseconds
    */
-  cleanupSchedulingInfo(maxAgeMs = 24 * 60 * 60 * 1000) { // 24 hours default
-    const now = Date.now();
-    let cleanedCount = 0;
-
-    // Cleanup steps
-    for (const [key, info] of this.scheduledSteps) {
-      if (now - info.scheduledAt.getTime() > maxAgeMs) {
-        this.scheduledSteps.delete(key);
-        cleanedCount++;
+  /**
+   * Cleanup old scheduled tasks from database (DATABASE-FIRST)
+   * @param {number} olderThanDays - Remove tasks older than X days
+   * @returns {Promise<number>} Number of tasks cleaned up
+   */
+  async cleanupSchedulingInfo(olderThanDays = 1) {
+    try {
+      // 🚀 DATABASE-FIRST: Cleanup using database method
+      const cleanedCount = await this.workflowDb.cleanupOldTasks(olderThanDays);
+      
+      if (cleanedCount > 0) {
+        console.log(`🧹 Cleaned up ${cleanedCount} old scheduled tasks from database`);
       }
+      
+      return cleanedCount;
+    } catch (error) {
+      console.error('❌ Error cleaning up scheduled tasks:', error);
+      return 0;
     }
-
-    // Cleanup workflows
-    for (const [key, info] of this.scheduledWorkflows) {
-      if (now - info.scheduledAt.getTime() > maxAgeMs) {
-        this.scheduledWorkflows.delete(key);
-        cleanedCount++;
-      }
-    }
-
-    if (cleanedCount > 0) {
-      console.log(`🧹 Cleaned up ${cleanedCount} old scheduling records`);
-    }
-
-    return cleanedCount;
   }
 }
 
-module.exports = new WorkflowSchedulingService();
+module.exports = WorkflowSchedulingService;
