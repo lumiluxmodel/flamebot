@@ -1,5 +1,5 @@
 // src/controllers/workflowController.js - Workflow Management Controller
-const workflowExecutor = require('../services/workflowExecutor');
+const workflowExecutor = require('../services/workflowExecutorV2');
 const cronMonitor = require('../services/cronMonitor');
 const workflowDb = require('../services/workflowDatabaseService');
 

@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 
 // Import services
-const workflowExecutor = require("../services/workflowExecutor");
+const workflowExecutor = require("../services/workflowExecutorV2");
 const cronManager = require("../services/cronManager");
 const taskScheduler = require("../services/taskScheduler");
 const cronMonitor = require("../services/cronMonitor");
@@ -528,6 +528,7 @@ router.post(
         "activate_continuous_swipe",
         "spectre_config",
         "swipe",
+        "goto",
       ];
 
       for (let i = 0; i < steps.length; i++) {
@@ -580,6 +581,15 @@ router.post(
               }): continuous swipe requires minSwipes, maxSwipes, minIntervalMs, maxIntervalMs`,
             });
           }
+        }
+
+        if (step.action === "goto" && !step.nextStep) {
+          return res.status(400).json({
+            success: false,
+            error: `Step ${i + 1} (${
+              step.id
+            }): goto requires nextStep`,
+          });
         }
       }
 
@@ -681,6 +691,7 @@ router.put(
           "activate_continuous_swipe",
           "spectre_config",
           "swipe",
+          "goto",
         ];
 
         for (let i = 0; i < steps.length; i++) {
@@ -697,6 +708,14 @@ router.put(
             return res.status(400).json({
               success: false,
               error: `Step ${i + 1} has invalid action: ${step.action}`,
+            });
+          }
+
+          // Validate goto requires nextStep
+          if (step.action === "goto" && !step.nextStep) {
+            return res.status(400).json({
+              success: false,
+              error: `Step ${i + 1} (${step.id}): goto requires nextStep`,
             });
           }
         }

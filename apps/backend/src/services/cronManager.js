@@ -224,8 +224,16 @@ class CronManager extends EventEmitter {
         console.log(`⏰ Scheduling task: ${taskId} for ${executeAt.toLocaleString()} (in ${this.formatDelay(delay)})`);
 
         const timeoutId = setTimeout(async () => {
-            await this.executeTask(taskId, taskFunction, metadata);
-            this.scheduledTasks.delete(taskId);
+            try {
+                await this.executeTask(taskId, taskFunction, metadata);
+            } catch (error) {
+                console.error(`❌ Scheduled task ${taskId} failed:`, error);
+                // Emit error event for monitoring
+                this.emit('task:failed', { taskId, error: error.message, metadata });
+            } finally {
+                // Always cleanup scheduled task
+                this.scheduledTasks.delete(taskId);
+            }
         }, delay);
 
         this.scheduledTasks.set(taskId, {

@@ -1,5 +1,5 @@
 // src/services/workflowManager.js - Updated to use WorkflowExecutor instead of WorkflowEngine
-const workflowExecutor = require("./workflowExecutor");
+const workflowExecutor = require("./workflowExecutorV2");
 const cronManager = require("./cronManager");
 const cronMonitor = require("./cronMonitor");
 const taskScheduler = require("./taskScheduler");

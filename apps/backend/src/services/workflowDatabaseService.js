@@ -33,13 +33,19 @@ class WorkflowDatabaseService {
    */
   async getAllWorkflowDefinitions() {
     const query = `
-            SELECT id, name, type, description, steps, config, version, created_at, updated_at
+            SELECT id, name, type, description, steps, config, is_active, version, created_at, updated_at
             FROM workflow_definitions 
             WHERE is_active = true
             ORDER BY name
         `;
     const result = await this.db.query(query);
-    return result.rows;
+    
+    // Parse JSONB fields for each workflow
+    return result.rows.map(row => ({
+      ...row,
+      steps: typeof row.steps === 'string' ? JSON.parse(row.steps) : row.steps,
+      config: row.config ? (typeof row.config === 'string' ? JSON.parse(row.config) : row.config) : {}
+    }));
   }
 
   /**
@@ -201,12 +207,13 @@ class WorkflowDatabaseService {
   }
 
   /**
-   * Update workflow instance
+   * Update workflow instance with deadlock protection
    * @param {string} accountId - Account ID
    * @param {Object} updates - Fields to update
+   * @param {number} retryAttempts - Number of retry attempts for deadlocks
    * @returns {Promise<Object>} Updated workflow instance
    */
-  async updateWorkflowInstance(accountId, updates) {
+  async updateWorkflowInstance(accountId, updates, retryAttempts = 3) {
     const setClause = [];
     const values = [];
     let paramIndex = 1;
@@ -235,8 +242,51 @@ class WorkflowDatabaseService {
         `;
     values.push(accountId);
 
-    const result = await this.db.query(query, values);
-    return result.rows[0];
+    // Retry logic for deadlock handling
+    for (let attempt = 1; attempt <= retryAttempts; attempt++) {
+      try {
+        // Use transaction with lock timeout
+        const client = await this.db.getClient();
+        
+        try {
+          await client.query('BEGIN');
+          
+          // Set lock timeout to prevent long waits
+          await client.query('SET lock_timeout = 5000'); // 5 seconds
+          
+          const result = await client.query(query, values);
+          
+          await client.query('COMMIT');
+          
+          return result.rows[0];
+          
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally {
+          client.release();
+        }
+        
+      } catch (error) {
+        const isDeadlock = error.code === '40P01' || // deadlock_detected
+                          error.code === '40001' || // serialization_failure  
+                          error.message.includes('lock_timeout') ||
+                          error.message.includes('deadlock');
+        
+        if (isDeadlock && attempt < retryAttempts) {
+          // Wait with exponential backoff before retry
+          const delay = Math.min(100 * Math.pow(2, attempt - 1), 1000); // 100ms, 200ms, 400ms, max 1s
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          console.warn(`⚠️  Deadlock detected on workflow update, retrying (${attempt}/${retryAttempts}):`, error.message);
+          continue;
+        }
+        
+        // If not a deadlock or max retries reached, throw error
+        console.error(`❌ Workflow instance update failed after ${attempt} attempts:`, error);
+        throw error;
+      }
+    }
   }
 
   /**

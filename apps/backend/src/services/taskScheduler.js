@@ -134,7 +134,7 @@ async executeWorkflowStep(task) {
     console.log(`🎯 Executing workflow step via TaskScheduler`);
     
     // Get WorkflowExecutor instance
-    const workflowExecutor = require('./workflowExecutor');
+    const workflowExecutor = require('./workflowExecutorV2');
     
     // Call the workflow executor's method
     return await workflowExecutor.executeWorkflowStep(payload);
@@ -150,7 +150,7 @@ async executeWorkflowStep(task) {
         console.log(`🔄 Executing continuous swipe via TaskScheduler`);
         
         // Get WorkflowExecutor instance
-        const workflowExecutor = require('./workflowExecutor');
+        const workflowExecutor = require('./workflowExecutorV2');
         
         // Call the workflow executor's method
         return await workflowExecutor.executeContinuousSwipe(payload);
