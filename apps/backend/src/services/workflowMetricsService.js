@@ -14,32 +14,30 @@ class WorkflowMetricsService {
 
   /**
    * Record workflow execution start in database
-   * @param {string} executionId - Execution ID
+   * @param {string} executionId - Execution ID (account_id)
    * @param {Object} executionInfo - Execution information
    */
   async recordExecutionStart(executionId, executionInfo) {
     try {
-      await this.db.query(`
-        INSERT INTO workflow_execution_log (
-          execution_id, account_id, workflow_type, status, 
-          started_at, current_step, total_steps, metadata
-        ) VALUES ($1, $2, $3, 'started', $4, 0, $5, $6)
-        ON CONFLICT (execution_id) DO UPDATE SET
-          status = 'started',
-          started_at = $4,
-          updated_at = CURRENT_TIMESTAMP
+      // Use workflow_instances table for execution tracking
+      const result = await this.db.query(`
+        UPDATE workflow_instances SET
+          status = 'active',
+          started_at = COALESCE(started_at, $1),
+          last_activity_at = $1
+        WHERE account_id = $2
+        RETURNING id
       `, [
-        executionId,
-        executionInfo.accountId,
-        executionInfo.workflowType,
         new Date(),
-        executionInfo.totalSteps,
-        JSON.stringify({
-          startTime: Date.now()
-        })
+        executionId
       ]);
 
-      console.log(`📊 Recorded execution start: ${executionId}`);
+      if (result.rows.length === 0) {
+        console.log(`⚠️ No workflow instance found for account: ${executionId}`);
+        return;
+      }
+
+      console.log(`📊 Recorded execution start: ${executionId} (stored in database)`);
     } catch (error) {
       console.error(`❌ Error recording execution start:`, error);
     }
@@ -47,26 +45,32 @@ class WorkflowMetricsService {
 
   /**
    * Update workflow execution progress in database
-   * @param {string} executionId - Execution ID
+   * @param {string} executionId - Execution ID (account_id)
    * @param {Object} progressInfo - Progress information
    */
   async updateExecutionProgress(executionId, progressInfo) {
     try {
+      // Map invalid statuses to valid ones
+      let validStatus = progressInfo.status || 'active';
+      if (['processing_step', 'running', 'started'].includes(validStatus)) {
+        validStatus = 'active';
+      }
+
       await this.db.query(`
-        UPDATE workflow_execution_log SET
+        UPDATE workflow_instances SET
           current_step = $2,
           status = $3,
           progress_percentage = $4,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE execution_id = $1
+          last_activity_at = CURRENT_TIMESTAMP
+        WHERE account_id = $1
       `, [
         executionId,
-        progressInfo.currentStep,
-        progressInfo.status || 'running',
+        progressInfo.currentStep || 0,
+        validStatus,
         progressInfo.progress || 0
       ]);
 
-      console.log(`📊 Updated execution progress: ${executionId} (${progressInfo.currentStep}/${progressInfo.totalSteps})`);
+      console.log(`📊 Updated execution progress: ${executionId} (stored in database)`);
     } catch (error) {
       console.error(`❌ Error updating execution progress:`, error);
     }
@@ -74,7 +78,7 @@ class WorkflowMetricsService {
 
   /**
    * Record workflow execution completion in database
-   * @param {string} executionId - Execution ID
+   * @param {string} executionId - Execution ID (account_id)
    * @param {boolean} success - Whether execution succeeded
    * @param {string} error - Error message if failed
    * @param {number} duration - Execution duration in ms
@@ -85,19 +89,19 @@ class WorkflowMetricsService {
       const completedAt = new Date();
 
       await this.db.query(`
-        UPDATE workflow_execution_log SET
+        UPDATE workflow_instances SET
           status = $2,
           completed_at = $3,
-          error_message = $4,
-          duration_ms = $5,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE execution_id = $1
+          last_error = $4,
+          last_activity_at = CURRENT_TIMESTAMP,
+          progress_percentage = $5
+        WHERE account_id = $1
       `, [
         executionId,
         status,
         completedAt,
         error,
-        duration
+        success ? 100 : null
       ]);
 
       // Update daily workflow stats
@@ -130,11 +134,11 @@ class WorkflowMetricsService {
           COUNT(*) as total_executions,
           COUNT(*) FILTER (WHERE status = 'completed') as successful_executions,
           COUNT(*) FILTER (WHERE status = 'failed') as failed_executions,
-          COUNT(*) FILTER (WHERE status IN ('started', 'running')) as active_executions,
-          AVG(duration_ms) FILTER (WHERE duration_ms IS NOT NULL) as average_execution_time,
-          MAX(duration_ms) as longest_execution,
-          MIN(duration_ms) FILTER (WHERE duration_ms > 0) as shortest_execution
-        FROM workflow_execution_log 
+          COUNT(*) FILTER (WHERE status IN ('active', 'running', 'paused')) as active_executions,
+          AVG(EXTRACT(EPOCH FROM (COALESCE(completed_at, NOW()) - started_at)) * 1000) as average_execution_time,
+          MAX(EXTRACT(EPOCH FROM (COALESCE(completed_at, NOW()) - started_at)) * 1000) as longest_execution,
+          MIN(EXTRACT(EPOCH FROM (completed_at - started_at)) * 1000) FILTER (WHERE completed_at IS NOT NULL) as shortest_execution
+        FROM workflow_instances 
         WHERE started_at >= ${timeCondition}
       `);
 
@@ -178,23 +182,23 @@ class WorkflowMetricsService {
     try {
       const result = await this.db.query(`
         SELECT 
-          execution_id,
-          account_id,
-          workflow_type,
-          status,
-          current_step,
-          total_steps,
-          progress_percentage,
-          started_at,
-          updated_at,
-          EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000 as duration_ms
-        FROM workflow_execution_log 
-        WHERE status IN ('started', 'running', 'active')
-        ORDER BY started_at DESC
+          wi.account_id,
+          wd.type as workflow_type,
+          wi.status,
+          wi.current_step,
+          wi.total_steps,
+          wi.progress_percentage,
+          wi.started_at,
+          wi.last_activity_at,
+          EXTRACT(EPOCH FROM (NOW() - wi.started_at)) * 1000 as duration_ms
+        FROM workflow_instances wi
+        JOIN workflow_definitions wd ON wi.workflow_id = wd.id
+        WHERE wi.status IN ('active', 'running', 'paused')
+        ORDER BY wi.started_at DESC
       `);
 
       return result.rows.map(row => ({
-        executionId: row.execution_id,
+        executionId: row.account_id,
         accountId: row.account_id,
         workflowType: row.workflow_type,
         status: row.status,
@@ -202,7 +206,7 @@ class WorkflowMetricsService {
         totalSteps: row.total_steps,
         progress: row.progress_percentage,
         startTime: new Date(row.started_at).getTime(),
-        lastActivity: new Date(row.updated_at).getTime(),
+        lastActivity: new Date(row.last_activity_at).getTime(),
         duration: parseFloat(row.duration_ms) || 0
       }));
 
@@ -219,6 +223,20 @@ class WorkflowMetricsService {
     try {
       const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
+      // Check if workflow_stats table exists
+      const tableExists = await this.db.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'workflow_stats'
+        );
+      `);
+
+      if (!tableExists.rows[0].exists) {
+        console.log(`📊 Skipping daily stats update - workflow_stats table doesn't exist`);
+        return;
+      }
+
       await this.db.query(`
         INSERT INTO workflow_stats (
           date, total_workflows, active_workflows, completed_workflows, 
@@ -227,12 +245,12 @@ class WorkflowMetricsService {
         SELECT 
           $1::date,
           COUNT(*),
-          COUNT(*) FILTER (WHERE status IN ('started', 'running')),
+          COUNT(*) FILTER (WHERE status IN ('active', 'running')),
           COUNT(*) FILTER (WHERE status = 'completed'),
           COUNT(*) FILTER (WHERE status = 'failed'),
           COUNT(*) FILTER (WHERE status = 'stopped'),
-          AVG(duration_ms) FILTER (WHERE duration_ms IS NOT NULL) / 3600000.0
-        FROM workflow_execution_log
+          AVG(EXTRACT(EPOCH FROM (completed_at - started_at)) / 3600.0) FILTER (WHERE completed_at IS NOT NULL)
+        FROM workflow_instances
         WHERE DATE(started_at) = $1::date
         ON CONFLICT (date) DO UPDATE SET
           total_workflows = EXCLUDED.total_workflows,
@@ -263,9 +281,9 @@ class WorkflowMetricsService {
           COUNT(*) as total_workflows,
           COUNT(*) FILTER (WHERE status = 'completed') as completed,
           COUNT(*) FILTER (WHERE status = 'failed') as failed,
-          AVG(duration_ms) FILTER (WHERE duration_ms IS NOT NULL) as avg_duration,
+          AVG(EXTRACT(EPOCH FROM (COALESCE(completed_at, NOW()) - started_at)) * 1000) as avg_duration,
           MAX(started_at) as last_workflow
-        FROM workflow_execution_log
+        FROM workflow_instances
       `;
 
       const params = [];
@@ -295,21 +313,21 @@ class WorkflowMetricsService {
   }
 
   /**
-   * Clean old execution logs (maintenance)
+   * Clean old workflow instances (maintenance)
    * @param {number} daysToKeep - Days to keep in database
    */
   async cleanOldLogs(daysToKeep = 30) {
     try {
       const result = await this.db.query(`
-        DELETE FROM workflow_execution_log 
+        DELETE FROM workflow_instances 
         WHERE started_at < NOW() - INTERVAL '${daysToKeep} days'
         AND status IN ('completed', 'failed', 'stopped')
       `);
 
-      console.log(`🧹 Cleaned ${result.rowCount} old execution logs (older than ${daysToKeep} days)`);
+      console.log(`🧹 Cleaned ${result.rowCount} old workflow instances (older than ${daysToKeep} days)`);
       return result.rowCount;
     } catch (error) {
-      console.error(`❌ Error cleaning old logs:`, error);
+      console.error(`❌ Error cleaning old workflow instances:`, error);
       return 0;
     }
   }

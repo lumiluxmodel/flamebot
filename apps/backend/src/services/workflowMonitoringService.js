@@ -93,6 +93,29 @@ class WorkflowMonitoringService extends EventEmitter {
   }
 
   /**
+   * Record retry attempt (DATABASE-FIRST)
+   * @param {string} executionId - Execution ID
+   * @param {number} retryCount - Current retry count
+   * @param {string} error - Error message that caused retry
+   */
+  async recordRetry(executionId, retryCount, error) {
+    // Update the execution progress to reflect retry
+    await this.updateExecutionProgress(executionId, {
+      status: 'active', // Keep as active during retries
+      retryCount,
+      lastError: error
+    });
+
+    this.emit('execution:retry', {
+      executionId,
+      retryCount,
+      error
+    });
+
+    console.log(`📊 Recorded retry attempt: ${executionId} (retry ${retryCount}) - stored in database`);
+  }
+
+  /**
    * Get execution metrics from database (replaces in-memory metrics)
    * @param {string} timeframe - Timeframe ('1h', '24h', '7d', '30d')
    * @returns {Promise<Object>} Execution metrics

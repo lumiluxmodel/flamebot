@@ -31,9 +31,11 @@ class WorkflowSchedulingService extends EventEmitter {
     try {
       // Create task for step execution
       const taskId = await taskScheduler.scheduleTask({
-        executeAt,
+        workflowInstanceId: execution.workflowInstanceId, // Use actual workflow instance ID from database
+        stepId: nextStep.id,
+        scheduledFor: executeAt,
         action: "execute_workflow_step",
-        metadata: {
+        payload: {
           action: "execute_workflow_step",
           accountId: execution.accountId,
           workflowType: execution.workflowType,
@@ -93,15 +95,17 @@ class WorkflowSchedulingService extends EventEmitter {
 
     try {
       const retryTaskId = await taskScheduler.scheduleTask({
-        executeAt: retryAt,
+        workflowInstanceId: execution.workflowInstanceId,
+        stepId: `retry_${execution.currentStep}_${retryCount}`,
+        scheduledFor: retryAt,
         action: "retry_workflow_step",
-        metadata: {
+        payload: {
           action: "retry_workflow_step",
           accountId: execution.accountId,
           workflowType: execution.workflowType,
-          stepId: execution.currentStepConfig.id,
+          stepId: execution.workflowDef.steps[execution.currentStep]?.id,
           stepIndex: execution.currentStep,
-          stepConfig: execution.currentStepConfig,
+          stepConfig: execution.workflowDef.steps[execution.currentStep],
           retryCount,
           originalError: error.message,
         },

@@ -109,7 +109,7 @@ class WorkflowExecutor extends EventEmitter {
       await this.safeSetExecution(accountId, execution);
 
       // Create workflow instance in database
-      await this.workflowDb.createWorkflowInstance({
+      const workflowInstance = await this.workflowDb.createWorkflowInstance({
         accountId,
         workflowType,
         accountData,
@@ -117,6 +117,9 @@ class WorkflowExecutor extends EventEmitter {
         executionContext: execution.executionContext,
         status: 'running'
       });
+
+      // Add workflow instance ID to execution context
+      execution.workflowInstanceId = workflowInstance.id;
 
       // Start first step
       await this.processNextStep(execution);
@@ -665,6 +668,162 @@ class WorkflowExecutor extends EventEmitter {
     }
   }
 
+  /**
+   * Pause workflow execution (DATABASE-FIRST)
+   * @param {string} accountId - Account ID
+   * @returns {Promise<Object>} Pause result
+   */
+  async pauseExecution(accountId) {
+    console.log(`⏸️ Pausing workflow execution for ${accountId}`);
+    
+    try {
+      // 🚀 DATABASE-FIRST: Update workflow status in database
+      const updateResult = await this.workflowDb.updateWorkflowInstance(accountId, {
+        status: 'paused',
+        paused_at: new Date()
+      });
+
+      if (!updateResult) {
+        return { success: false, error: "Workflow instance not found in database" };
+      }
+
+      // Cancel any scheduled tasks for this execution
+      const execution = await this.safeGetExecution(accountId);
+      if (execution && execution.scheduledTasks) {
+        for (const [taskId] of execution.scheduledTasks) {
+          this.schedulingService.cancelScheduledTask(taskId);
+          console.log(`📅 Cancelled scheduled task: ${taskId}`);
+        }
+      }
+
+      // Update monitoring
+      await this.monitoringService.updateExecutionProgress(accountId, {
+        status: 'paused',
+        pausedAt: new Date()
+      });
+
+      console.log(`✅ Workflow paused successfully: ${accountId}`);
+      
+      this.emit('execution:paused', {
+        accountId,
+        pausedAt: new Date()
+      });
+
+      return { 
+        success: true, 
+        message: "Workflow paused successfully",
+        pausedAt: new Date()
+      };
+
+    } catch (error) {
+      console.error(`❌ Failed to pause execution for ${accountId}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Resume workflow execution (DATABASE-FIRST)
+   * @param {string} accountId - Account ID
+   * @returns {Promise<Object>} Resume result
+   */
+  async resumeExecution(accountId) {
+    console.log(`▶️ Resuming workflow execution for ${accountId}`);
+    
+    try {
+      // 🚀 DATABASE-FIRST: Get workflow instance from database
+      const workflowInstance = await this.workflowDb.getWorkflowInstanceByAccountId(accountId);
+      
+      if (!workflowInstance) {
+        return { success: false, error: "Workflow instance not found in database" };
+      }
+
+      if (workflowInstance.status !== 'paused') {
+        return { 
+          success: false, 
+          error: `Cannot resume workflow with status: ${workflowInstance.status}` 
+        };
+      }
+
+      // Update status to active in database
+      await this.workflowDb.updateWorkflowInstance(accountId, {
+        status: 'active',
+        resumed_at: new Date()
+      });
+
+      // 🚀 DATABASE-FIRST: Load account data from database
+      const accountDatabaseService = require('./accountDatabaseService');
+      const accountData = await accountDatabaseService.loadAccountData(accountId);
+      
+      if (!accountData) {
+        throw new Error(`Account not found in database: ${accountId}`);
+      }
+
+      // Get workflow definition
+      const workflowDef = this.workflowDefinitions.get(workflowInstance.workflow_type);
+      if (!workflowDef) {
+        throw new Error(`Workflow definition not found: ${workflowInstance.workflow_type}`);
+      }
+
+      // Recreate execution context
+      const execution = {
+        accountId,
+        workflowType: workflowInstance.workflow_type,
+        accountData,
+        workflowDef,
+        currentStep: workflowInstance.current_step,
+        totalSteps: workflowInstance.total_steps,
+        startTime: new Date(workflowInstance.started_at).getTime(),
+        retryCount: workflowInstance.retry_count,
+        executionContext: workflowInstance.execution_context || {},
+        scheduledTasks: new Map()
+      };
+
+      // Add back to active executions
+      await this.safeSetExecution(accountId, execution);
+
+      // Update monitoring
+      await this.monitoringService.updateExecutionProgress(accountId, {
+        status: 'active',
+        currentStep: execution.currentStep,
+        totalSteps: execution.totalSteps,
+        resumedAt: new Date()
+      });
+
+      // Resume from current step
+      console.log(`🔄 Resuming from step ${execution.currentStep}/${execution.totalSteps}`);
+      
+      // Process next step
+      setImmediate(async () => {
+        try {
+          await this.processNextStep(execution);
+        } catch (error) {
+          console.error(`❌ Error processing step after resume:`, error);
+          await this.failExecution(execution, error);
+        }
+      });
+
+      console.log(`✅ Workflow resumed successfully: ${accountId}`);
+      
+      this.emit('execution:resumed', {
+        accountId,
+        currentStep: execution.currentStep,
+        totalSteps: execution.totalSteps,
+        resumedAt: new Date()
+      });
+
+      return { 
+        success: true, 
+        message: "Workflow resumed successfully",
+        currentStep: execution.currentStep,
+        totalSteps: execution.totalSteps,
+        resumedAt: new Date()
+      };
+
+    } catch (error) {
+      console.error(`❌ Failed to resume execution for ${accountId}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
 
   // Safe execution methods (inherited from original)
   async safeGetExecution(executionId) {
