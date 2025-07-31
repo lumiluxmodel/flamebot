@@ -1,9 +1,10 @@
-// src/services/workflowManager.js - Updated to use WorkflowExecutor instead of WorkflowEngine
+// src/services/workflowManager.js - Updated to use Database-First Architecture
 const workflowExecutor = require("./workflowExecutorV2");
 const cronManager = require("./cronManager");
 const cronMonitor = require("./cronMonitor");
 const taskScheduler = require("./taskScheduler");
 const workflowDb = require("./workflowDatabaseService");
+const accountDatabaseService = require("./accountDatabaseService");
 
 /**
  * Workflow Manager - Provides a clean API interface to the modern workflow system
@@ -79,19 +80,15 @@ class WorkflowManager {
   }
 
   /**
-   * Start automation workflow for a newly imported account
-   * This should be called after successful account import
+   * Start automation workflow for a newly imported account (DATABASE-FIRST)
+   * Follows CODING_STANDARDS.md: Database is the Single Source of Truth
    *
    * @param {string} accountId - Flamebot account ID (from import response)
-   * @param {Object} accountData - Account data
-   * @param {string} accountData.model - Model name (Aura, Lola, Iris, Ciara)
-   * @param {string} accountData.channel - Channel for prompts (snap, gram, of)
    * @param {string} workflowType - Workflow type ('default', 'aggressive', or 'test')
    * @returns {Promise<Object>} Start result
    */
   async startAccountAutomation(
     accountId,
-    accountData,
     workflowType = "default"
   ) {
     if (!this.isInitialized) {
@@ -100,13 +97,23 @@ class WorkflowManager {
 
     try {
       console.log(`\n🎯 Starting automation for account: ${accountId}`);
-      console.log(`   Model: ${accountData.model}`);
-      console.log(`   Channel: ${accountData.channel || "gram"}`);
       console.log(`   Workflow: ${workflowType}`);
 
-      // Validate account data
-      if (!accountId || !accountData.model) {
-        throw new Error("Account ID and model are required");
+      // 🚀 DATABASE-FIRST: Load account data from database
+      console.log(`💾 Loading account data from database...`);
+      const accountData = await accountDatabaseService.loadAccountData(accountId);
+      
+      if (!accountData) {
+        throw new Error(`Account not found in database: ${accountId}`);
+      }
+
+      console.log(`   Model: ${accountData.model}`);
+      console.log(`   Channel: ${accountData.channel}`);
+      console.log(`   Status: ${accountData.status}`);
+
+      // Validate account data from database
+      if (!accountData.model) {
+        throw new Error("Account model not found in database");
       }
 
       // Start workflow execution using the new executor

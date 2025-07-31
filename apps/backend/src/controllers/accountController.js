@@ -1,6 +1,7 @@
-// src/controllers/accountController.js - Updated with Workflow Integration
+// src/controllers/accountController.js - Updated with Database-First Architecture
 const flamebotService = require("../services/flamebotService");
 const workflowManager = require("../services/workflowManager");
+const accountDatabaseService = require("../services/accountDatabaseService");
 const { validateAccountDataWithDB, getAvailableModels } = require("../utils/formatters");
 const config = require("../config");
 
@@ -110,6 +111,32 @@ class AccountController {
         
         if (realAccountId) {
           console.log(`✅ Account ID from import result: ${realAccountId}`);
+          
+          // 🚀 DATABASE-FIRST: Save account data to database (follows CODING_STANDARDS.md)
+          console.log(`💾 Saving account data to database...`);
+          const saveResult = await accountDatabaseService.saveAccountData(realAccountId, {
+            model,
+            channel,
+            authToken,
+            proxy,
+            location,
+            latitude: finalLatitude,
+            longitude: finalLongitude,
+            refreshToken: finalRefreshToken,
+            deviceId: finalDeviceId,
+            persistentId: finalPersistentId
+          });
+
+          if (!saveResult.success) {
+            console.error(`❌ Failed to save account to database: ${saveResult.error}`);
+            return res.status(500).json({
+              success: false,
+              error: "Failed to save account data to database",
+              details: saveResult.error
+            });
+          }
+
+          console.log(`✅ Account data saved to database successfully`);
         } else {
           console.log(
             `⚠️ No account ID returned, workflow automation will not start`
@@ -122,14 +149,9 @@ class AccountController {
         if (startAutomation && realAccountId) {
           console.log(`\n🤖 Starting automation workflow...`);
           try {
+            // 🚀 DATABASE-FIRST: Pass only accountId, data comes from database
             workflowResult = await workflowManager.startAccountAutomation(
               realAccountId,
-              {
-                model,
-                channel,
-                authToken,
-                importedAt: accountData.importedAt,
-              },
               workflowType
             );
 
@@ -322,14 +344,37 @@ class AccountController {
               continue;
             }
 
+            // 🚀 DATABASE-FIRST: Save account data to database before starting workflow
+            console.log(`💾 Saving account data to database for: ${successfulImport.accountId}`);
+            const saveResult = await accountDatabaseService.saveAccountData(successfulImport.accountId, {
+              model: successfulImport.model,
+              channel: successfulImport.channel || "gram",
+              authToken: successfulImport.authToken,
+              proxy: successfulImport.proxy,
+              location: successfulImport.location,
+              latitude: successfulImport.latitude,
+              longitude: successfulImport.longitude,
+              refreshToken: successfulImport.refreshToken,
+              deviceId: successfulImport.deviceId,
+              persistentId: successfulImport.persistentId
+            });
+
+            if (!saveResult.success) {
+              console.error(`❌ Failed to save account to database: ${saveResult.error}`);
+              workflowResults.push({
+                accountId: successfulImport.accountId,
+                model: successfulImport.model,
+                workflowStarted: false,
+                workflowError: `Database save failed: ${saveResult.error}`
+              });
+              continue;
+            }
+
+            console.log(`✅ Account data saved to database for: ${successfulImport.accountId}`);
+
+            // 🚀 DATABASE-FIRST: Start workflow with only accountId, data comes from database
             const workflowResult = await workflowManager.startAccountAutomation(
               successfulImport.accountId,
-              {
-                model: successfulImport.model,
-                channel: successfulImport.channel || "gram",
-                authToken: successfulImport.authToken,
-                importedAt: new Date().toISOString(),
-              },
               workflowType
             );
 

@@ -1,8 +1,9 @@
-// src/services/workflowExecutionService.js - Specialized Workflow Execution Service
+// src/services/workflowExecutionService.js - Database-First Workflow Execution Service
 
 const EventEmitter = require("events");
 const flamebotActionsService = require("./flamebotActionsService");
 const aiService = require("./aiService");
+const accountDatabaseService = require("./accountDatabaseService");
 
 /**
  * WorkflowExecutionService - Handles single responsibility of step execution
@@ -75,21 +76,40 @@ class WorkflowExecutionService extends EventEmitter {
   }
 
   /**
-   * Execute add_prompt action
+   * Execute add_prompt action (DATABASE-FIRST)
    * @param {Object} execution - Execution context
    * @param {Object} stepConfig - Step configuration
    * @returns {Promise<Object>} Execution result
    */
   async executeAddPrompt(execution, stepConfig) {
-    const { accountData } = execution;
-    const { model, channel } = stepConfig;
+    const { accountId } = execution;
 
-    console.log(`💬 Adding prompt for ${accountData.card_id} - Model: ${model}, Channel: ${channel}`);
+    // 🚀 DATABASE-FIRST: Load account data from database
+    console.log(`💾 Loading account data from database for ${accountId}...`);
+    const accountData = await accountDatabaseService.loadAccountData(accountId);
+    
+    if (!accountData) {
+      throw new Error(`Account not found in database: ${accountId}`);
+    }
+
+    // Use database data as primary source, allow workflow override
+    const model = stepConfig.model || accountData.model;
+    const channel = stepConfig.channel || accountData.channel;
+
+    if (!model) {
+      throw new Error(`No model found in database for account: ${accountId}`);
+    }
+
+    if (!channel) {
+      throw new Error(`No channel found in database for account: ${accountId}`);
+    }
+
+    console.log(`💬 Adding prompt for ${accountId} - Model: ${model}, Channel: ${channel} (from database)`);
 
     const result = await flamebotActionsService.updatePrompt(
-      accountData.card_id,
-      model || "DefaultModel",
-      channel || "gram"
+      accountId, // Use accountId directly instead of card_id
+      model,
+      channel
     );
 
     return {
@@ -101,19 +121,28 @@ class WorkflowExecutionService extends EventEmitter {
   }
 
   /**
-   * Execute add_bio action
+   * Execute add_bio action (DATABASE-FIRST)
    * @param {Object} execution - Execution context
    * @param {Object} stepConfig - Step configuration
    * @returns {Promise<Object>} Execution result
    */
   async executeAddBio(execution, stepConfig) {
-    const { accountData } = execution;
+    const { accountId } = execution;
+    
+    // 🚀 DATABASE-FIRST: Load account data from database
+    console.log(`💾 Loading account data from database for ${accountId}...`);
+    const accountData = await accountDatabaseService.loadAccountData(accountId);
+    
+    if (!accountData) {
+      throw new Error(`Account not found in database: ${accountId}`);
+    }
+
     const customBio = stepConfig.bio || null;
 
-    console.log(`📝 Adding bio for ${accountData.card_id}`);
+    console.log(`📝 Adding bio for ${accountId} (from database)`);
 
     const result = await flamebotActionsService.updateBio(
-      accountData.card_id,
+      accountId, // Use accountId directly
       customBio
     );
 
@@ -125,21 +154,36 @@ class WorkflowExecutionService extends EventEmitter {
   }
 
   /**
-   * Execute swipe action
+   * Execute swipe action (DATABASE-FIRST)
    * @param {Object} execution - Execution context
    * @param {Object} stepConfig - Step configuration
    * @returns {Promise<Object>} Execution result
    */
   async executeSwipe(execution, stepConfig) {
-    const { accountData } = execution;
+    const { accountId } = execution;
     const swipeCount = stepConfig.swipeCount || 10;
 
-    console.log(`👆 Starting swipe session for ${accountData.card_id} - Count: ${swipeCount}`);
+    // 🚀 DATABASE-FIRST: Load account data from database for swipe tracking
+    console.log(`💾 Loading account data from database for ${accountId}...`);
+    const accountData = await accountDatabaseService.loadAccountData(accountId);
+    
+    if (!accountData) {
+      throw new Error(`Account not found in database: ${accountId}`);
+    }
+
+    console.log(`👆 Starting swipe session for ${accountId} - Count: ${swipeCount} (from database)`);
 
     const result = await flamebotActionsService.swipe(
-      accountData.card_id,
+      accountId, // Use accountId directly
       swipeCount
     );
+
+    // 🚀 DATABASE-FIRST: Update swipe stats in database
+    if (result.success && result.swipeResults) {
+      const matchCount = result.swipeResults.matches || 0;
+      await accountDatabaseService.updateSwipeStats(accountId, swipeCount, matchCount);
+      console.log(`📊 Updated swipe stats in database: +${swipeCount} swipes, +${matchCount} matches`);
+    }
 
     return {
       success: true,

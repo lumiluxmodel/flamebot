@@ -270,14 +270,13 @@ function validateAndNormalizeNames(model, channel, dbModels, dbChannels) {
 }
 
 /**
- * Get available models from database
+ * Get available models from database (DATABASE-FIRST)
  * @returns {Promise<Array>} Array of model names
  */
 async function getAvailableModels() {
   try {
-    const databaseService = require('../services/databaseService');
-    const dbModels = await databaseService.getAllModels();
-    return dbModels.map(m => m.name);
+    const accountDatabaseService = require('../services/accountDatabaseService');
+    return await accountDatabaseService.getAvailableModels();
   } catch (error) {
     console.error('Error getting models from database:', error);
     // Fallback to empty array if database fails
