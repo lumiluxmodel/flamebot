@@ -159,28 +159,52 @@ async executeWorkflowStep(task) {
             throw new Error(`Invalid scheduledFor date: ${scheduledFor}`);
         }
 
-        const taskId = `${stepId}_${workflowInstanceId}_${Date.now()}`;
+        // Generate unique task ID with better uniqueness guarantee
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substr(2, 9);
+        const taskId = `${stepId}_${workflowInstanceId}_${timestamp}_${random}`;
 
-        try {
-            // Save to database
-            await workflowDb.createScheduledTask({
-                taskId,
-                workflowInstanceId,
-                stepId,
-                action,
-                scheduledFor,
-                payload,
-                maxAttempts
-            });
+        // Retry logic for duplicate task ID conflicts
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        while (retryCount < maxRetries) {
+            try {
+                // Save to database
+                await workflowDb.createScheduledTask({
+                    taskId,
+                    workflowInstanceId,
+                    stepId,
+                    action,
+                    scheduledFor,
+                    payload,
+                    maxAttempts
+                });
 
-            console.log(`⏰ Task scheduled: ${taskId} for ${scheduledFor.toLocaleString()}`);
-            this.emit('task:scheduled', { taskId, scheduledFor, action });
+                console.log(`⏰ Task scheduled: ${taskId} for ${scheduledFor.toLocaleString()}`);
+                this.emit('task:scheduled', { taskId, scheduledFor, action });
 
-            return taskId;
+                return taskId;
 
-        } catch (error) {
-            console.error(`❌ Failed to schedule task:`, error);
-            throw error;
+            } catch (error) {
+                // Check if it's a duplicate task ID error
+                if (error.message.includes('already exists') && retryCount < maxRetries - 1) {
+                    retryCount++;
+                    console.warn(`⚠️ Duplicate task ID detected, retrying (${retryCount}/${maxRetries}): ${taskId}`);
+                    
+                    // Generate new task ID for retry
+                    const newTimestamp = Date.now();
+                    const newRandom = Math.random().toString(36).substr(2, 9);
+                    taskId = `${stepId}_${workflowInstanceId}_${newTimestamp}_${newRandom}`;
+                    
+                    // Wait a small amount before retry
+                    await new Promise(resolve => setTimeout(resolve, 10 * retryCount));
+                    continue;
+                }
+                
+                console.error(`❌ Failed to schedule task after ${retryCount + 1} attempts:`, error);
+                throw error;
+            }
         }
     }
 

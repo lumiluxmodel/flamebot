@@ -787,7 +787,12 @@ class WorkflowExecutorImproved extends EventEmitter {
       // Get execution from database
       const workflowInstance = await this.workflowDb.getWorkflowInstanceByAccountId(accountId);
       if (!workflowInstance) {
-        throw new Error(`Workflow instance not found: ${accountId}`);
+        console.warn(`⚠️ Workflow instance not found for account: ${accountId}. This may be normal if workflow completed or was cleaned up.`);
+        return {
+          success: false,
+          error: `Workflow instance not found: ${accountId}`,
+          reason: 'workflow_completed_or_cleaned'
+        };
       }
 
       // Reconstruct execution context from database

@@ -595,7 +595,10 @@ class WorkflowDatabaseService {
       const duplicateResult = await client.query(duplicateQuery, [taskId]);
       
       if (duplicateResult.rows.length > 0) {
-        throw new Error(`Scheduled task with ID ${taskId} already exists`);
+        console.warn(`⚠️ Task ${taskId} already exists, returning existing task`);
+        const existingTask = await client.query('SELECT * FROM scheduled_tasks WHERE task_id = $1', [taskId]);
+        await client.query('COMMIT');
+        return existingTask.rows[0];
       }
       
       const query = `
