@@ -594,8 +594,7 @@ router.post(
         config: defaultConfig,
       });
 
-      // Reload workflow definitions in executor
-      await workflowExecutor.loadWorkflowDefinitions();
+      // Workflow definitions are loaded from database on demand, no need to reload
 
       console.log(
         `✅ Created workflow definition: ${type} (v${created.version})`
@@ -716,8 +715,7 @@ router.put(
       // Update workflow
       const updated = await workflowDb.upsertWorkflowDefinition(updateData);
 
-      // Reload workflow definitions in executor
-      await workflowExecutor.loadWorkflowDefinitions();
+      // Workflow definitions are loaded from database on demand, no need to reload
 
       console.log(
         `✅ Updated workflow definition: ${type} (v${updated.version})`
