@@ -18,6 +18,10 @@ export interface WorkflowStep {
   maxIntervalMs?: number
   nextStep?: string
   parallel?: boolean
+  // Goto-specific properties
+  infiniteAllowed?: boolean
+  maxIterations?: number
+  trackIterations?: boolean
   config?: Record<string, unknown>
 }
 
@@ -52,6 +56,10 @@ export interface BaseNodeData extends Record<string, unknown> {
   maxIntervalMs?: number
   nextStep?: string
   parallel?: boolean
+  // Goto-specific properties
+  infiniteAllowed?: boolean
+  maxIterations?: number
+  trackIterations?: boolean
   config?: Record<string, unknown>
 }
 
@@ -157,6 +165,7 @@ export const NODE_TYPES: Record<WorkflowNodeType, NodeTypeConfig> = {
       description: 'Add AI prompt',
       delay: 0,
       critical: true,
+      timeout: 90000, // 1.5 minutes
     },
     color: '#0ea5e9', // blue
   },
@@ -171,6 +180,7 @@ export const NODE_TYPES: Record<WorkflowNodeType, NodeTypeConfig> = {
       description: 'Update bio',
       delay: 0,
       critical: false,
+      timeout: 120000, // 2 minutes
     },
     color: '#10b981', // green
   },
@@ -185,6 +195,8 @@ export const NODE_TYPES: Record<WorkflowNodeType, NodeTypeConfig> = {
       description: 'Swipe action',
       delay: 0,
       swipeCount: 10,
+      critical: true,
+      timeout: 300000, // 5 minutes
     },
     color: '#a855f7', // purple
   },
@@ -208,7 +220,7 @@ export const NODE_TYPES: Record<WorkflowNodeType, NodeTypeConfig> = {
   goto: {
     type: 'goto',
     label: 'Go To',
-    description: 'Jump to another step',
+    description: 'Jump to another step (with loop control)',
     defaultData: {
       label: 'Go To',
       nodeType: 'goto',
@@ -216,6 +228,9 @@ export const NODE_TYPES: Record<WorkflowNodeType, NodeTypeConfig> = {
       description: 'Go to step',
       delay: 0,
       nextStep: '',
+      infiniteAllowed: true,
+      maxIterations: 1000,
+      trackIterations: true,
     },
     color: '#ef4444', // red
   },
@@ -271,6 +286,9 @@ export class WorkflowConverter {
         maxIntervalMs: node.properties?.maxIntervalMs || node.data?.maxIntervalMs,
         nextStep: node.properties?.nextStep || node.data?.nextStep,
         parallel: node.properties?.parallel || node.data?.parallel,
+        infiniteAllowed: node.properties?.infiniteAllowed || node.data?.infiniteAllowed,
+        maxIterations: node.properties?.maxIterations || node.data?.maxIterations,
+        trackIterations: node.properties?.trackIterations || node.data?.trackIterations,
         config: node.properties?.config || node.data?.config,
       },
     }))
@@ -322,6 +340,9 @@ export class WorkflowConverter {
       maxIntervalMs: node.data.maxIntervalMs,
       nextStep: node.data.nextStep,
       parallel: node.data.parallel,
+      infiniteAllowed: node.data.infiniteAllowed,
+      maxIterations: node.data.maxIterations,
+      trackIterations: node.data.trackIterations,
       config: node.data.config,
     }))
   }
@@ -351,6 +372,9 @@ export class WorkflowConverter {
           maxIntervalMs: step.maxIntervalMs,
           nextStep: step.nextStep,
           parallel: step.parallel,
+          infiniteAllowed: step.infiniteAllowed,
+          maxIterations: step.maxIterations,
+          trackIterations: step.trackIterations,
           config: step.config,
         },
       }

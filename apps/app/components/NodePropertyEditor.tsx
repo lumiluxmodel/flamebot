@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { WorkflowNode, BaseNodeData, NODE_TYPES } from '../types/workflow'
 import { X } from 'lucide-react'
+import { useAlert } from './AlertSystem'
 
 interface NodePropertyEditorProps {
   node: WorkflowNode
@@ -24,6 +25,7 @@ export function NodePropertyEditor({
   const [formData, setFormData] = useState<BaseNodeData>(node.data)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const config = NODE_TYPES[node.type as keyof typeof NODE_TYPES] || NODE_TYPES.wait
+  const { showConfirm } = useAlert()
 
   useEffect(() => {
     setFormData(node.data)
@@ -88,6 +90,18 @@ export function NodePropertyEditor({
     // Validate delay
     if (formData.delay < 0) {
       newErrors.delay = 'Delay cannot be negative'
+    }
+
+    // Validate goto fields
+    if (formData.nextStep !== undefined) {
+      if (formData.infiniteAllowed === false && formData.maxIterations !== undefined) {
+        if (formData.maxIterations < 1) {
+          newErrors.maxIterations = 'Max iterations must be at least 1'
+        }
+        if (formData.maxIterations > 1000) {
+          newErrors.maxIterations = 'Max iterations cannot exceed 1000'
+        }
+      }
     }
 
     setErrors(newErrors)
@@ -331,27 +345,90 @@ export function NodePropertyEditor({
 
           {/* Go To - Improved with select */}
           {(formData.nextStep !== undefined) && (
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                Go To Node
-              </label>
-              <select
-                value={formData.nextStep || ''}
-                onChange={(e) => updateField('nextStep', e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded-lg text-zinc-900 dark:text-white text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
-              >
-                <option value="">Select target node...</option>
-                {availableNodes.map((targetNode) => (
-                  <option key={targetNode.id} value={targetNode.id}>
-                    {targetNode.data.label} ({targetNode.type})
-                  </option>
-                ))}
-              </select>
-              {availableNodes.length === 0 && (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                  No other nodes available to connect to
-                </p>
-              )}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Go To Node
+                </label>
+                <select
+                  value={formData.nextStep || ''}
+                  onChange={(e) => updateField('nextStep', e.target.value)}
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded-lg text-zinc-900 dark:text-white text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+                >
+                  <option value="">Select target node...</option>
+                  {availableNodes.map((targetNode) => (
+                    <option key={targetNode.id} value={targetNode.id}>
+                      {targetNode.data.label} ({targetNode.type})
+                    </option>
+                  ))}
+                </select>
+                {availableNodes.length === 0 && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                    No other nodes available to connect to
+                  </p>
+                )}
+              </div>
+
+              {/* Loop Control Section */}
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-3">Loop Control</h4>
+                
+                {/* Infinite Allowed Toggle */}
+                <div className="mb-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.infiniteAllowed !== false}
+                      onChange={(e) => updateField('infiniteAllowed', e.target.checked)}
+                      className="rounded border-yellow-300 dark:border-yellow-600 text-yellow-600 focus:ring-yellow-500 focus:ring-offset-0"
+                    />
+                    <span className="text-sm text-yellow-800 dark:text-yellow-300">Allow infinite loops</span>
+                  </label>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1 ml-6">
+                    {formData.infiniteAllowed !== false 
+                      ? "⚠️ This step can loop forever" 
+                      : "✅ Loop will be limited by max iterations"
+                    }
+                  </p>
+                </div>
+
+                {/* Max Iterations - Only show if infinite is disabled */}
+                {formData.infiniteAllowed === false && (
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-1.5">
+                      Max Iterations
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.maxIterations || 10}
+                      onChange={(e) => updateField('maxIterations', Math.max(1, parseInt(e.target.value) || 10))}
+                      min="1"
+                      max="1000"
+                      className="w-full px-3 py-2 bg-white dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-600 rounded-lg text-yellow-900 dark:text-yellow-100 text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+                      placeholder="10"
+                    />
+                    <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
+                      Loop will fail after this many iterations
+                    </p>
+                  </div>
+                )}
+
+                {/* Track Iterations Toggle */}
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.trackIterations !== false}
+                      onChange={(e) => updateField('trackIterations', e.target.checked)}
+                      className="rounded border-yellow-300 dark:border-yellow-600 text-yellow-600 focus:ring-yellow-500 focus:ring-offset-0"
+                    />
+                    <span className="text-sm text-yellow-800 dark:text-yellow-300">Track iterations in database</span>
+                  </label>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1 ml-6">
+                    Recommended for monitoring and debugging
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </form>
@@ -376,9 +453,14 @@ export function NodePropertyEditor({
             <button
               type="button"
               onClick={() => {
-                if (confirm('Are you sure you want to delete this node?')) {
-                  onDelete()
-                }
+                showConfirm({
+                  title: 'Delete Node',
+                  message: 'Are you sure you want to delete this node? This action cannot be undone.',
+                  type: 'danger',
+                  confirmText: 'Delete',
+                  cancelText: 'Cancel',
+                  onConfirm: onDelete
+                })
               }}
               className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
             >

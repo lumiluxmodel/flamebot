@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, StopCircle, Play, Pause, ExternalLink, Trash2 } from 'lucide-react';
 import { useActiveWorkflows, useActiveSwipeTasks, useWorkflowDetailedStatus, apiClient } from '../lib/api';
 import { LoadingSpinner, ScrollArea, formatDelay, ClientOnlyIcon } from './common';
+import { useAlert } from './AlertSystem';
 
 // Helper function to format elapsed time
 const formatTimeElapsed = (milliseconds: number): string => {
@@ -40,6 +41,7 @@ interface WorkflowCardProps {
 const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onRefresh }) => {
   const [expanded, setExpanded] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { showError, showConfirm } = useAlert();
   const { data: detailedStatus, loading: detailsLoading, error: detailsError } = useWorkflowDetailedStatus(
     expanded ? workflow.accountId : '',
     3000
@@ -52,7 +54,7 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onRefresh }) => {
       if (onRefresh) onRefresh();
     } catch (error) {
       console.error('Failed to pause workflow:', error);
-      alert(`Failed to pause workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError('Pause Failed', error instanceof Error ? error.message : 'Failed to pause workflow');
     } finally {
       setActionLoading(null);
     }
@@ -65,29 +67,37 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onRefresh }) => {
       if (onRefresh) onRefresh();
     } catch (error) {
       console.error('Failed to resume workflow:', error);
-      alert(`Failed to resume workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError('Resume Failed', error instanceof Error ? error.message : 'Failed to resume workflow');
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleStop = async (deleteData = false) => {
-    const confirmMessage = deleteData 
+    const title = deleteData ? 'Stop & Delete Workflow' : 'Stop Workflow';
+    const message = deleteData 
       ? 'Are you sure you want to permanently stop and DELETE all data for this workflow? This cannot be undone!'
       : 'Are you sure you want to permanently stop this workflow? It will be archived and cannot be resumed.';
     
-    if (!confirm(confirmMessage)) return;
-    
-    try {
-      setActionLoading('stop');
-      await apiClient.stopAccountWorkflow(workflow.accountId, deleteData);
-      if (onRefresh) onRefresh();
-    } catch (error) {
-      console.error('Failed to stop workflow:', error);
-      alert(`Failed to stop workflow: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setActionLoading(null);
-    }
+    showConfirm({
+      title,
+      message,
+      type: 'danger',
+      confirmText: deleteData ? 'Delete' : 'Stop',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        try {
+          setActionLoading('stop');
+          await apiClient.stopAccountWorkflow(workflow.accountId, deleteData);
+          if (onRefresh) onRefresh();
+        } catch (error) {
+          console.error('Failed to stop workflow:', error);
+          showError('Stop Failed', error instanceof Error ? error.message : 'Failed to stop workflow');
+        } finally {
+          setActionLoading(null);
+        }
+      }
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -503,6 +513,7 @@ const Workflows: React.FC = () => {
   );
   const { data: activeSwipes } = useActiveSwipeTasks();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { showError, showSuccess, showConfirm, showWarning } = useAlert();
 
   // Get unique workflow types from summary
   const workflowTypes = summary ? Object.keys(summary.byWorkflowType) : [];
@@ -513,25 +524,31 @@ const Workflows: React.FC = () => {
       : activeWorkflows?.map(w => w.accountId) || [];
     
     if (accountIds.length === 0) {
-      alert('No workflows selected or available');
+      showWarning('No Selection', 'No workflows selected or available');
       return;
     }
 
-    const confirmMessage = `Are you sure you want to ${operation} ${accountIds.length} workflow(s)?`;
-    if (!confirm(confirmMessage)) return;
-    
-    try {
-      setActionLoading(operation);
-      const result = await apiClient.bulkWorkflowOperation(operation, accountIds);
-      alert(result.message);
-      setSelectedWorkflows([]);
-      refetch();
-    } catch (error) {
-      console.error(`Failed to ${operation} workflows:`, error);
-      alert(`Failed to ${operation} workflows`);
-    } finally {
-      setActionLoading(null);
-    }
+    showConfirm({
+      title: `${operation.charAt(0).toUpperCase() + operation.slice(1)} Workflows`,
+      message: `Are you sure you want to ${operation} ${accountIds.length} workflow(s)?`,
+      type: operation === 'stop' ? 'danger' : 'warning',
+      confirmText: operation.charAt(0).toUpperCase() + operation.slice(1),
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        try {
+          setActionLoading(operation);
+          const result = await apiClient.bulkWorkflowOperation(operation, accountIds);
+          showSuccess('Operation Successful', result.message);
+          setSelectedWorkflows([]);
+          refetch();
+        } catch (error) {
+          console.error(`Failed to ${operation} workflows:`, error);
+          showError('Operation Failed', `Failed to ${operation} workflows`);
+        } finally {
+          setActionLoading(null);
+        }
+      }
+    });
   };
 
   const handleStopSwipeTask = async (taskId: string) => {

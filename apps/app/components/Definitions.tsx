@@ -4,6 +4,7 @@ import { Plus, Edit2, Copy, Trash2, ToggleLeft, ToggleRight } from 'lucide-react
 import { useWorkflowDefinitions, apiClient } from '../lib/api';
 import { LoadingSpinner, ScrollArea, formatDelay, ClientOnlyIcon } from './common';
 import WorkflowModal from './WorkflowModal';
+import { useAlert } from './AlertSystem';
 
 interface WorkflowStep {
   id: string;
@@ -41,6 +42,7 @@ const Definitions: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
+  const { showError, showConfirm } = useAlert();
 
   // Helper functions for colors
   const getWorkflowColor = (type: string) => {
@@ -101,27 +103,32 @@ const Definitions: React.FC = () => {
       await refetchDefinitions();
     } catch (error) {
       console.error('Failed to clone workflow:', error);
-      alert('Failed to clone workflow. Check console for details.');
+      showError('Clone Failed', 'Failed to clone workflow. Check console for details.');
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleDeleteWorkflow = async (workflow: Workflow) => {
-    if (!confirm(`Are you sure you want to delete "${workflow.name}"?`)) {
-      return;
-    }
-    
-    try {
-      setActionLoading(`delete_${workflow.type}`);
-      await apiClient.deleteWorkflowDefinition(workflow.type);
-      await refetchDefinitions();
-    } catch (error) {
-      console.error('Failed to delete workflow:', error);
-      alert('Failed to delete workflow. Check console for details.');
-    } finally {
-      setActionLoading(null);
-    }
+    showConfirm({
+      title: 'Delete Workflow',
+      message: `Are you sure you want to delete "${workflow.name}"? This action cannot be undone.`,
+      type: 'danger',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        try {
+          setActionLoading(`delete_${workflow.type}`);
+          await apiClient.deleteWorkflowDefinition(workflow.type);
+          await refetchDefinitions();
+        } catch (error) {
+          console.error('Failed to delete workflow:', error);
+          showError('Delete Failed', 'Failed to delete workflow. Check console for details.');
+        } finally {
+          setActionLoading(null);
+        }
+      }
+    });
   };
 
   const handleToggleStatus = async (workflow: Workflow) => {
@@ -131,7 +138,7 @@ const Definitions: React.FC = () => {
       await refetchDefinitions();
     } catch (error) {
       console.error('Failed to toggle workflow status:', error);
-      alert('Failed to toggle workflow status. Check console for details.');
+      showError('Toggle Failed', 'Failed to toggle workflow status. Check console for details.');
     } finally {
       setActionLoading(null);
     }

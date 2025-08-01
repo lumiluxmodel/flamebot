@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { useWorkflowDefinitions, apiClient } from '../lib/api'
 import WorkflowEditor from './WorkflowEditor'
 import { WorkflowSaveModal } from './WorkflowSaveModal'
+import { useAlert } from './AlertSystem'
 import { 
   WorkflowDefinition, 
   WorkflowStep, 
@@ -24,6 +25,7 @@ const Workflows2: React.FC = () => {
   const [pendingSteps, setPendingSteps] = useState<WorkflowStep[]>([])
   
   const { data: workflowDefinitions, refetch: refetchDefinitions } = useWorkflowDefinitions()
+  const { showSuccess, showError } = useAlert()
 
   // Sample workflows for testing
   const sampleWorkflows: Record<string, SampleWorkflow> = {
@@ -127,10 +129,10 @@ const Workflows2: React.FC = () => {
           }))
         })
         await refetchDefinitions()
-        alert('Workflow saved successfully!')
+        showSuccess('Workflow Saved', 'Workflow saved successfully!')
       } catch (error) {
         console.error('Failed to save workflow:', error)
-        alert('Failed to save workflow')
+        showError('Save Failed', 'Failed to save workflow')
       } finally {
         setSaving(false)
       }
@@ -139,7 +141,7 @@ const Workflows2: React.FC = () => {
       setPendingSteps(steps)
       setShowSaveModal(true)
     }
-  }, [selectedWorkflow, refetchDefinitions])
+  }, [selectedWorkflow, refetchDefinitions, showSuccess, showError])
 
   const handleModalSave = useCallback(async ({ name, type, description }: { name: string; type: string; description: string }) => {
     try {
@@ -166,16 +168,16 @@ const Workflows2: React.FC = () => {
         }))
       })
       await refetchDefinitions()
-      alert('Workflow created successfully!')
+      showSuccess('Workflow Created', 'Workflow created successfully!')
       setShowSaveModal(false)
       setPendingSteps([])
     } catch (error) {
       console.error('Failed to create workflow:', error)
-      alert('Failed to create workflow')
+      showError('Creation Failed', 'Failed to create workflow')
     } finally {
       setSaving(false)
     }
-  }, [pendingSteps, refetchDefinitions])
+  }, [pendingSteps, refetchDefinitions, showSuccess, showError])
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">

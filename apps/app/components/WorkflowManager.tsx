@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import { useWorkflowDefinitions, apiClient } from '../lib/api'
 import WorkflowEditor from './WorkflowEditor'
 import { 
@@ -8,6 +8,7 @@ import {
   WorkflowStep, 
 } from '../types/workflow'
 import { ClientOnlyIcon } from './common'
+import { useAlert } from './AlertSystem'
 import { 
   Plus,
   Workflow,
@@ -35,9 +36,10 @@ export function WorkflowManager() {
   const [loading, setLoading] = useState(false)
   
   const { data: workflowDefinitions, refetch: refetchDefinitions } = useWorkflowDefinitions()
+  const { showSuccess, showError, showPrompt } = useAlert()
 
   // Sample workflows for testing
-  const sampleWorkflows: Record<string, SampleWorkflow> = {
+  const sampleWorkflows: Record<string, SampleWorkflow> = useMemo(() => ({
     simple_workflow: {
       name: "Simple Workflow",
       type: "simple_workflow",
@@ -95,7 +97,7 @@ export function WorkflowManager() {
         },
       ],
     },
-  }
+  }), [])
 
   const handleLoadWorkflow = (workflow: WorkflowDefinition | SampleWorkflow) => {
     setSelectedWorkflow(workflow)
@@ -116,7 +118,13 @@ export function WorkflowManager() {
     try {
       setLoading(true)
       
-      if ('id' in selectedWorkflow && selectedWorkflow.id) {
+      // Check if this is an existing workflow from the saved workflows list
+      const isExistingWorkflow = workflowDefinitions?.some(w => w.type === selectedWorkflow.type)
+      
+      // Also check if selectedWorkflow has an id (for backwards compatibility)
+      const hasId = 'id' in selectedWorkflow && selectedWorkflow.id
+      
+      if (isExistingWorkflow || hasId) {
         // Update existing workflow
         await apiClient.updateWorkflowDefinition(selectedWorkflow.type, {
           name: selectedWorkflow.name,
@@ -135,18 +143,76 @@ export function WorkflowManager() {
             maxIntervalMs: step.maxIntervalMs,
             nextStep: step.nextStep,
             parallel: step.parallel,
+            infiniteAllowed: step.infiniteAllowed,
+            maxIterations: step.maxIterations,
+            trackIterations: step.trackIterations,
             config: step.config,
           }))
         })
       } else {
-        // Create new workflow
-        const name = prompt('Enter workflow name:', selectedWorkflow.name)
-        const type = prompt('Enter workflow type:', selectedWorkflow.type)
-        const description = prompt('Enter workflow description:', selectedWorkflow.description)
+        // Create new workflow - for sample workflows or new workflows
+        let name = selectedWorkflow.name
+        let type = selectedWorkflow.type
+        let description = selectedWorkflow.description
         
-        if (!name || !type || !description) {
-          alert('All fields are required')
-          return
+        // Only prompt for details if it's a truly new workflow (not a sample)
+        const isSampleWorkflow = Object.keys(sampleWorkflows).includes(selectedWorkflow.type)
+        
+        if (isSampleWorkflow || !selectedWorkflow.type.startsWith('new_workflow')) {
+          // For sample workflows, generate a unique type based on the sample
+          const baseType = isSampleWorkflow ? selectedWorkflow.type : 'custom_workflow'
+          type = `${baseType}_${Date.now()}`
+          
+          const workflowName = await showPrompt({
+            title: 'Enter Workflow Name',
+            message: 'Please enter a name for your workflow',
+            defaultValue: selectedWorkflow.name,
+            placeholder: 'My Workflow'
+          })
+          
+          if (!workflowName) return
+          name = workflowName
+          
+          const workflowDescription = await showPrompt({
+            title: 'Enter Workflow Description',
+            message: 'Please enter a description for your workflow',
+            defaultValue: selectedWorkflow.description,
+            placeholder: 'Describe what this workflow does...'
+          })
+          
+          if (!workflowDescription) return
+          description = workflowDescription
+        } else {
+          // For completely new workflows
+          const workflowName = await showPrompt({
+            title: 'Enter Workflow Name',
+            message: 'Please enter a name for your new workflow',
+            defaultValue: 'New Workflow',
+            placeholder: 'My Workflow'
+          })
+          
+          if (!workflowName) return
+          name = workflowName
+          
+          const workflowType = await showPrompt({
+            title: 'Enter Workflow Type',
+            message: 'Please enter a unique identifier for your workflow (use only letters, numbers, and underscores)',
+            defaultValue: `workflow_${Date.now()}`,
+            placeholder: 'my_workflow'
+          })
+          
+          if (!workflowType) return
+          type = workflowType
+          
+          const workflowDescription = await showPrompt({
+            title: 'Enter Workflow Description',
+            message: 'Please enter a description for your workflow',
+            defaultValue: 'A new workflow',
+            placeholder: 'Describe what this workflow does...'
+          })
+          
+          if (!workflowDescription) return
+          description = workflowDescription
         }
 
         await apiClient.createWorkflowDefinition({
@@ -167,20 +233,23 @@ export function WorkflowManager() {
             maxIntervalMs: step.maxIntervalMs,
             nextStep: step.nextStep,
             parallel: step.parallel,
+            infiniteAllowed: step.infiniteAllowed,
+            maxIterations: step.maxIterations,
+            trackIterations: step.trackIterations,
             config: step.config,
           }))
         })
       }
       
       await refetchDefinitions()
-      alert('Workflow saved successfully!')
+      showSuccess('Workflow Saved!', 'Your workflow has been saved successfully.')
     } catch (error) {
       console.error('Failed to save workflow:', error)
-      alert('Failed to save workflow')
+      showError('Save Failed', error instanceof Error ? error.message : 'Failed to save workflow')
     } finally {
       setLoading(false)
     }
-  }, [selectedWorkflow, refetchDefinitions])
+  }, [selectedWorkflow, refetchDefinitions, workflowDefinitions, sampleWorkflows, showError, showPrompt, showSuccess])
 
 
 
@@ -415,6 +484,16 @@ export function WorkflowManager() {
                       </ClientOnlyIcon>
                     </div>
                     {selectedWorkflow.name}
+                    {/* Show if this is an existing workflow or new */}
+                    {workflowDefinitions?.some(w => w.type === selectedWorkflow.type) ? (
+                      <span className="text-xs font-normal px-2 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded">
+                        Editing
+                      </span>
+                    ) : (
+                      <span className="text-xs font-normal px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded">
+                        New
+                      </span>
+                    )}
                   </h2>
                   <p className="text-zinc-600 dark:text-zinc-400 text-sm mt-1">{selectedWorkflow.description}</p>
                   <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500 dark:text-zinc-500">
@@ -438,6 +517,14 @@ export function WorkflowManager() {
                       </ClientOnlyIcon>
                       {formatDelay(selectedWorkflow.steps.reduce((sum, step) => sum + step.delay, 0))} total delay
                     </span>
+                    {workflowDefinitions?.some(w => w.type === selectedWorkflow.type) && (
+                      <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
+                        <ClientOnlyIcon>
+                          <Upload className="w-3 h-3" />
+                        </ClientOnlyIcon>
+                        Type: {selectedWorkflow.type}
+                      </span>
+                    )}
                   </div>
                 </div>
                 {loading && (

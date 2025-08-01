@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus } from 'lucide-react';
 import { apiClient } from '../lib/api';
 import { ScrollArea, formatDelay, parseDelay, ClientOnlyIcon } from './common';
+import { useAlert } from './AlertSystem';
 
 // Types
 interface WorkflowStep {
@@ -47,6 +48,7 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
   const [workflowDescription, setWorkflowDescription] = useState('');
   const [workflowSteps, setWorkflowSteps] = useState<WorkflowStep[]>([]);
   const [saving, setSaving] = useState(false);
+  const { showError, showWarning } = useAlert();
 
   // Action options with their required fields
   const actionOptions = [
@@ -100,12 +102,12 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
 
   const handleSave = async () => {
     if (!workflowName || !workflowType || !workflowDescription) {
-      alert('Please fill in all required fields');
+      showWarning('Missing Information', 'Please fill in all required fields');
       return;
     }
 
     if (workflowSteps.length === 0) {
-      alert('Please add at least one step');
+      showWarning('No Steps', 'Please add at least one step');
       return;
     }
 
@@ -142,7 +144,7 @@ const WorkflowModal: React.FC<WorkflowModalProps> = ({ isOpen, isEdit, editingWo
       window.location.reload();
     } catch (error) {
       console.error('Failed to save workflow:', error);
-      alert('Failed to save workflow. Please check the console for details.');
+      showError('Save Failed', 'Failed to save workflow. Please check the console for details.');
     } finally {
       setSaving(false);
     }

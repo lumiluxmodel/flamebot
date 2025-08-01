@@ -107,6 +107,24 @@ export const WorkflowNode = memo(({ data, selected }: WorkflowNodeProps) => {
             ∞ {data.minSwipes}-{data.maxSwipes}
           </span>
         )}
+        
+        {data.nextStep && (
+          <span className="inline-flex items-center px-2 py-1 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-md text-orange-700 dark:text-orange-400 font-mono">
+            → {data.nextStep.slice(-8)}
+          </span>
+        )}
+        
+        {data.infiniteAllowed === false && data.maxIterations && (
+          <span className="inline-flex items-center px-2 py-1 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md text-yellow-700 dark:text-yellow-400 font-mono">
+            Max: {data.maxIterations}
+          </span>
+        )}
+
+        {data.infiniteAllowed === true && (
+          <span className="inline-flex items-center px-2 py-1 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-400 font-medium">
+            ∞ Infinite
+          </span>
+        )}
       </div>
 
       {/* Selection Indicator */}

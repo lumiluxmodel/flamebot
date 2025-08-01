@@ -16,6 +16,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { getLayoutedElements } from '../lib/workflow-layout'
+import { useAlert } from './AlertSystem'
 
 import {
   WorkflowNode,
@@ -74,6 +75,7 @@ function WorkflowEditorContent({
   const converter = useRef(new WorkflowConverter())
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
   const cleanupRef = useRef<(() => void)[]>([])
+  const { showError } = useAlert()
 
   // Load workflow data when it changes
   useEffect(() => {
@@ -212,11 +214,11 @@ function WorkflowEditorContent({
       await onSave(steps)
     } catch (error) {
       console.error('Failed to save workflow:', error)
-      alert('Failed to save workflow')
+      showError('Save Failed', error instanceof Error ? error.message : 'Failed to save workflow')
     } finally {
       setSaving(false)
     }
-  }, [onSave, nodes, edges, saving])
+  }, [onSave, nodes, edges, saving, showError])
 
   const handleExportImage = useCallback(async () => {
     try {
@@ -262,9 +264,9 @@ function WorkflowEditorContent({
       img.src = svgUrl
     } catch (error) {
       console.error('Failed to export image:', error)
-      alert('Failed to export workflow as image')
+      showError('Export Failed', 'Failed to export workflow as image')
     }
-  }, [reactFlowInstance, nodes])
+  }, [reactFlowInstance, nodes, showError])
 
   const handleExportJSON = useCallback(() => {
     const steps = converter.current.convertReactFlowToWorkflowSteps({ nodes, edges })

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Orbitron, Share_Tech_Mono } from "next/font/google";
 import "./globals.css";
 import ThemeToggle from "../components/ThemeToggle";
+import { AlertProvider } from "../components/AlertSystem";
 
   const orbitron = Orbitron({
     variable: "--font-orbitron",
@@ -68,8 +69,10 @@ export default function RootLayout({
       <body
         className={`${orbitron.variable} ${shareTechMono.variable} font-mono font-medium antialiased bg-white dark:bg-black text-zinc-900 dark:text-white overflow-hidden transition-colors duration-300`}
       >
-        <ThemeToggle />
-        {children}
+        <AlertProvider>
+          <ThemeToggle />
+          {children}
+        </AlertProvider>
       </body>
     </html>
   );
