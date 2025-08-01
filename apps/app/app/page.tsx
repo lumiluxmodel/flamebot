@@ -157,9 +157,9 @@ export default function FlameBotDashboard() {
               <div className="text-[10px] text-zinc-500 dark:text-zinc-600 mb-4 text-center">ACTIVE_EXECUTIONS</div>
               {activeWorkflows && activeWorkflows.length > 0 ? (
                 activeWorkflows.slice(0, 3).map((execution, i) => (
-                  <div key={execution.executionId} className="bg-zinc-100/80 dark:bg-zinc-950/40 border border-zinc-300 dark:border-zinc-800/50 p-3 backdrop-blur-sm animate-fade-in" style={{ animationDelay: `${i * 0.2}s` }}>
+                  <div key={execution.accountId} className="bg-zinc-100/80 dark:bg-zinc-950/40 border border-zinc-300 dark:border-zinc-800/50 p-3 backdrop-blur-sm animate-fade-in" style={{ animationDelay: `${i * 0.2}s` }}>
                     <div className="text-[9px] text-zinc-600 dark:text-zinc-500 mb-1">EXECUTION_ID</div>
-                    <div className="font-mono text-[10px] text-yellow-600 dark:text-yellow-500 mb-2 break-all">{execution.executionId.slice(-8)}</div>
+                    <div className="font-mono text-[10px] text-yellow-600 dark:text-yellow-500 mb-2 break-all">{execution.accountId.slice(-8)}</div>
                     <div className="flex justify-between text-[9px] mb-2">
                       <span className="text-zinc-600 dark:text-zinc-400">{execution.workflowType.toUpperCase()}</span>
                       <span className={`${execution.status === 'active' ? 'text-emerald-600 dark:text-emerald-500' : 'text-zinc-600 dark:text-zinc-500'} pulse-dot`}>

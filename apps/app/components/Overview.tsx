@@ -50,7 +50,7 @@ const Overview = () => {
   if (!stats || !dashboardData) return null;
 
   const systemHealth = dashboardData.overview.systemHealth.toUpperCase();
-  const activeWorkflows = stats.executor.activeExecutions;
+  const activeWorkflows = isNaN(stats.executor.activeExecutions) ? 0 : (stats.executor.activeExecutions || 0);
   const successRate = Math.round(stats.health.successRate * 100);
   const cronJobs = `${stats.database.completedWorkflows}/${stats.cronSystem.totalCronJobs}`;
 

@@ -254,19 +254,19 @@ export interface WorkflowStats {
 }
 
 export interface ActiveWorkflow {
-  executionId: string;
   accountId: string;
   workflowType: string;
-  progress: number;
   status: 'active' | 'paused' | 'completed' | 'failed' | 'stopped';
-  currentStep?: string;
-  totalSteps?: number;
+  progress: number;
+  currentStep: number;
+  totalSteps: number;
   startedAt: string;
+  gotoIterations: Record<string, unknown>;
+  timeElapsed: number;
+  progressPercentage: number;
+  isRunning: boolean;
   estimatedCompletion?: string;
   lastActivity?: string;
-  timeElapsed?: number;
-  progressPercentage?: number;
-  isRunning?: boolean;
   canResume?: boolean;
   canPause?: boolean;
   isPermanent?: boolean;

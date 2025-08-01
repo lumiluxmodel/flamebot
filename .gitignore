@@ -17,3 +17,9 @@ coverage/
 dist/
 build/
 .turbo/
+
+# Database backups
+backups/
+*.sql
+*.sql.gz
+*.dump

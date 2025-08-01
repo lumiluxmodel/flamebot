@@ -68,7 +68,7 @@ const System = () => {
           <div className="space-y-4">
             {[
               { label: 'EXECUTED TASKS', value: executedTasks, color: 'text-yellow-600 dark:text-yellow-500' },
-              { label: 'AVG EXECUTION', value: `${parseFloat(stats.executions.averageDurationMs).toFixed(2)}ms`, color: 'text-zinc-900 dark:text-white' },
+              { label: 'AVG EXECUTION', value: `${stats.executions.averageDurationMs ? parseFloat(stats.executions.averageDurationMs).toFixed(2) : '0.00'}ms`, color: 'text-zinc-900 dark:text-white' },
               { label: 'TOTAL WORKFLOWS', value: stats.database.totalWorkflows, color: 'text-zinc-900 dark:text-white' },
               { label: 'ACCOUNTS AUTOMATED', value: stats.database.totalAccountsAutomated, color: 'text-zinc-900 dark:text-white' },
               { label: 'SUCCESS RATE', value: `${Math.round(stats.health.successRate * 100)}%`, color: 'text-emerald-600 dark:text-emerald-500' }
@@ -103,7 +103,7 @@ const System = () => {
           <div className="absolute -top-3 left-8 bg-white dark:bg-black px-2 text-[10px] text-blue-600 dark:text-blue-500">THROUGHPUT</div>
           <div className="text-[10px] text-zinc-600 mb-4">AVG_EXECUTION_TIME</div>
           <div className="text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-500">
-            {parseFloat(stats.executions.averageDurationMs).toFixed(1)}ms
+            {stats.executions.averageDurationMs ? parseFloat(stats.executions.averageDurationMs).toFixed(1) : '0.0'}ms
           </div>
           <div className="text-[10px] text-zinc-600 mt-2">PER ACTION</div>
         </div>
@@ -130,7 +130,7 @@ const System = () => {
         
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'ACTIVE WORKFLOWS', value: stats.executor.activeExecutions, max: 10, color: 'yellow' },
+            { label: 'ACTIVE WORKFLOWS', value: stats.executor.activeExecutions || 0, max: 10, color: 'yellow' },
             { label: 'QUEUED TASKS', value: stats.taskScheduler.queuedTasks, max: 50, color: 'blue' },
             { label: 'CRON JOBS', value: stats.cronSystem.totalCronJobs, max: 20, color: 'emerald' },
             { label: 'FAILED TASKS', value: stats.cronSystem.failedTasks, max: 5, color: 'red' }
