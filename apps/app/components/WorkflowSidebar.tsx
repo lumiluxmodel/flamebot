@@ -5,9 +5,7 @@ import {
   Sparkles, 
   User, 
   MousePointer, 
-  Activity,
   Repeat,
-  Play,
   Info
 } from 'lucide-react';
 import { ClientOnlyIcon } from './common';
@@ -22,18 +20,11 @@ interface NodeType {
 
 const nodeTypes: NodeType[] = [
   {
-    type: 'start',
-    label: 'Start',
-    icon: <Play className="w-4 h-4" />,
-    color: 'bg-emerald-500',
-    description: 'Workflow entry point'
-  },
-  {
     type: 'wait',
     label: 'Wait',
     icon: <Clock className="w-4 h-4" />,
     color: 'bg-blue-500',
-    description: 'Delay execution'
+    description: 'Wait for specified duration'
   },
   {
     type: 'add_prompt',
@@ -47,28 +38,21 @@ const nodeTypes: NodeType[] = [
     label: 'Add Bio',
     icon: <User className="w-4 h-4" />,
     color: 'bg-pink-500',
-    description: 'Add bio information'
+    description: 'Update profile bio'
   },
   {
     type: 'swipe_with_spectre',
-    label: 'Swipe Spectre',
+    label: 'Swipe with Spectre',
     icon: <MousePointer className="w-4 h-4" />,
     color: 'bg-cyan-500',
-    description: 'Configure swipe action'
-  },
-  {
-    type: 'activate_continuous_swipe',
-    label: 'Continuous Swipe',
-    icon: <Activity className="w-4 h-4" />,
-    color: 'bg-purple-500',
-    description: 'Infinite random swipes'
+    description: 'Auto swipe session'
   },
   {
     type: 'goto',
-    label: 'Go To (Loop)',
+    label: 'Go To',
     icon: <Repeat className="w-4 h-4" />,
     color: 'bg-red-500',
-    description: 'Create loops'
+    description: 'Jump to step (with loops)'
   }
 ] as const;
 

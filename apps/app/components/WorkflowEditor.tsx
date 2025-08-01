@@ -22,7 +22,6 @@ import {
   WorkflowNode,
   WorkflowEdge,
   ReactFlowData,
-  BaseNodeData,
   NODE_TYPES,
   WorkflowNodeType,
   WorkflowConverter,
@@ -30,20 +29,12 @@ import {
   WorkflowStep,
 } from '../types/workflow'
 import { WorkflowControls } from './WorkflowControls'
-import { NodePropertyEditor } from './NodePropertyEditor'
-import { WorkflowNode as CustomWorkflowNode } from './WorkflowNode'
 
-// Node types for React Flow
-const nodeTypes = {
-  wait: CustomWorkflowNode,
-  add_prompt: CustomWorkflowNode,
-  add_bio: CustomWorkflowNode,
-  swipe_with_spectre: CustomWorkflowNode,
-  activate_continuous_swipe: CustomWorkflowNode,
-  goto: CustomWorkflowNode,
-  spectre_config: CustomWorkflowNode,
-  swipe: CustomWorkflowNode,
-}
+// Import the updated node components
+import { nodeTypes as updatedNodeTypes } from './nodes/WorkflowNodes'
+
+// Node types for React Flow - using the updated components
+const nodeTypes = updatedNodeTypes
 
 interface WorkflowEditorProps {
   workflowData?: WorkflowDefinition | null
@@ -69,8 +60,6 @@ function WorkflowEditorContent({
   const reactFlowInstance = useReactFlow()
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([])
-  const [selectedNode, setSelectedNode] = useState<WorkflowNode | null>(null)
-  const [isPropertyEditorOpen, setIsPropertyEditorOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const converter = useRef(new WorkflowConverter())
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
@@ -117,14 +106,6 @@ function WorkflowEditorContent({
     [setEdges, readOnly]
   )
 
-  const onNodeClick = useCallback(
-    (event: React.MouseEvent, node: WorkflowNode) => {
-      if (readOnly) return
-      setSelectedNode(node)
-      setIsPropertyEditorOpen(true)
-    },
-    [readOnly]
-  )
 
 
   // Save node positions when they change
@@ -183,27 +164,6 @@ function WorkflowEditorContent({
     [setNodes, readOnly]
   )
 
-  const updateNode = useCallback(
-    (nodeId: string, newData: BaseNodeData) => {
-      setNodes((nds) =>
-        nds.map((node) =>
-          node.id === nodeId
-            ? { ...node, data: { ...node.data, ...newData } }
-            : node
-        )
-      )
-    },
-    [setNodes]
-  )
-
-  const deleteNode = useCallback(
-    (nodeId: string) => {
-      if (readOnly) return
-      setNodes((nds) => nds.filter((node) => node.id !== nodeId))
-      setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId))
-    },
-    [setNodes, setEdges, readOnly]
-  )
 
   const handleSave = useCallback(async () => {
     if (!onSave || saving) return
@@ -324,13 +284,13 @@ function WorkflowEditorContent({
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         fitView
         attributionPosition="bottom-left"
         nodesDraggable={!readOnly}
         nodesConnectable={!readOnly}
         elementsSelectable={!readOnly}
+        deleteKeyCode={['Backspace', 'Delete']}
       >
         <Background color="#333" />
         <Controls />
@@ -356,28 +316,6 @@ function WorkflowEditorContent({
           </Panel>
         )}
       </ReactFlow>
-
-      {selectedNode && isPropertyEditorOpen && (
-        <NodePropertyEditor
-          node={selectedNode}
-          isOpen={isPropertyEditorOpen}
-          allNodes={nodes}
-          onClose={() => {
-            setIsPropertyEditorOpen(false)
-            setSelectedNode(null)
-          }}
-          onSave={(nodeData) => {
-            updateNode(selectedNode.id, nodeData)
-            setIsPropertyEditorOpen(false)
-            setSelectedNode(null)
-          }}
-          onDelete={() => {
-            deleteNode(selectedNode.id)
-            setIsPropertyEditorOpen(false)
-            setSelectedNode(null)
-          }}
-        />
-      )}
     </div>
   )
 } 

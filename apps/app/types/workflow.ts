@@ -69,10 +69,7 @@ export type WorkflowNodeType =
   | 'add_prompt' 
   | 'add_bio'
   | 'swipe_with_spectre'
-  | 'activate_continuous_swipe'
   | 'goto'
-  | 'spectre_config'
-  | 'swipe'
 
 // React Flow edge data with index signature
 export interface WorkflowEdgeData extends Record<string, unknown> {
@@ -187,35 +184,18 @@ export const NODE_TYPES: Record<WorkflowNodeType, NodeTypeConfig> = {
   swipe_with_spectre: {
     type: 'swipe_with_spectre',
     label: 'Swipe with Spectre',
-    description: 'Perform swipe action using Spectre',
+    description: 'Perform automated swipe session',
     defaultData: {
-      label: 'Swipe',
+      label: 'Swipe with Spectre',
       nodeType: 'swipe_with_spectre',
       action: 'swipe_with_spectre',
-      description: 'Swipe action',
+      description: 'Auto swipe session',
       delay: 0,
-      swipeCount: 10,
+      swipeCount: 20,
       critical: true,
       timeout: 300000, // 5 minutes
     },
-    color: '#a855f7', // purple
-  },
-  activate_continuous_swipe: {
-    type: 'activate_continuous_swipe',
-    label: 'Continuous Swipe',
-    description: 'Activate continuous swiping',
-    defaultData: {
-      label: 'Continuous',
-      nodeType: 'activate_continuous_swipe',
-      action: 'activate_continuous_swipe',
-      description: 'Continuous swipe',
-      delay: 0,
-      minSwipes: 15,
-      maxSwipes: 25,
-      minIntervalMs: 3600000,
-      maxIntervalMs: 7200000,
-    },
-    color: '#f59e0b', // amber
+    color: '#06b6d4', // cyan
   },
   goto: {
     type: 'goto',
@@ -225,7 +205,7 @@ export const NODE_TYPES: Record<WorkflowNodeType, NodeTypeConfig> = {
       label: 'Go To',
       nodeType: 'goto',
       action: 'goto',
-      description: 'Go to step',
+      description: 'Loop back to step',
       delay: 0,
       nextStep: '',
       infiniteAllowed: true,
@@ -233,33 +213,6 @@ export const NODE_TYPES: Record<WorkflowNodeType, NodeTypeConfig> = {
       trackIterations: true,
     },
     color: '#ef4444', // red
-  },
-  spectre_config: {
-    type: 'spectre_config',
-    label: 'Spectre Config',
-    description: 'Configure Spectre settings',
-    defaultData: {
-      label: 'Spectre Config',
-      nodeType: 'spectre_config',
-      action: 'spectre_config',
-      description: 'Configure Spectre',
-      delay: 0,
-    },
-    color: '#6366f1', // indigo
-  },
-  swipe: {
-    type: 'swipe',
-    label: 'Basic Swipe',
-    description: 'Basic swipe action',
-    defaultData: {
-      label: 'Basic Swipe',
-      nodeType: 'swipe',
-      action: 'swipe',
-      description: 'Basic swipe',
-      delay: 0,
-      swipeCount: 5,
-    },
-    color: '#ec4899', // pink
   },
 }
 
