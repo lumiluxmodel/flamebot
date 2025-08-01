@@ -19,16 +19,17 @@ const formatTimeElapsed = (milliseconds: number): string => {
 
 interface WorkflowCardProps {
   workflow: {
-    executionId: string;
     accountId: string;
     workflowType: string;
-    progress: number;
     status: 'active' | 'paused' | 'completed' | 'failed' | 'stopped';
-    currentStep?: string;
-    totalSteps?: number;
+    progress: number;
+    currentStep: number;
+    totalSteps: number;
     startedAt: string;
-    timeElapsed?: number;
-    progressPercentage?: number;
+    gotoIterations: Record<string, unknown>;
+    timeElapsed: number;
+    progressPercentage: number;
+    isRunning: boolean;
     canResume?: boolean;
     canPause?: boolean;
     isPermanent?: boolean;
@@ -120,9 +121,9 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ workflow, onRefresh }) => {
     <div className={`cyber-card ${getBorderColor(workflow.status)} p-6 md:p-8 relative ${workflow.status === 'active' ? 'animate-pulse-border' : ''} mb-6`}>
       <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
         <div className="flex-1">
-          <div className="text-[10px] text-zinc-600 mb-2">EXECUTION_ID</div>
-          <div className="font-mono text-sm text-zinc-800 dark:text-white break-all">{workflow.executionId}</div>
-          <div className="text-[10px] text-zinc-600 dark:text-zinc-500 mt-1">Account: {workflow.accountId.slice(-8)}</div>
+          <div className="text-[10px] text-zinc-600 mb-2">ACCOUNT_ID</div>
+          <div className="font-mono text-sm text-zinc-800 dark:text-white break-all">{workflow.accountId}</div>
+          <div className="text-[10px] text-zinc-600 dark:text-zinc-500 mt-1">Short: {workflow.accountId.slice(-8)}</div>
         </div>
         <div className="flex items-center gap-2">
           <div className={`text-[11px] ${getStatusColor(workflow.status)} pulse-dot`}>
@@ -752,7 +753,7 @@ const Workflows: React.FC = () => {
                 <div className="flex-1 h-[1px] bg-gradient-to-r from-yellow-500/20 to-transparent"></div>
               </div>
               {activeWorkflows.map((workflow) => (
-                <div key={workflow.executionId} className="relative">
+                <div key={workflow.accountId} className="relative">
                   {/* Selection checkbox */}
                   <div className="absolute -left-8 top-8 flex items-center">
                     <input
