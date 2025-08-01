@@ -208,8 +208,8 @@ class WorkflowManager {
    * Get all active workflows (for UI display)
    * @returns {Array} Active workflows
    */
-  getAllActiveWorkflows() {
-    const executions = this.executor.getAllActiveExecutions();
+  async getAllActiveWorkflows() {
+    const executions = await this.executor.getAllActiveExecutions();
 
     return executions.map((execution) => ({
       accountId: execution.accountId,
@@ -489,15 +489,42 @@ class WorkflowManager {
    * Health check for workflow manager with cron monitoring
    * @returns {Object} Enhanced health status
    */
-  getHealthStatus() {
-    const executorStats = this.executor.getStatistics();
+  async getHealthStatus() {
+    const rawExecutorStats = await this.executor.getStatistics();
     const cronStatus = this.cronManager.getStatus();
     const monitoringStatus = this.monitor.getStatus();
     const taskStatus = this.taskScheduler.getStatus();
 
+    // Handle both factory structure (nested under 'services') and direct structure
+    let executorStats;
+    if (rawExecutorStats && rawExecutorStats.services) {
+      // New factory structure
+      executorStats = rawExecutorStats.services;
+      // If services is empty, but factory is initialized, use factory status
+      if (Object.keys(executorStats).length === 0 && rawExecutorStats.factory && rawExecutorStats.factory.initialized) {
+        executorStats = {
+          isInitialized: true,
+          activeExecutions: 0,
+          totalExecutions: 0,
+          successfulExecutions: 0
+        };
+      }
+    } else if (rawExecutorStats && !rawExecutorStats.error) {
+      // Direct structure
+      executorStats = rawExecutorStats;
+    } else {
+      // Error or uninitialized state
+      executorStats = {
+        isInitialized: false,
+        activeExecutions: 0,
+        totalExecutions: 0,
+        successfulExecutions: 0
+      };
+    }
+
     const overallHealthy =
       this.isInitialized &&
-      executorStats.isInitialized &&
+      (executorStats.isInitialized === true || executorStats.activeExecutions !== undefined) &&
       cronStatus.isRunning &&
       monitoringStatus.isMonitoring &&
       monitoringStatus.systemHealth !== "error";
@@ -507,9 +534,9 @@ class WorkflowManager {
       initialized: this.isInitialized,
       components: {
         workflowExecutor: {
-          initialized: executorStats.isInitialized,
-          activeExecutions: executorStats.activeExecutions,
-          totalExecutions: executorStats.totalExecutions,
+          initialized: executorStats.isInitialized || false,
+          activeExecutions: executorStats.activeExecutions || 0,
+          totalExecutions: executorStats.totalExecutions || 0,
           successRate:
             (executorStats.totalExecutions || 0) > 0
               ? ((executorStats.successfulExecutions || 0) /

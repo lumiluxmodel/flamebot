@@ -1261,7 +1261,7 @@ router.get(
       console.log("📊 API: Getting monitoring dashboard data");
 
       const dashboardData = cronMonitor.getDashboardData();
-      const activeExecutions = workflowExecutor.getAllActiveExecutions();
+      const activeExecutions = await workflowExecutor.getAllActiveExecutions();
 
       // Enhance dashboard data
       const enhancedData = {
@@ -1471,12 +1471,37 @@ router.get(
   "/health",
   asyncHandler(async (req, res) => {
     try {
-      const executorStats = workflowExecutor.getStatistics();
+      const rawExecutorStats = await workflowExecutor.getStatistics();
       const cronStatus = cronManager.getStatus();
       const monitoringStatus = cronMonitor.getStatus();
 
+      // Handle both factory structure (nested under 'services') and direct structure
+      let executorStats;
+      if (rawExecutorStats && rawExecutorStats.services) {
+        // New factory structure
+        executorStats = rawExecutorStats.services;
+        // If services is empty, but factory is initialized, use factory status
+        if (Object.keys(executorStats).length === 0 && rawExecutorStats.factory && rawExecutorStats.factory.initialized) {
+          executorStats = {
+            isInitialized: true,
+            activeExecutions: 0,
+            totalExecutions: 0
+          };
+        }
+      } else if (rawExecutorStats && !rawExecutorStats.error) {
+        // Direct structure
+        executorStats = rawExecutorStats;
+      } else {
+        // Error or uninitialized state
+        executorStats = {
+          isInitialized: false,
+          activeExecutions: 0,
+          totalExecutions: 0
+        };
+      }
+
       const isHealthy =
-        executorStats.isInitialized &&
+        (executorStats.isInitialized === true || executorStats.activeExecutions !== undefined) &&
         cronStatus.isRunning &&
         monitoringStatus.isMonitoring;
 
@@ -1484,9 +1509,9 @@ router.get(
         healthy: isHealthy,
         components: {
           workflowExecutor: {
-            healthy: executorStats.isInitialized,
-            activeExecutions: executorStats.activeExecutions,
-            totalExecutions: executorStats.totalExecutions,
+            healthy: executorStats.isInitialized || false,
+            activeExecutions: executorStats.activeExecutions || 0,
+            totalExecutions: executorStats.totalExecutions || 0,
           },
           cronManager: {
             healthy: cronStatus.isRunning,

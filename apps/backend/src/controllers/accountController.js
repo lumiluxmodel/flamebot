@@ -551,7 +551,7 @@ class AccountController {
    */
   async getAllActiveWorkflows(req, res) {
     try {
-      const activeWorkflows = workflowManager.getAllActiveWorkflows();
+      const activeWorkflows = await workflowManager.getAllActiveWorkflows();
       const stats = workflowManager.getWorkflowStats();
 
       res.json({
@@ -691,7 +691,7 @@ async getDetailedWorkflowStatus(req, res) {
   async healthCheck(req, res) {
     try {
       const flamebotHealth = await flamebotService.healthCheck();
-      const workflowHealth = workflowManager.getHealthStatus();
+      const workflowHealth = await workflowManager.getHealthStatus();
 
       const overallHealthy = flamebotHealth.healthy && workflowHealth.healthy;
 
