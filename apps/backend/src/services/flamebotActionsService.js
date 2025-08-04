@@ -375,6 +375,53 @@ class FlamebotActionsService {
     const maxLikes = spectreConfig.max_likes || 50;
     return await this.configureSpectreMode(accountId, maxLikes, spectreConfig);
   }
+
+  /**
+   * Get account information including status
+   * @param {Array<string>} accountIds - Array of account IDs (card_ids)
+   * @returns {Promise<Object>} Account information including status
+   */
+  async getAccountsInfo(accountIds) {
+    console.log(`🔍 Getting account info for ${accountIds.length} accounts`);
+    
+    try {
+      const response = await this.client.post('/api/get-tinder-accounts-by-ids', accountIds);
+      
+      if (!response.data.success) {
+        throw new Error('Failed to get account info');
+      }
+      
+      console.log(`✅ Retrieved info for ${response.data.total} accounts`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error getting account info:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if account is alive (not banned)
+   * @param {string} accountId - Account ID (card_id)
+   * @returns {Promise<boolean>} True if account is alive
+   */
+  async isAccountAlive(accountId) {
+    try {
+      const accountInfo = await this.getAccountsInfo([accountId]);
+      
+      if (accountInfo.accounts && accountInfo.accounts.length > 0) {
+        const account = accountInfo.accounts[0];
+        const status = account.status;
+        console.log(`📊 Account ${accountId} status: ${status}`);
+        return status === 'alive';
+      }
+      
+      console.warn(`⚠️ No account info found for ${accountId}`);
+      return false;
+    } catch (error) {
+      console.error(`❌ Error checking account status for ${accountId}:`, error.message);
+      return false;
+    }
+  }
 }
 
 module.exports = new FlamebotActionsService();
