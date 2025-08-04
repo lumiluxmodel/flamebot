@@ -173,7 +173,7 @@ class WorkflowExecutionService extends EventEmitter {
 
     console.log(`👆 Starting swipe session for ${accountId} - Count: ${swipeCount} (from database)`);
 
-    const result = await flamebotActionsService.swipe(
+    const result = await flamebotActionsService.startSwipeTask(
       accountId, // Use accountId directly
       swipeCount
     );
